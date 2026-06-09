@@ -1,0 +1,6 @@
+{
+  "name": "Chruch Management",
+  "description": "Church management system for tracking ministries, actions, projects, budgets, and parliamentary records.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
