@@ -12,17 +12,15 @@ type Perfil = {
 };
 
 const MENU_OPTIONS = [
-  { id: '/ministerios', label: 'Cadastro de Ministérios' },
-  { id: '/partidos', label: 'Cadastro de Partidos' },
-  { id: '/deputados', label: 'Cadastro de Deputados' },
-  { id: '/areas-tematicas', label: 'Cadastro de Áreas Temáticas' },
-  { id: '/emendas', label: 'Emendas' },
-  { id: '/editais', label: 'Cadastro de Editais' },
-  { id: '/projetos', label: 'Projetos' },
-  { id: '/relatorios', label: 'Relatórios' },
-  { id: '/perfis', label: 'Cadastro de Perfis' },
-  { id: '/usuarios', label: 'Cadastro de Usuários' },
-  { id: '/configuracoes', label: 'Configurações' },
+  { id: '/membros', label: 'Gestão de Membros' },
+  { id: '/comunidades', label: 'Gestão de Comunidades' },
+  { id: '/licoes', label: 'Gestão de Lições' },
+  { id: '/presencas', label: 'Controle de Presenças' },
+  { id: '/financeiro', label: 'Gestão Financeira' },
+  { id: '/igrejas', label: 'Gestão de Igrejas' },
+  { id: '/perfis', label: 'Gestão de Perfis' },
+  { id: '/usuarios', label: 'Gestão de Usuários' },
+  { id: '/configuracoes', label: 'Configurações do Sistema' },
 ];
 
 export default function PerfisPage() {
