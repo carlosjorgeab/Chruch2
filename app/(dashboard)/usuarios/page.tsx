@@ -3,22 +3,22 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
-import { useDeputado } from '@/context/DeputadoContext';
+import { useIgreja } from '@/context/IgrejaContext';
 import { Plus, Edit2, Trash2, Save, Users } from 'lucide-react';
 
 type Usuario = {
   id: string;
   email: string;
   id_perfil: string | null;
-  id_deputado: string | null;
+  id_igreja: string | null;
   is_admin: boolean;
   perfil?: { nome: string };
-  deputado?: { nome: string };
+  igreja?: { nome: string };
 };
 
 export default function UsuariosPage() {
   const { user } = useAuth();
-  const { deputados } = useDeputado();
+  const { igrejas } = useIgreja();
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [perfis, setPerfis] = useState<{id: string, nome: string}[]>([]);
   const [loading, setLoading] = useState(true);
@@ -27,7 +27,7 @@ export default function UsuariosPage() {
     email: '', 
     senha: '', 
     id_perfil: '', 
-    id_deputado: '',
+    id_igreja: '',
     is_admin: false
   });
   const [error, setError] = useState('');
@@ -38,11 +38,11 @@ export default function UsuariosPage() {
     // Fetch users
     const { data: usersData, error: usersError } = await supabase
       .from('usuarios')
-      .select('*, perfil:perfis(nome), deputado:deputado(nome)')
+      .select('*, perfil:perfis(nome), igreja:igrejas(nome)')
       .order('created_at', { ascending: false });
       
     if (!usersError && usersData) {
-      setUsuarios(usersData);
+      setUsuarios(usersData as any);
     }
 
     // Fetch profiles
@@ -72,8 +72,8 @@ export default function UsuariosPage() {
       setError('Selecione um perfil para o usuário.');
       return;
     }
-    if (!currentUser.is_admin && !currentUser.id_deputado) {
-      setError('Selecione um deputado para o usuário.');
+    if (!currentUser.is_admin && !currentUser.id_igreja) {
+      setError('Selecione uma igreja para o usuário.');
       return;
     }
 
@@ -81,7 +81,7 @@ export default function UsuariosPage() {
     const userData: any = {
       email: currentUser.email,
       id_perfil: currentUser.is_admin ? null : currentUser.id_perfil,
-      id_deputado: currentUser.is_admin ? null : currentUser.id_deputado,
+      id_igreja: currentUser.is_admin ? null : currentUser.id_igreja,
       is_admin: currentUser.is_admin || false
     };
 
@@ -123,7 +123,7 @@ export default function UsuariosPage() {
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight flex items-center gap-2">
-            <Users className="text-primary" />
+            <Users className="text-amber-500" />
             Cadastro de Usuários
           </h1>
           <p className="text-slate-500 dark:text-slate-400 mt-1">Gerencie os usuários do sistema e seus acessos</p>
@@ -131,10 +131,10 @@ export default function UsuariosPage() {
         {!isEditing && (
           <button 
             onClick={() => { 
-              setCurrentUser({ email: '', senha: '', id_perfil: '', id_deputado: '', is_admin: false }); 
+              setCurrentUser({ email: '', senha: '', id_perfil: '', id_igreja: '', is_admin: false }); 
               setIsEditing(true); 
             }}
-            className="flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-lg font-bold hover:bg-primary/90 transition-colors"
+            className="flex items-center gap-2 bg-amber-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-amber-700 transition-colors"
           >
             <Plus size={20} />
             Novo Usuário
@@ -155,7 +155,7 @@ export default function UsuariosPage() {
                 type="text" 
                 value={currentUser.email} 
                 onChange={(e) => setCurrentUser({...currentUser, email: e.target.value})}
-                className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary outline-none"
+                className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500 outline-none"
                 placeholder="usuario ou usuario@email.com"
               />
             </div>
@@ -168,7 +168,7 @@ export default function UsuariosPage() {
                 type="password" 
                 value={currentUser.senha || ''} 
                 onChange={(e) => setCurrentUser({...currentUser, senha: e.target.value})}
-                className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary outline-none"
+                className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500 outline-none"
                 placeholder="••••••••"
               />
             </div>
@@ -179,10 +179,10 @@ export default function UsuariosPage() {
                 id="is_admin"
                 checked={currentUser.is_admin}
                 onChange={(e) => setCurrentUser({...currentUser, is_admin: e.target.checked})}
-                className="w-5 h-5 text-primary rounded focus:ring-primary" 
+                className="w-5 h-5 text-amber-500 rounded focus:ring-amber-500" 
               />
               <label htmlFor="is_admin" className="text-sm font-bold text-slate-700 dark:text-slate-300 cursor-pointer">
-                Usuário Administrador (Acesso total a todas as telas e deputados)
+                Usuário Administrador (Acesso total a todas as telas e igrejas)
               </label>
             </div>
 
@@ -193,7 +193,7 @@ export default function UsuariosPage() {
                   <select 
                     value={currentUser.id_perfil || ''} 
                     onChange={(e) => setCurrentUser({...currentUser, id_perfil: e.target.value})}
-                    className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary outline-none"
+                    className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500 outline-none"
                   >
                     <option value="" disabled>Selecione um perfil</option>
                     {perfis.map(p => (
@@ -203,15 +203,15 @@ export default function UsuariosPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Deputado Vinculado</label>
+                  <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Igreja Vinculada</label>
                   <select 
-                    value={currentUser.id_deputado || ''} 
-                    onChange={(e) => setCurrentUser({...currentUser, id_deputado: e.target.value})}
-                    className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary outline-none"
+                    value={currentUser.id_igreja || ''} 
+                    onChange={(e) => setCurrentUser({...currentUser, id_igreja: e.target.value})}
+                    className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500 outline-none"
                   >
-                    <option value="" disabled>Selecione um deputado</option>
-                    {deputados.map(d => (
-                      <option key={d.id} value={d.id}>{d.nome} ({d.estado})</option>
+                    <option value="" disabled>Selecione uma igreja</option>
+                    {igrejas.map(ig => (
+                      <option key={ig.id} value={ig.id}>{ig.nome}</option>
                     ))}
                   </select>
                 </div>
@@ -228,7 +228,7 @@ export default function UsuariosPage() {
             </button>
             <button 
               onClick={handleSave}
-              className="flex items-center gap-2 bg-primary text-white px-6 py-2 rounded-lg font-bold hover:bg-primary/90 transition-colors"
+              className="flex items-center gap-2 bg-amber-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-amber-700 transition-colors"
             >
               <Save size={20} />
               Salvar
@@ -248,7 +248,7 @@ export default function UsuariosPage() {
                   <tr className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-700">
                     <th className="p-4 font-bold text-slate-600 dark:text-slate-400 text-sm">E-mail / Usuário</th>
                     <th className="p-4 font-bold text-slate-600 dark:text-slate-400 text-sm">Perfil</th>
-                    <th className="p-4 font-bold text-slate-600 dark:text-slate-400 text-sm">Deputado</th>
+                    <th className="p-4 font-bold text-slate-600 dark:text-slate-400 text-sm">Igreja</th>
                     <th className="p-4 font-bold text-slate-600 dark:text-slate-400 text-sm text-right">Ações</th>
                   </tr>
                 </thead>
@@ -263,23 +263,23 @@ export default function UsuariosPage() {
                         {u.is_admin ? 'Acesso Total' : (u.perfil?.nome || '-')}
                       </td>
                       <td className="p-4 text-slate-600 dark:text-slate-400">
-                        {u.is_admin ? 'Todos' : (u.deputado?.nome || '-')}
+                        {u.is_admin ? 'Todas' : (u.igreja?.nome || '-')}
                       </td>
                       <td className="p-4 text-right">
                         <div className="flex justify-end gap-2">
                           <button 
                             onClick={() => { setCurrentUser(u); setIsEditing(true); }}
-                            className="p-2 text-slate-400 hover:text-primary transition-colors rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
+                            className="p-2 text-slate-400 hover:text-amber-500 transition-colors rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
                           >
                             <Edit2 size={18} />
                           </button>
                           <button 
                             onClick={() => handleDelete(u.id)}
                             className="p-2 text-slate-400 hover:text-red-500 transition-colors rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
-                            disabled={u.email === 'admin'} // Prevent deleting the main admin
-                            title={u.email === 'admin' ? 'Não é possível excluir o admin principal' : ''}
+                            disabled={u.email === 'admin@igreja.com' || u.email === 'admin'} 
+                            title={u.email.startsWith('admin') ? 'Não é possível excluir o admin principal' : ''}
                           >
-                            <Trash2 size={18} className={u.email === 'admin' ? 'opacity-30' : ''} />
+                            <Trash2 size={18} className={u.email.startsWith('admin') ? 'opacity-30' : ''} />
                           </button>
                         </div>
                       </td>

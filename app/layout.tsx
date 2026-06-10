@@ -1,51 +1,21 @@
 import type {Metadata} from 'next';
-import { Work_Sans, Inter } from 'next/font/google';
 import './globals.css';
-import { DeputadoProvider } from '@/context/DeputadoContext';
+import { IgrejaProvider } from '@/context/IgrejaContext';
 import { AuthProvider } from '@/context/AuthContext';
-import { InactivityHandler } from '@/components/InactivityHandler';
-
-const workSans = Work_Sans({
-  subsets: ['latin'],
-  variable: '--font-work-sans',
-  display: 'swap',
-});
-
-const inter = Inter({
-  subsets: ['latin'],
-  variable: '--font-inter',
-  display: 'swap',
-});
 
 export const metadata: Metadata = {
-  title: 'Chruch Management',
-  description: 'Church management system - track ministries, actions, budgets, and records',
+  title: 'Church Management',
+  description: 'Church management system',
 };
 
 export default function RootLayout({children}: {children: React.ReactNode}) {
   return (
-    <html lang="pt-BR" className={`${workSans.variable} ${inter.variable}`} suppressHydrationWarning>
-      <head>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              try {
-                if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-                  document.documentElement.classList.add('dark')
-                } else {
-                  document.documentElement.classList.remove('dark')
-                }
-              } catch (_) {}
-            `,
-          }}
-        />
-      </head>
-      <body className="font-body bg-background text-on-background bg-subtle-flag min-h-screen antialiased dark:bg-slate-950 dark:text-white" suppressHydrationWarning>
+    <html lang="pt-BR" suppressHydrationWarning>
+      <body suppressHydrationWarning>
         <AuthProvider>
-          <DeputadoProvider>
-            <InactivityHandler />
+          <IgrejaProvider>
             {children}
-          </DeputadoProvider>
+          </IgrejaProvider>
         </AuthProvider>
       </body>
     </html>

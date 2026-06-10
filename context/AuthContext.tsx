@@ -7,7 +7,7 @@ export type User = {
   id: string;
   email: string;
   id_perfil: string | null;
-  id_deputado: string | null;
+  id_igreja: string | null;
   is_admin: boolean;
   perfil?: {
     nome: string;
@@ -128,7 +128,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         id: data.id,
         email: data.email,
         id_perfil: data.id_perfil,
-        id_deputado: data.id_deputado,
+        id_igreja: data.id_igreja,
         is_admin: data.is_admin,
         perfil: data.perfil
       };
