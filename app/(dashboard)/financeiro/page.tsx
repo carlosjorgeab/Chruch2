@@ -4,7 +4,12 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useIgreja } from '@/context/IgrejaContext';
 import { Plus, Trash2, TrendingUp, TrendingDown, Wallet, Calendar, Tag, RefreshCw, Save, X, DollarSign } from 'lucide-react';
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
+import dynamic from 'next/dynamic';
+
+const FinancialChart = dynamic(() => import('@/components/FinancialChart'), {
+  ssr: false,
+  loading: () => <div className="h-full w-full flex items-center justify-center text-slate-400 font-bold uppercase tracking-widest text-[#94a3b8] text-xs">Carregando gráfico...</div>
+});
 
 type Transacao = {
   id: string;
@@ -36,52 +41,39 @@ export default function FinanceiroPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
+  const fetchTransacoes = async () => {
+    if (!selectedIgreja) return;
+    try {
+      setLoading(true);
+      const { data, error: err } = await supabase
+        .from('transacoes')
+        .select('*')
+        .eq('id_igreja', selectedIgreja.id)
+        .order('data', { ascending: false });
+
+      if (err) {
+        // Fallback or missing table error simply resets to empty gracefully
+        if (err.code === 'PGRST205') {
+          console.warn('Tabela transacoes não encontrada.');
+          setTransacoes([]);
+        } else {
+          console.error(err);
+        }
+      } else if (data) {
+        setTransacoes(data);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Load transactions and members
   useEffect(() => {
     if (selectedIgreja) {
       setLoading(true);
-      // Load from localStorage for quick/durable persistence
-      const stored = localStorage.getItem(`financeiro_igreja_${selectedIgreja.id}`);
-      if (stored) {
-        try {
-          setTransacoes(JSON.parse(stored));
-        } catch (e) {
-          console.error(e);
-        }
-      } else {
-        // Seeding initial template transactions for beautiful initial display
-        const genericData: Transacao[] = [
-          {
-            id: '1',
-            id_igreja: selectedIgreja.id,
-            tipo: 'Entrada',
-            categoria: 'Dízimo',
-            descricao: 'Contribuição Mensal Organizada',
-            valor: 1500,
-            data: new Date().toISOString().split('T')[0],
-          },
-          {
-            id: '2',
-            id_igreja: selectedIgreja.id,
-            tipo: 'Entrada',
-            categoria: 'Oferta',
-            descricao: 'Oferta do Culto de Domingo',
-            valor: 850,
-            data: new Date().toISOString().split('T')[0],
-          },
-          {
-            id: '3',
-            id_igreja: selectedIgreja.id,
-            tipo: 'Saída',
-            categoria: 'Aluguel',
-            descricao: 'Aluguel do Salão do Templo',
-            valor: 1100,
-            data: new Date().toISOString().split('T')[0],
-          },
-        ];
-        setTransacoes(genericData);
-        localStorage.setItem(`financeiro_igreja_${selectedIgreja.id}`, JSON.stringify(genericData));
-      }
+      fetchTransacoes();
       
       // Fetch members for contributors list
       const fetchMembros = async () => {
@@ -100,17 +92,36 @@ export default function FinanceiroPage() {
       };
       
       fetchMembros();
-      setLoading(false);
     } else {
       setTransacoes([]);
       setLoading(false);
     }
   }, [selectedIgreja]);
 
-  const saveTransactionsToStorage = (updated: Transacao[]) => {
-    if (selectedIgreja) {
-      localStorage.setItem(`financeiro_igreja_${selectedIgreja.id}`, JSON.stringify(updated));
+  const handleDelete = async (id: string) => {
+    if (!confirm('Deseja realmente remover este lançamento financeiro?')) {
+      return;
     }
+    try {
+      const { error: err } = await supabase.from('transacoes').delete().eq('id', id);
+      if (err) throw err;
+      const updated = transacoes.filter((t) => t.id !== id);
+      setTransacoes(updated);
+      setSuccess('Lançamento removido com sucesso!');
+    } catch (e: any) {
+      setError('Erro ao excluir transação: ' + (e.message || e));
+    }
+  };
+
+  const handleEdit = (transacao: Transacao) => {
+    setCurrentTransacao({
+      ...transacao,
+      data: transacao.data || '',
+      membro_contribuinte: transacao.membro_contribuinte || '',
+    });
+    setIsEditing(true);
+    setError('');
+    setSuccess('');
   };
 
   const handleNew = () => {
@@ -128,17 +139,7 @@ export default function FinanceiroPage() {
     setSuccess('');
   };
 
-  const handleDelete = (id: string) => {
-    if (!confirm('Deseja realmente remover este lançamento financeiro?')) {
-      return;
-    }
-    const updated = transacoes.filter((t) => t.id !== id);
-    setTransacoes(updated);
-    saveTransactionsToStorage(updated);
-    setSuccess('Lançamento removido com sucesso!');
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setSuccess('');
@@ -159,22 +160,34 @@ export default function FinanceiroPage() {
       return;
     }
 
-    const payload: Transacao = {
-      id: Math.random().toString(36).substring(2, 9),
+    const payload = {
       id_igreja: selectedIgreja.id,
       tipo: currentTransacao.tipo || 'Entrada',
       categoria: currentTransacao.categoria || 'Outros',
       descricao: currentTransacao.descricao,
       valor: valorNum,
       data: currentTransacao.data || new Date().toISOString().split('T')[0],
-      membro_contribuinte: currentTransacao.membro_contribuinte || undefined,
+      membro_contribuinte: currentTransacao.membro_contribuinte || null,
     };
 
-    const updated = [payload, ...transacoes];
-    setTransacoes(updated);
-    saveTransactionsToStorage(updated);
-    setSuccess('Lançamento registrado com sucesso!');
-    setIsEditing(false);
+    try {
+      if (currentTransacao.id) {
+        const { error: err } = await supabase
+          .from('transacoes')
+          .update(payload)
+          .eq('id', currentTransacao.id);
+        if (err) throw err;
+        setSuccess('Lançamento atualizado no banco com sucesso!');
+      } else {
+        const { error: err } = await supabase.from('transacoes').insert(payload);
+        if (err) throw err;
+        setSuccess('Lançamento registrado no banco com sucesso!');
+      }
+      setIsEditing(false);
+      fetchTransacoes();
+    } catch (e: any) {
+      setError('Erro ao salvar no banco: ' + (e.message || e));
+    }
   };
 
   const handleTipoChange = (newTipo: 'Entrada' | 'Saída') => {
@@ -253,7 +266,7 @@ export default function FinanceiroPage() {
         <form onSubmit={handleSubmit} className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm p-8 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
           <div className="flex justify-between items-center border-b border-slate-150 dark:border-slate-700 pb-4">
             <h3 className="text-xl font-bold text-slate-900 dark:text-white">
-              Sinalizar Novo Lançamento Financeiro
+              {currentTransacao.id ? 'Editar Lançamento Financeiro' : 'Sinalizar Novo Lançamento Financeiro'}
             </h3>
             <button type="button" onClick={() => setIsEditing(false)} className="text-slate-400 hover:text-slate-600">
               <X size={20} />
@@ -440,16 +453,7 @@ export default function FinanceiroPage() {
             <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
               <h4 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-6 font-headline">Fluxo Diário / Histórico Próximo</h4>
               <div className="h-64 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                    <XAxis dataKey="data" stroke="#94a3b8" fontSize={11} tickLine={false} />
-                    <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
-                    <Tooltip cursor={{ fill: 'transparent' }} />
-                    <Bar dataKey="Entrada" fill="#16a34a" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="Saída" fill="#ef4444" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+                <FinancialChart chartData={chartData} />
               </div>
             </div>
           )}
@@ -523,13 +527,22 @@ export default function FinanceiroPage() {
                           </span>
                         </td>
                         <td className="px-6 py-4 text-right">
-                          <button
-                            onClick={() => handleDelete(t.id)}
-                            className="p-2 text-slate-400 hover:text-red-650 hover:bg-slate-50 dark:hover:bg-slate-900 transition rounded-lg"
-                            title="Remover"
-                          >
-                            <Trash2 size={15} />
-                          </button>
+                          <div className="flex justify-end gap-2">
+                            <button
+                              onClick={() => handleEdit(t)}
+                              className="p-2 text-slate-400 hover:text-amber-600 hover:bg-slate-50 dark:hover:bg-slate-900 transition rounded-lg"
+                              title="Editar"
+                            >
+                              <Tag size={15} />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(t.id)}
+                              className="p-2 text-slate-400 hover:text-red-650 hover:bg-slate-50 dark:hover:bg-slate-900 transition rounded-lg"
+                              title="Remover"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}

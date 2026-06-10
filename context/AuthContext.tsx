@@ -33,6 +33,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
 
   useEffect(() => {
+    const initConfigs = async () => {
+      try {
+        const { data: configs } = await supabase.from('configuracoes_sistema').select('*');
+        if (configs) {
+          configs.forEach((c) => {
+            if (c.chave === 'session_timeout') {
+              localStorage.setItem('session_timeout', c.valor);
+            }
+            if (c.chave === 'disable_multi_login') {
+              localStorage.setItem('disable_multi_login', c.valor);
+            }
+          });
+        }
+      } catch (e) {
+        console.error('Initial configs fetch error:', e);
+      }
+    };
+    initConfigs();
+
     // Check local storage for session
     const storedUser = localStorage.getItem('democracia_user');
     const storedSession = localStorage.getItem('democracia_session_id');

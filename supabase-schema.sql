@@ -107,6 +107,19 @@ CREATE TABLE IF NOT EXISTS configuracoes_sistema (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
+-- 9. Tabela de Transações Financeiras
+CREATE TABLE IF NOT EXISTS transacoes (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id_igreja UUID REFERENCES igrejas(id) ON DELETE CASCADE,
+  tipo VARCHAR(10) NOT NULL CHECK (tipo IN ('Entrada', 'Saída')),
+  categoria VARCHAR(50) NOT NULL,
+  descricao TEXT NOT NULL,
+  valor NUMERIC(15, 2) NOT NULL,
+  data DATE NOT NULL,
+  membro_contribuinte VARCHAR(255),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
 -- ==========================================================
 -- SEED DATA - DADOS INICIAIS DO SISTEMA
 -- ==========================================================
