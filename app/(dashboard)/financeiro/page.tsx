@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabase';
 import { useIgreja } from '@/context/IgrejaContext';
 import { Plus, Trash2, TrendingUp, TrendingDown, Wallet, Calendar, Tag, RefreshCw, Save, X, DollarSign } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
@@ -98,7 +99,6 @@ export default function FinanceiroPage() {
         }
       };
       
-      const { supabase } = require('@/lib/supabase'); // Dynamic import
       fetchMembros();
       setLoading(false);
     } else {
