@@ -55,7 +55,7 @@ export function IgrejaProvider({ children }: { children: ReactNode }) {
         setIgrejas(data);
         if (data.length > 0) {
           setSelectedIgreja((prev) => {
-             if (prev && data.some(d => d.id === prev.id)) {
+             if (prev && data.some((d: any) => d.id === prev.id)) {
                return prev;
              }
              return data[0];

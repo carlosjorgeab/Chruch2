@@ -37,7 +37,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const { data: configs } = await supabase.from('configuracoes_sistema').select('*');
         if (configs) {
-          configs.forEach((c) => {
+          configs.forEach((c: any) => {
             if (c.chave === 'session_timeout') {
               localStorage.setItem('session_timeout', c.valor);
             }

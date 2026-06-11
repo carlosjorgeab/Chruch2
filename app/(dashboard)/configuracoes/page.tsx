@@ -40,7 +40,7 @@ export default function ConfiguracoesPage() {
       if (error) throw error;
 
       if (data) {
-        data.forEach(config => {
+        data.forEach((config: any) => {
           if (config.chave === 'session_timeout') setSessionTimeout(config.valor);
           if (config.chave === 'disable_multi_login') setDisableMultiLogin(config.valor === 'true');
           if (config.chave === 'language_default') setLanguage(config.valor);
