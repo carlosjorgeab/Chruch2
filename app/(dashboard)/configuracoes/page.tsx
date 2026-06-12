@@ -50,12 +50,6 @@ export default function ConfiguracoesPage() {
     setCheckingDb(true);
     const tables = ['igrejas', 'perfis', 'usuarios', 'membros', 'comunidades', 'lecoes', 'presencas', 'configuracoes_sistema', 'transacoes'];
     
-    const originalLocalStates: Record<string, string | null> = {};
-    tables.forEach(t => {
-      originalLocalStates[t] = localStorage.getItem(`use_local_${t}`);
-      localStorage.removeItem(`use_local_${t}`);
-    });
-
     const statusUpdates: Record<string, { exists: boolean; loading: boolean; error?: string }> = {};
     
     for (const table of tables) {
@@ -70,7 +64,7 @@ export default function ConfiguracoesPage() {
           error.message?.includes('schema cache') || 
           error.message?.includes('not found') || 
           error.message?.includes('Relation') || 
-          error.status === 404
+          (error as any).status === 404
         )) {
           statusUpdates[table] = { exists: false, loading: false, error: error.message };
         } else {
@@ -80,12 +74,6 @@ export default function ConfiguracoesPage() {
         statusUpdates[table] = { exists: false, loading: false, error: err.message || String(err) };
       }
     }
-
-    tables.forEach(t => {
-      if (originalLocalStates[t]) {
-        localStorage.setItem(`use_local_${t}`, originalLocalStates[t]!);
-      }
-    });
 
     setDbStatus(statusUpdates);
     setCheckingDb(false);
@@ -551,12 +539,11 @@ export default function ConfiguracoesPage() {
                       onClick={() => {
                         const tables = ['igrejas', 'perfis', 'usuarios', 'membros', 'comunidades', 'lecoes', 'presencas', 'configuracoes_sistema', 'transacoes'];
                         tables.forEach(t => localStorage.removeItem(`use_local_${t}`));
-                        alert('Cache de contingência limpo! O sistema tentará ler e gravar diretamente no Supabase em todas as telas.');
-                        window.location.reload();
+                        checkDatabaseTables();
                       }}
                       className="w-full text-center py-3 bg-primary text-white hover:opacity-90 rounded-xl font-bold text-xs transition-all tracking-wider uppercase block"
                     >
-                      Limpar Contingência Local e Forçar Supabase
+                      Reverificar Conexão das Tabelas
                     </button>
                   </div>
                 </div>

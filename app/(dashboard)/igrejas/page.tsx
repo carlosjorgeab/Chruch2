@@ -179,29 +179,8 @@ export default function IgrejasPage() {
     );
   }
 
-  const isLocalMode = typeof window !== 'undefined' && window.localStorage.getItem('use_local_igrejas') === 'true';
-
   return (
     <div className="p-8 space-y-8 max-w-6xl mx-auto">
-      {isLocalMode && (
-        <div className="p-5 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-3xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in fade-in slide-in-from-top-4 duration-300">
-          <div className="flex gap-3">
-            <AlertTriangle className="text-amber-600 shrink-0 self-start sm:self-center" size={24} />
-            <div>
-              <p className="font-bold text-slate-900 dark:text-amber-400 text-sm">Modo de Contingência Ativo (Tabela do Banco não localizada)</p>
-              <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                A tabela <code className="font-mono bg-white dark:bg-slate-800 px-1 py-0.5 rounded border border-slate-200 text-xs text-amber-600 font-bold">igrejas</code> não foi localizada no seu banco de dados Supabase. Para que o Cadastro funcione salvando na nuvem, você deve sincronizar a estrutura do banco em Configurações.
-              </p>
-            </div>
-          </div>
-          <a
-            href="/configuracoes"
-            className="text-xs font-black uppercase bg-amber-600 hover:bg-amber-700 text-white px-4 py-2.5 rounded-xl whitespace-nowrap self-stretch sm:self-auto text-center"
-          >
-            Sincronizar Banco de Dados
-          </a>
-        </div>
-      )}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
         <div>
           <p className="text-sm font-bold text-amber-600 uppercase tracking-widest mb-1">Administração</p>
