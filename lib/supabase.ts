@@ -7,8 +7,8 @@ try {
     throw new Error('Invalid protocol');
   }
 } catch (e) {
-  supabaseUrl = 'https://zavwqwjjzqjksnpitnqz.supabase.co';
+  supabaseUrl = 'https://jiinngmxhezdwkxyxkyd.supabase.co';
 }
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_g_1K5Tus33laiGohG9-1ig_SmJAuXv2';
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_Z6bmOgV6Hmacwm7i6YKaUQ_-XAvnimn';
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
