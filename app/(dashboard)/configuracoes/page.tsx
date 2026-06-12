@@ -537,8 +537,6 @@ export default function ConfiguracoesPage() {
                   <div className="pt-2">
                     <button
                       onClick={() => {
-                        const tables = ['igrejas', 'perfis', 'usuarios', 'membros', 'comunidades', 'lecoes', 'presencas', 'configuracoes_sistema', 'transacoes'];
-                        tables.forEach(t => localStorage.removeItem(`use_local_${t}`));
                         checkDatabaseTables();
                       }}
                       className="w-full text-center py-3 bg-primary text-white hover:opacity-90 rounded-xl font-bold text-xs transition-all tracking-wider uppercase block"
