@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { Settings, Save, Bell, Shield, Globe, Moon, Clock, Lock, MonitorStop, RefreshCw, CheckCircle, AlertTriangle } from 'lucide-react';
+import { Settings, Save, Bell, Shield, Globe, Moon, Clock, Lock, MonitorStop, RefreshCw, CheckCircle, AlertTriangle, Database, FileText, Copy, Check } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 export default function ConfiguracoesPage() {
@@ -20,6 +20,76 @@ export default function ConfiguracoesPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Database status states
+  const [dbStatus, setDbStatus] = useState<Record<string, { exists: boolean; loading: boolean; error?: string }>>({});
+  const [checkingDb, setCheckingDb] = useState(false);
+  const [schemaSql, setSchemaSql] = useState('');
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (activeTab === 'database') {
+      checkDatabaseTables();
+      fetchSchema();
+    }
+  }, [activeTab]);
+
+  const fetchSchema = async () => {
+    try {
+      const res = await fetch('/api/schema');
+      const data = await res.json();
+      if (data.schema) {
+        setSchemaSql(data.schema);
+      }
+    } catch (e) {
+      console.error('Error fetching schema:', e);
+    }
+  };
+
+  const checkDatabaseTables = async () => {
+    setCheckingDb(true);
+    const tables = ['igrejas', 'perfis', 'usuarios', 'membros', 'comunidades', 'lecoes', 'presencas', 'configuracoes_sistema', 'transacoes'];
+    
+    const originalLocalStates: Record<string, string | null> = {};
+    tables.forEach(t => {
+      originalLocalStates[t] = localStorage.getItem(`use_local_${t}`);
+      localStorage.removeItem(`use_local_${t}`);
+    });
+
+    const statusUpdates: Record<string, { exists: boolean; loading: boolean; error?: string }> = {};
+    
+    for (const table of tables) {
+      statusUpdates[table] = { exists: false, loading: true };
+      setDbStatus(prev => ({ ...prev, [table]: { exists: false, loading: true } }));
+      
+      try {
+        const { error } = await supabase.from(table).select('id').limit(1);
+        
+        if (error && (
+          error.code === 'PGRST205' || 
+          error.message?.includes('schema cache') || 
+          error.message?.includes('not found') || 
+          error.message?.includes('Relation') || 
+          error.status === 404
+        )) {
+          statusUpdates[table] = { exists: false, loading: false, error: error.message };
+        } else {
+          statusUpdates[table] = { exists: true, loading: false };
+        }
+      } catch (err: any) {
+        statusUpdates[table] = { exists: false, loading: false, error: err.message || String(err) };
+      }
+    }
+
+    tables.forEach(t => {
+      if (originalLocalStates[t]) {
+        localStorage.setItem(`use_local_${t}`, originalLocalStates[t]!);
+      }
+    });
+
+    setDbStatus(statusUpdates);
+    setCheckingDb(false);
+  };
 
   useEffect(() => {
     setMounted(true);
@@ -122,6 +192,7 @@ export default function ConfiguracoesPage() {
     { id: 'geral', label: 'Geral', icon: Settings },
     { id: 'seguranca', label: 'Segurança', icon: Shield },
     { id: 'notificacoes', label: 'Notificações', icon: Bell },
+    { id: 'database', label: 'Banco de Dados', icon: Database },
   ];
 
   if (!mounted) return null;
@@ -416,6 +487,118 @@ export default function ConfiguracoesPage() {
                   {saving ? <RefreshCw size={18} className="animate-spin" /> : <Save size={18} />}
                   {saving ? 'Salvando...' : 'Salvar Alterações'}
                 </button>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'database' && (
+            <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
+              <div className="border-b border-slate-100 dark:border-slate-700 pb-4">
+                <h3 className="text-xl font-black font-headline text-slate-900 dark:text-white uppercase">Diagnóstico do Banco de Dados</h3>
+                <p className="text-slate-500 dark:text-slate-400 text-sm">Verifique a sincronização das tabelas no Supabase</p>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Diagnóstico Table Status */}
+                <div className="bg-slate-50 dark:bg-slate-900/60 rounded-3xl p-6 border border-slate-200 dark:border-slate-800/80 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                      <Database className="text-primary" size={18} />
+                      Status das Tabelas
+                    </h4>
+                    <button
+                      onClick={checkDatabaseTables}
+                      disabled={checkingDb}
+                      className="text-xs bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 transition-all"
+                    >
+                      <RefreshCw size={12} className={checkingDb ? 'animate-spin' : ''} />
+                      Recarregar
+                    </button>
+                  </div>
+
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Verificação direta de presença dos esquemas públicos na sua instância do Supabase.
+                  </p>
+
+                  <div className="space-y-2.5 max-h-[280px] overflow-y-auto pr-1">
+                    {['igrejas', 'perfis', 'usuarios', 'membros', 'comunidades', 'lecoes', 'presencas', 'configuracoes_sistema', 'transacoes'].map((tableName) => {
+                      const status = dbStatus[tableName];
+                      return (
+                        <div key={tableName} className="flex items-center justify-between p-3 bg-white dark:bg-slate-850 rounded-xl border border-slate-100 dark:border-slate-800 text-xs">
+                          <span className="font-mono text-slate-700 dark:text-slate-300 font-bold">{tableName}</span>
+                          <div>
+                            {status?.loading ? (
+                              <RefreshCw size={14} className="animate-spin text-slate-400" />
+                            ) : status?.exists ? (
+                              <span className="inline-flex items-center gap-1 font-bold text-green-600 bg-green-50 dark:bg-green-950/20 px-2 py-0.5 rounded-full">
+                                <CheckCircle size={12} />
+                                Ativa
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 font-bold text-red-600 bg-red-50 dark:bg-red-950/20 px-2 py-0.5 rounded-full" title={status?.error}>
+                                <AlertTriangle size={12} />
+                                Não Encontrada
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="pt-2">
+                    <button
+                      onClick={() => {
+                        const tables = ['igrejas', 'perfis', 'usuarios', 'membros', 'comunidades', 'lecoes', 'presencas', 'configuracoes_sistema', 'transacoes'];
+                        tables.forEach(t => localStorage.removeItem(`use_local_${t}`));
+                        alert('Cache de contingência limpo! O sistema tentará ler e gravar diretamente no Supabase em todas as telas.');
+                        window.location.reload();
+                      }}
+                      className="w-full text-center py-3 bg-primary text-white hover:opacity-90 rounded-xl font-bold text-xs transition-all tracking-wider uppercase block"
+                    >
+                      Limpar Contingência Local e Forçar Supabase
+                    </button>
+                  </div>
+                </div>
+
+                {/* Sincronização Panel */}
+                <div className="bg-slate-50 dark:bg-slate-900/60 rounded-3xl p-6 border border-slate-200 dark:border-slate-800/80 space-y-4 flex flex-col">
+                  <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <FileText className="text-amber-500" size={18} />
+                    Como Resolver
+                  </h4>
+
+                  <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                    Se alguma tabela estiver marcada como <span className="text-red-500 font-bold">Não Encontrada</span>, copie o script de criação abaixo e execute-o como uma nova consulta no <b>SQL Editor</b> do seu painel do Supabase.
+                  </p>
+
+                  <div className="flex-1 min-h-[160px] max-h-[300px] bg-slate-900 text-slate-300 rounded-2xl p-4 font-mono text-[10px] overflow-y-auto border border-slate-850 relative">
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(schemaSql || '');
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 2000);
+                      }}
+                      className="absolute right-3 top-3 p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-all"
+                      title="Copiar SQL completo"
+                    >
+                      {copied ? <Check size={14} className="text-green-400" /> : <Copy size={14} />}
+                    </button>
+                    <pre className="whitespace-pre-wrap">{schemaSql ? schemaSql.substring(0, 1000) + '\n  -- [... resto do script de criação ...]' : 'Carregando script de banco de dados...'}</pre>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(schemaSql || '');
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 2000);
+                    }}
+                    className="w-full py-2.5 border border-slate-300 dark:border-slate-700 hover:bg-slate-250 dark:hover:bg-slate-850 text-slate-700 dark:text-slate-300 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2"
+                  >
+                    {copied ? <CheckCircle size={14} className="text-green-500" /> : <Copy size={14} />}
+                    {copied ? 'Copiado para Área de Transferência!' : 'Copiar Script SQL Completo (DDL)'}
+                  </button>
+                </div>
               </div>
             </div>
           )}
