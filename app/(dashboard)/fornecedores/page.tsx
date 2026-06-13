@@ -16,7 +16,7 @@ type Fornecedor = {
 };
 
 export default function FornecedoresPage() {
-  const { user } = useAuth();
+  const { user, hasPermission } = useAuth();
   const { selectedIgreja } = useIgreja();
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
   const [loading, setLoading] = useState(true);
@@ -146,6 +146,22 @@ export default function FornecedoresPage() {
       (f.email?.toLowerCase().includes(search) ?? false)
     );
   });
+
+  if (!user?.is_admin && !hasPermission('/fornecedores')) {
+    return (
+      <div className="p-6 max-w-4xl mx-auto text-center py-20">
+        <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded-3xl p-12 shadow-sm space-y-4 max-w-xl mx-auto">
+          <div className="p-4 bg-red-100 dark:bg-red-900/40 rounded-full w-16 h-16 flex items-center justify-center mx-auto text-red-600 dark:text-red-400">
+            <AlertCircle size={32} />
+          </div>
+          <h3 className="text-xl font-bold text-slate-850 dark:text-white">Acesso Negado</h3>
+          <p className="text-sm text-slate-550 dark:text-slate-400 leading-relaxed">
+            Você não possui permissão para acessar o cadastro de Fornecedores. Entre em contato com o administrador do sistema.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (!selectedIgreja) {
     return (

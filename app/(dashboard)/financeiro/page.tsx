@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useIgreja } from '@/context/IgrejaContext';
+import { useAuth } from '@/context/AuthContext';
 import { 
   Plus, Trash2, TrendingUp, TrendingDown, Wallet, Calendar, Tag, RefreshCw, 
   Save, X, DollarSign, Upload, File, FileText, Check, AlertCircle, Link2, Settings, Briefcase, Landmark, Edit2
@@ -57,6 +58,7 @@ type ArquivoAnexo = {
 };
 
 export default function FinanceiroPage() {
+  const { user, hasPermission } = useAuth();
   const { selectedIgreja } = useIgreja();
   const [activeTab, setActiveTab] = useState<'lancamentos' | 'contas' | 'categorias' | 'formas_pagamento'>('lancamentos');
   
@@ -552,6 +554,22 @@ export default function FinanceiroPage() {
     .reverse()
     .slice(-8); // Get latest 8 active days;
 
+  if (!user?.is_admin && !hasPermission('/financeiro')) {
+    return (
+      <div className="p-8 max-w-4xl mx-auto text-center py-20">
+        <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded-3xl p-12 shadow-sm space-y-4 max-w-xl mx-auto">
+          <div className="p-4 bg-red-100 dark:bg-red-900/40 rounded-full w-16 h-16 flex items-center justify-center mx-auto text-red-650">
+            <AlertCircle size={32} />
+          </div>
+          <h3 className="text-xl font-bold text-slate-850 dark:text-white">Acesso Negado</h3>
+          <p className="text-sm text-slate-550 dark:text-slate-400 leading-relaxed">
+            Você não possui permissão para acessar a Gestão Financeira. Entre em contato com o administrador do sistema.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-8 space-y-8 max-w-6xl mx-auto">
       {/* Top Header */}
@@ -575,30 +593,36 @@ export default function FinanceiroPage() {
             >
               Lançamentos
             </button>
-            <button
-              onClick={() => setActiveTab('contas')}
-              className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${
-                activeTab === 'contas' ? 'bg-amber-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-              }`}
-            >
-              Contas
-            </button>
-            <button
-              onClick={() => setActiveTab('categorias')}
-              className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${
-                activeTab === 'categorias' ? 'bg-amber-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-              }`}
-            >
-              Categorias
-            </button>
-            <button
-              onClick={() => setActiveTab('formas_pagamento')}
-              className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${
-                activeTab === 'formas_pagamento' ? 'bg-amber-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-              }`}
-            >
-              Formas de Pagamento
-            </button>
+            {(user?.is_admin || hasPermission('/financeiro/contas')) && (
+              <button
+                onClick={() => setActiveTab('contas')}
+                className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${
+                  activeTab === 'contas' ? 'bg-amber-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                }`}
+              >
+                Contas
+              </button>
+            )}
+            {(user?.is_admin || hasPermission('/financeiro/categorias')) && (
+              <button
+                onClick={() => setActiveTab('categorias')}
+                className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${
+                  activeTab === 'categorias' ? 'bg-amber-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                }`}
+              >
+                Categorias
+              </button>
+            )}
+            {(user?.is_admin || hasPermission('/financeiro/formas_pagamento')) && (
+              <button
+                onClick={() => setActiveTab('formas_pagamento')}
+                className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${
+                  activeTab === 'formas_pagamento' ? 'bg-amber-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                }`}
+              >
+                Formas de Pagamento
+              </button>
+            )}
           </div>
         )}
       </div>
