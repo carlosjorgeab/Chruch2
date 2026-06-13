@@ -11,7 +11,7 @@ type LanguageContextType = {
   setLanguage: (lang: LanguageType) => Promise<void>;
   t: (key: string, defaultText?: string) => string;
   overrides: Record<string, string>;
-  saveOverride: (key: string, value: string) => Promise<void>;
+  saveOverride: (key: string, value: string, targetLanguage?: LanguageType) => Promise<void>;
   loading: boolean;
 };
 
@@ -85,10 +85,11 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const saveOverride = async (key: string, value: string) => {
+  const saveOverride = async (key: string, value: string, targetLanguage?: LanguageType) => {
+    const targetLang = targetLanguage || language;
     const nextOverrides = {
       ...overrides,
-      [`${language}_${key}`]: value
+      [`${targetLang}_${key}`]: value
     };
     setOverrides(nextOverrides);
     localStorage.setItem('translation_overrides', JSON.stringify(nextOverrides));

@@ -346,7 +346,7 @@ export default function ConfiguracoesPage() {
                             type="button"
                             onClick={async () => {
                               const val = editingTranslations[stateKey] !== undefined ? editingTranslations[stateKey] : (currentOverride || defaultText);
-                              await saveOverride(key, val);
+                              await saveOverride(key, val, language as any);
                               setStatusMessage({ type: 'success', text: `Termo "${key}" personalizado com sucesso!` });
                               setTimeout(() => setStatusMessage(null), 3000);
                             }}
