@@ -17,6 +17,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
 
   useEffect(() => {
+    // Run DB migrations automatically in background
+    fetch('/api/migrate').catch(err => console.error('Auto migration failed:', err));
+
     const timer = setTimeout(() => setMounted(true), 0);
     return () => clearTimeout(timer);
   }, []);

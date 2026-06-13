@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Users, UsersRound, BookOpen, ClipboardCheck, Wallet, Settings, LogOut, Shield, Building } from 'lucide-react';
+import { LayoutDashboard, Users, UsersRound, BookOpen, ClipboardCheck, Wallet, Settings, LogOut, Shield, Building, Briefcase } from 'lucide-react';
 import { useIgreja } from '@/context/IgrejaContext';
 import { useAuth } from '@/context/AuthContext';
 import { Logo } from '@/components/Logo';
@@ -20,12 +20,13 @@ export function Sidebar({ isOpen = false, setIsOpen }: { isOpen?: boolean, setIs
     { href: '/licoes', icon: BookOpen, label: t('menu_licoes'), disabled: false, id: '/licoes' },
     { href: '/presencas', icon: ClipboardCheck, label: t('menu_presencas'), disabled: false, id: '/presencas' },
     { href: '/financeiro', icon: Wallet, label: t('menu_financeiro'), disabled: false, id: '/financeiro' },
+    { href: '/fornecedores', icon: Briefcase, label: 'Fornecedores', disabled: false, id: '/fornecedores' },
     { href: '/igrejas', icon: Building, label: t('menu_igrejas'), disabled: false, id: '/igrejas' },
     { href: '/perfis', icon: Shield, label: t('menu_perfis'), disabled: false, id: '/perfis' },
     { href: '/usuarios', icon: Users, label: t('menu_usuarios'), disabled: false, id: '/usuarios' },
     { href: '/configuracoes', icon: Settings, label: t('menu_configuracoes'), disabled: false, id: '/configuracoes' },
   ].filter(item => {
-    if (item.id === '/perfis' || item.id === '/usuarios' || item.id === '/configuracoes' || item.id === '/igrejas') {
+    if (item.id === '/perfis' || item.id === '/usuarios' || item.id === '/configuracoes' || item.id === '/igrejas' || item.id === '/fornecedores') {
       return user?.is_admin || hasPermission(item.id);
     }
     return hasPermission(item.id);

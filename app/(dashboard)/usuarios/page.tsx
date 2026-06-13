@@ -13,6 +13,7 @@ type Usuario = {
   id_igreja: string | null;
   is_admin: boolean;
   ativo?: boolean;
+  foto_url?: string;
   perfil?: { nome: string };
   igreja?: { nome: string };
 };
@@ -30,7 +31,8 @@ export default function UsuariosPage() {
     id_perfil: '', 
     id_igreja: '',
     is_admin: false,
-    ativo: true
+    ativo: true,
+    foto_url: ''
   });
   const [error, setError] = useState('');
 
@@ -85,7 +87,8 @@ export default function UsuariosPage() {
       id_perfil: currentUser.is_admin ? null : currentUser.id_perfil,
       id_igreja: currentUser.is_admin ? null : currentUser.id_igreja,
       is_admin: currentUser.is_admin || false,
-      ativo: currentUser.ativo !== false
+      ativo: currentUser.ativo !== false,
+      foto_url: currentUser.foto_url || ''
     };
 
     if (currentUser.senha) {
@@ -198,6 +201,17 @@ export default function UsuariosPage() {
               />
             </div>
 
+            <div className="md:col-span-2">
+              <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">URL da Imagem de Perfil</label>
+              <input 
+                type="text" 
+                value={currentUser.foto_url || ''} 
+                onChange={(e) => setCurrentUser({...currentUser, foto_url: e.target.value})}
+                className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500 outline-none"
+                placeholder="https://exemplo.com/foto.jpg"
+              />
+            </div>
+
             <div className="md:col-span-2 flex flex-col sm:flex-row gap-4 p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
               <div className="flex items-center gap-3">
                 <input 
@@ -295,7 +309,19 @@ export default function UsuariosPage() {
                   {usuarios.map(u => (
                     <tr key={u.id} className="border-b border-slate-100 dark:border-slate-800 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-800/50">
                       <td className="p-4 font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                        {u.email}
+                        <div className="w-8 h-8 rounded-full overflow-hidden bg-slate-200 dark:bg-slate-700 flex items-center justify-center flex-shrink-0 border border-slate-200">
+                          {u.foto_url ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={u.foto_url} alt="profile" className="w-full h-full object-cover" onError={(e) => { (e.target as any).style.display = 'none' }} />
+                          ) : (
+                            <div className="font-bold text-xs uppercase text-slate-500">{u.email.charAt(0)}</div>
+                          )}
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="flex items-center gap-1.5 text-sm font-bold text-slate-950 dark:text-white leading-tight">
+                            {u.email}
+                          </span>
+                        </div>
                         {u.is_admin && <span className="px-2 py-0.5 bg-red-100 text-red-700 text-[10px] uppercase tracking-wider font-black rounded">Admin</span>}
                         {u.ativo === false ? (
                           <span className="px-2 py-0.5 bg-red-500/10 text-red-600 text-[10px] uppercase tracking-wider font-black rounded">Desabilitado</span>

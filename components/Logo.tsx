@@ -1,6 +1,31 @@
+'use client';
 import React from "react";
+import { useIgreja } from "@/context/IgrejaContext";
 
 export function Logo({ className = "w-8 h-8" }: { className?: string }) {
+  let selectedIgreja: any = null;
+  try {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    const context = useIgreja();
+    selectedIgreja = context?.selectedIgreja;
+  } catch (e) {
+    // Graceful fallback if rendered outside IglesiaProvider
+  }
+
+  if (selectedIgreja?.logo_url) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img 
+        src={selectedIgreja.logo_url} 
+        alt="Logo" 
+        className={`${className} object-contain`}
+        onError={(e) => { 
+          (e.currentTarget as HTMLImageElement).src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"></svg>';
+        }}
+      />
+    );
+  }
+
   return (
     <svg 
       viewBox="0 0 128 128" 

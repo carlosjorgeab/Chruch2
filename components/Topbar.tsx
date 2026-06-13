@@ -282,8 +282,13 @@ export function Topbar() {
               <p className="text-sm font-semibold text-slate-900 dark:text-white leading-tight truncate max-w-[120px]">{user?.email || 'Usuário'}</p>
               <p className="text-xs text-slate-500 group-hover:text-amber-500 transition-colors">{user?.perfil?.nome || 'Membro'}</p>
             </div>
-            <div className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 border border-slate-200 dark:border-slate-700">
-               <UserCircle size={24} />
+            <div className="w-9 h-9 rounded-full overflow-hidden bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 border border-slate-200 dark:border-slate-700 shrink-0">
+              {user?.foto_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={user.foto_url} alt="profile" className="w-full h-full object-cover" onError={(e) => { (e.target as any).style.display = 'none' }} />
+              ) : (
+                <UserCircle size={24} />
+              )}
             </div>
           </div>
           
