@@ -1,12 +1,13 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { Search, Bell, UserCircle, ChevronDown, Building2, Settings, Users, LogOut } from 'lucide-react';
+import { Search, Bell, UserCircle, ChevronDown, Building2, Settings, Users, LogOut, CheckCircle2, AlertTriangle, Calendar, Award } from 'lucide-react';
 import { useIgreja } from '@/context/IgrejaContext';
 import { useAuth } from '@/context/AuthContext';
 import { Logo } from '@/components/Logo';
 import { useLanguage } from '@/context/LanguageContext';
+import { supabase } from '@/lib/supabase';
 
 export function Topbar() {
   const { igrejas, selectedIgreja, setSelectedIgreja } = useIgreja();
@@ -14,6 +15,152 @@ export function Topbar() {
   const { t } = useLanguage();
   const [searchQuery, setSearchQuery] = useState('');
   const router = useRouter();
+
+  // Notifications states
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [configs, setConfigs] = useState<Record<string, boolean>>({
+    notify_new_members: true,
+    notify_lessons: true,
+    notify_low_balance: true,
+    notify_birthdays: true,
+  });
+
+  useEffect(() => {
+    async function fetchNotifications() {
+      if (!user) return;
+
+      try {
+        // 1. Fetch system-wide notification configs
+        const { data: configData } = await supabase.from('configuracoes_sistema').select('*');
+        const activeConfigs = {
+          notify_new_members: true,
+          notify_lessons: true,
+          notify_low_balance: true,
+          notify_birthdays: true,
+        };
+
+        if (configData) {
+          configData.forEach((c: any) => {
+            if (c.chave === 'notify_new_members') activeConfigs.notify_new_members = (c.valor === 'true');
+            if (c.chave === 'notify_lessons') activeConfigs.notify_lessons = (c.valor === 'true');
+            if (c.chave === 'notify_low_balance') activeConfigs.notify_low_balance = (c.valor === 'true');
+            if (c.chave === 'notify_birthdays') activeConfigs.notify_birthdays = (c.valor === 'true');
+          });
+        }
+        setConfigs(activeConfigs);
+
+        const list: any[] = [];
+        const isUserAdmin = user.is_admin;
+        const userPerms = user.perfil?.permissoes || [];
+
+        // 2. Fetch Members & Birthdays if permissions allow
+        if (isUserAdmin || userPerms.includes('/membros')) {
+          let mQuery = supabase.from('membros').select('*');
+          if (selectedIgreja?.id) {
+            mQuery = mQuery.eq('id_igreja', selectedIgreja.id);
+          }
+          const { data: members } = await mQuery;
+          if (members) {
+            const now = new Date();
+            members.forEach((m: any) => {
+              // New Members alert
+              if (activeConfigs.notify_new_members) {
+                const mDate = new Date(m.created_at);
+                const diffTime = Math.abs(now.getTime() - mDate.getTime());
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                if (diffDays <= 14) {
+                  list.push({
+                    id: `new-member-${m.id}`,
+                    title: 'Novo Membro Cadastrado',
+                    message: `${m.nome} ingressou como ${m.cargo || 'Membro'}.`,
+                    time: `${diffDays}d atrás`,
+                    type: 'member',
+                  });
+                }
+              }
+
+              // Birthdays alert
+              if (activeConfigs.notify_birthdays && m.data_nascimento) {
+                const parts = m.data_nascimento.split('-');
+                if (parts.length === 3) {
+                  const bMonth = parseInt(parts[1], 10) - 1;
+                  const bDay = parseInt(parts[2], 10);
+                  const currentMonth = now.getMonth();
+                  if (currentMonth === bMonth) {
+                    list.push({
+                      id: `birthday-${m.id}`,
+                      title: 'Aniversariante do Mês',
+                      message: `Dia ${bDay} - ${m.nome} faz aniversário este mês!`,
+                      time: 'Festa',
+                      type: 'birthday',
+                    });
+                  }
+                }
+              }
+            });
+          }
+        }
+
+        // 3. Fetch Lessons/Lecões
+        if (activeConfigs.notify_lessons && (isUserAdmin || userPerms.includes('/licoes'))) {
+          let lQuery = supabase.from('lecoes').select('*').eq('status', 'Programada');
+          if (selectedIgreja?.id) {
+            lQuery = lQuery.eq('id_igreja', selectedIgreja.id);
+          }
+          const { data: lessons } = await lQuery;
+          if (lessons) {
+            lessons.forEach((l: any) => {
+              const formattedDate = l.data ? new Date(l.data + 'T00:00:00').toLocaleDateString('pt-BR') : 'Sem data';
+              list.push({
+                id: `lesson-${l.id}`,
+                title: 'Lição Programada',
+                message: `Lembrete da Escola Bíblica: "${l.titulo}" agendada para ${formattedDate}.`,
+                time: l.data || 'Breve',
+                type: 'lesson',
+              });
+            });
+          }
+        }
+
+        // 4. Fetch Financial Transaction Balance Flow
+        if (activeConfigs.notify_low_balance && (isUserAdmin || userPerms.includes('/financeiro'))) {
+          let tQuery = supabase.from('transacoes').select('tipo, valor');
+          if (selectedIgreja?.id) {
+            tQuery = tQuery.eq('id_igreja', selectedIgreja.id);
+          }
+          const { data: transactions } = await tQuery;
+          if (transactions) {
+            let total = 0;
+            transactions.forEach((t: any) => {
+              if (t.tipo === 'Entrada') total += Number(t.valor);
+              else if (t.tipo === 'Saída') total -= Number(t.valor);
+            });
+
+            if (total < 5000) {
+              list.push({
+                id: 'low-balance',
+                title: 'Alerta de Saldo Mínimo',
+                message: `Atenção: Saldo geral está abaixo de R$ 5.000,00 (Total: R$ ${total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}).`,
+                time: 'Urgente',
+                type: 'balance',
+              });
+            }
+          }
+        }
+
+        setNotifications(list);
+      } catch (err) {
+        console.error('Error compiling alerts:', err);
+      }
+    }
+
+    fetchNotifications();
+    
+    // Refresh notifications every 60 seconds
+    const interval = setInterval(fetchNotifications, 60000);
+    return () => clearInterval(interval);
+  }, [user, selectedIgreja]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,10 +208,73 @@ export function Topbar() {
           />
         </form>
 
-        <button className="p-2 relative text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300 transition-colors">
-          <Bell size={20} />
-          <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border border-white dark:border-slate-900"></span>
-        </button>
+        {/* Notifications Icon & Panel */}
+        <div className="relative">
+          <button 
+            onClick={() => setShowNotifications(!showNotifications)}
+            className="p-2 relative text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300 transition-colors focus:outline-none"
+          >
+            <Bell size={20} />
+            {notifications.length > 0 && (
+              <span className="absolute top-1.5 right-1.5 w-4 h-4 bg-red-650 dark:bg-red-500 text-[9px] font-black text-white flex items-center justify-center rounded-full border border-white dark:border-slate-900 shadow-sm animate-pulse">
+                {notifications.length}
+              </span>
+            )}
+          </button>
+
+          {showNotifications && (
+            <div className="absolute right-0 mt-3 w-80 sm:w-96 bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-100 dark:border-slate-800 py-3 z-50 animate-in fade-in slide-in-from-top-3 duration-250">
+              <div className="flex items-center justify-between px-4 pb-2.5 border-b border-slate-100 dark:border-slate-800">
+                <span className="text-xs font-black uppercase text-slate-400 dark:text-slate-500 tracking-wider">
+                  Notificações Ativas ({notifications.length})
+                </span>
+                {notifications.length > 0 && (
+                  <button 
+                    onClick={() => setNotifications([])}
+                    className="text-[10px] text-amber-500 hover:text-amber-600 font-bold uppercase tracking-wider transition-colors"
+                  >
+                    Estrear Limpar
+                  </button>
+                )}
+              </div>
+
+              <div className="max-h-72 overflow-y-auto divide-y divide-slate-50 dark:divide-slate-800">
+                {notifications.length === 0 ? (
+                  <div className="py-8 px-4 text-center text-slate-400 dark:text-slate-500 text-xs font-semibold">
+                    <CheckCircle2 className="mx-auto text-slate-300 dark:text-slate-705 mb-2.5" size={28} />
+                    Nenhuma notificação ativa no momento.
+                  </div>
+                ) : (
+                  notifications.map((n) => {
+                    let Icon = Bell;
+                    let color = 'text-blue-500 bg-blue-50 dark:bg-blue-900/20';
+                    if (n.type === 'member') { Icon = Users; color = 'text-green-500 bg-green-50 dark:bg-green-900/20'; }
+                    if (n.type === 'birthday') { Icon = Calendar; color = 'text-pink-500 bg-pink-50 dark:bg-pink-900/20'; }
+                    if (n.type === 'lesson') { Icon = Award; color = 'text-purple-500 bg-purple-50 dark:bg-purple-900/20'; }
+                    if (n.type === 'balance') { Icon = AlertTriangle; color = 'text-amber-500 bg-amber-50 dark:bg-amber-900/20'; }
+
+                    return (
+                      <div key={n.id} className="p-3.5 hover:bg-slate-50 dark:hover:bg-slate-850/50 transition-colors flex gap-3">
+                        <div className={`p-2 rounded-xl h-9 w-9 flex items-center justify-center shrink-0 ${color}`}>
+                          <Icon size={16} />
+                        </div>
+                        <div className="space-y-0.5">
+                          <p className="text-xs font-black text-slate-850 dark:text-white leading-normal">{n.title}</p>
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium leading-relaxed">{n.message}</p>
+                          <div className="flex items-center gap-1.5 pt-1">
+                            <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">
+                              {n.time}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          )}
+        </div>
 
         <div className="relative group">
           <div className="flex items-center gap-3 pl-3 md:pl-5 border-l border-slate-200 dark:border-slate-800 cursor-pointer">

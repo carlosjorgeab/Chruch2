@@ -141,14 +141,6 @@ export default function PerfisPage() {
                   <input type="checkbox" checked disabled className="w-4 h-4 text-primary" />
                   <span className="text-sm font-medium">Visão Geral (Sempre liberado)</span>
                 </div>
-                <div className="flex items-center gap-3 p-3 rounded-lg border border-slate-200 bg-slate-50 opacity-70">
-                  <input type="checkbox" checked disabled className="w-4 h-4 text-primary" />
-                  <span className="text-sm font-medium">Visão Mapa (Sempre liberado)</span>
-                </div>
-                <div className="flex items-center gap-3 p-3 rounded-lg border border-slate-200 bg-slate-50 opacity-70">
-                  <input type="checkbox" checked disabled className="w-4 h-4 text-primary" />
-                  <span className="text-sm font-medium">Adesão Edital (Sempre liberado)</span>
-                </div>
                 {MENU_OPTIONS.map(menu => (
                   <label key={menu.id} className="flex items-center gap-3 p-3 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer transition-colors">
                     <input 

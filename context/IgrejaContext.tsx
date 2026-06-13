@@ -3,6 +3,7 @@ import { createContext, useContext, useState, useEffect, ReactNode } from 'react
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { usePathname } from 'next/navigation';
+import { useLanguage } from '@/context/LanguageContext';
 
 export type Igreja = {
   id: string;
@@ -10,6 +11,12 @@ export type Igreja = {
   slug?: string;
   logo_url?: string;
   ativo?: boolean;
+  cor_fundo?: string | null;
+  cor_paineis?: string | null;
+  cor_bordas?: string | null;
+  cor_fontes?: string | null;
+  cor_botoes?: string | null;
+  idioma_padrao?: string | null;
 };
 
 type IgrejaContextType = {
@@ -27,6 +34,13 @@ export function IgrejaProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
   const pathname = usePathname();
+  const { setLanguage } = useLanguage();
+
+  useEffect(() => {
+    if (selectedIgreja && selectedIgreja.idioma_padrao) {
+      setLanguage(selectedIgreja.idioma_padrao as any);
+    }
+  }, [selectedIgreja, setLanguage]);
 
   useEffect(() => {
     async function fetchIgrejas() {

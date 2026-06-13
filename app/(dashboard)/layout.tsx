@@ -97,8 +97,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         const corPaineis = (selectedIgreja as any)?.cor_paineis;
         const corBordas = (selectedIgreja as any)?.cor_bordas;
         const corFontes = (selectedIgreja as any)?.cor_fontes;
+        const corBotoes = (selectedIgreja as any)?.cor_botoes;
 
-        if (!corFundo && !corPaineis && !corBordas && !corFontes) return null;
+        if (!corFundo && !corPaineis && !corBordas && !corFontes && !corBotoes) return null;
 
         return (
           <style dangerouslySetInnerHTML={{ __html: `
@@ -107,12 +108,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               --church-panel: ${corPaineis || '#ffffff'};
               --church-border: ${corBordas || '#e2e8f0'};
               --church-font: ${corFontes || '#0f172a'};
+              --church-button: ${corBotoes || '#E4A232'};
             }
             .dark {
               --church-bg: ${corFundo || '#0f172a'};
               --church-panel: ${corPaineis || '#1e293b'};
               --church-border: ${corBordas || '#334155'};
               --church-font: ${corFontes || '#f8fafc'};
+              --church-button: ${corBotoes || '#E4A232'};
             }
             
             /* Main content area overrides */
@@ -158,6 +161,32 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             main .dark\\:text-slate-200,
             main .dark\\:text-slate-300 {
               color: var(--church-font) !important;
+            }
+
+            /* Buttons & Amber Accent Overrides */
+            aside .bg-\\[\\#E4A232\\],
+            main button.bg-amber-600,
+            main button.bg-\\[\\#E4A232\\],
+            main .bg-amber-600,
+            main .bg-\\[\\#E4A232\\],
+            main button.bg-primary,
+            main .bg-primary {
+              background-color: var(--church-button) !important;
+              color: #ffffff !important;
+            }
+
+            main .text-amber-500,
+            main .text-amber-600,
+            main .text-amber-700,
+            main .text-primary {
+              color: var(--church-button) !important;
+            }
+
+            main .border-amber-500,
+            main .border-primary,
+            main .focus\\:border-amber-500:focus,
+            main .focus\\:border-primary:focus {
+              border-color: var(--church-button) !important;
             }
           ` }} />
         );

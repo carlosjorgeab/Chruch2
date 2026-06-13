@@ -19,6 +19,8 @@ type Igreja = {
   cor_paineis?: string | null;
   cor_bordas?: string | null;
   cor_fontes?: string | null;
+  cor_botoes?: string | null;
+  idioma_padrao?: string | null;
 };
 
 export default function IgrejasPage() {
@@ -39,6 +41,8 @@ export default function IgrejasPage() {
     cor_paineis: '',
     cor_bordas: '',
     cor_fontes: '',
+    cor_botoes: '',
+    idioma_padrao: 'pt',
   });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -88,6 +92,8 @@ export default function IgrejasPage() {
       cor_paineis: '',
       cor_bordas: '',
       cor_fontes: '',
+      cor_botoes: '',
+      idioma_padrao: 'pt',
     });
     setIsEditing(true);
     setError('');
@@ -155,6 +161,8 @@ export default function IgrejasPage() {
       cor_paineis: currentIgreja.cor_paineis || null,
       cor_bordas: currentIgreja.cor_bordas || null,
       cor_fontes: currentIgreja.cor_fontes || null,
+      cor_botoes: currentIgreja.cor_botoes || null,
+      idioma_padrao: currentIgreja.idioma_padrao || 'pt',
     };
 
     try {
@@ -165,38 +173,50 @@ export default function IgrejasPage() {
           .update(payload)
           .eq('id', currentIgreja.id);
           
-        if (err && err.message?.includes('column "cor_fundo" of relation "igrejas" does not exist')) {
+        if (err && (
+          err.message?.includes('column "cor_fundo" of relation "igrejas" does not exist') ||
+          err.message?.includes('column "cor_botoes" of relation "igrejas" does not exist') ||
+          err.message?.includes('column "idioma_padrao" of relation "igrejas" does not exist')
+        )) {
           const fallbackPayload: any = { ...payload };
           delete fallbackPayload.cor_fundo;
           delete fallbackPayload.cor_paineis;
           delete fallbackPayload.cor_bordas;
           delete fallbackPayload.cor_fontes;
+          delete fallbackPayload.cor_botoes;
+          delete fallbackPayload.idioma_padrao;
           const fallbackRes = await supabase
             .from('igrejas')
             .update(fallbackPayload)
             .eq('id', currentIgreja.id);
           err = fallbackRes.error;
           if (!err) {
-            alert("Alerta: A igreja foi atualizada, mas as novas colunas de cores ainda não existem no banco de dados. Acesse Configurações -> Banco de Dados para ver o SQL de migração.");
+            alert("Alerta: A igreja foi atualizada, mas as novas colunas customizadas (cores, botões ou idioma) ainda não existem no banco de dados. Acesse Configurações -> Banco de Dados para ver o SQL de migração.");
           }
         }
 
         if (err) throw err;
-        setSuccess('Igreja atualizada com sucesso!');
+        setSuccess('Igreja updated with success!');
       } else {
         // Insert
         let { error: err } = await supabase.from('igrejas').insert(payload);
         
-        if (err && err.message?.includes('column "cor_fundo" of relation "igrejas" does not exist')) {
+        if (err && (
+          err.message?.includes('column "cor_fundo" of relation "igrejas" does not exist') ||
+          err.message?.includes('column "cor_botoes" of relation "igrejas" does not exist') ||
+          err.message?.includes('column "idioma_padrao" of relation "igrejas" does not exist')
+        )) {
           const fallbackPayload: any = { ...payload };
           delete fallbackPayload.cor_fundo;
           delete fallbackPayload.cor_paineis;
           delete fallbackPayload.cor_bordas;
           delete fallbackPayload.cor_fontes;
+          delete fallbackPayload.cor_botoes;
+          delete fallbackPayload.idioma_padrao;
           const fallbackRes = await supabase.from('igrejas').insert(fallbackPayload);
           err = fallbackRes.error;
           if (!err) {
-            alert("Alerta: A igreja foi cadastrada, mas as novas colunas de cores ainda não existem no banco de dados. Acesse Configurações -> Banco de Dados para ver o SQL de migração.");
+            alert("Alerta: A igreja foi cadastrada, mas as novas colunas customizadas (cores, botões ou idioma) ainda não existem no banco de dados. Acesse Configurações -> Banco de Dados para ver o SQL de migração.");
           }
         }
 
@@ -368,9 +388,9 @@ export default function IgrejasPage() {
 
               <div className="md:col-span-2 border-t border-slate-100 dark:border-slate-755 pt-6 bg-transparent">
                 <h4 className="text-xs font-black uppercase text-slate-400 dark:text-slate-500 tracking-wider mb-4 ml-1">
-                  Identidade Visual (Cores Customizadas)
+                  Identidade Visual & Configurações da Igreja
                 </h4>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                   <div>
                     <label className="block text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 ml-1">
                       Fundo do App
@@ -456,9 +476,46 @@ export default function IgrejasPage() {
                       />
                     </div>
                   </div>
+
+                  <div>
+                    <label className="block text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 ml-1">
+                      Botões do App
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="color"
+                        value={currentIgreja.cor_botoes || '#E4A232'}
+                        onChange={(e) => setCurrentIgreja({ ...currentIgreja, cor_botoes: e.target.value })}
+                        className="w-10 h-10 rounded-lg cursor-pointer border-0 bg-transparent p-0 flex-shrink-0"
+                      />
+                      <input
+                        type="text"
+                        value={currentIgreja.cor_botoes || ''}
+                        onChange={(e) => setCurrentIgreja({ ...currentIgreja, cor_botoes: e.target.value })}
+                        className="w-full px-2 py-1 border-2 border-slate-100 dark:border-slate-700 rounded-lg text-xs bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 uppercase outline-none font-semibold text-center"
+                        placeholder="#E4A232"
+                      />
+                    </div>
+                  </div>
                 </div>
-                <p className="mt-2 text-slate-400 dark:text-slate-500 text-[10px] leading-relaxed">
-                  * Deixe em branco se desejar utilizar as cores originais do sistema. A barra lateral e barra superior administrativas permanecerão com as cores originais, sendo afetadas apenas pelo modo Claro/Escuro.
+
+                <div className="mt-6 max-w-sm">
+                  <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 ml-1">
+                    Idioma Padrão da Igreja
+                  </label>
+                  <select
+                    value={currentIgreja.idioma_padrao || 'pt'}
+                    onChange={(e) => setCurrentIgreja({ ...currentIgreja, idioma_padrao: e.target.value })}
+                    className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-semibold text-sm"
+                  >
+                    <option value="pt">Português (Brasil)</option>
+                    <option value="en">English (US)</option>
+                    <option value="es">Español</option>
+                  </select>
+                </div>
+
+                <p className="mt-4 text-slate-400 dark:text-slate-500 text-[10px] leading-relaxed">
+                  * Deixe as cores em branco para usar as cores originais. O idioma padrão afetará a interface de todos os membros associados a esta igreja.
                 </p>
               </div>
 

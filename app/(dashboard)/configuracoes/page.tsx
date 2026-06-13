@@ -261,30 +261,6 @@ export default function ConfiguracoesPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800">
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 bg-white dark:bg-slate-800 rounded-xl flex items-center justify-center text-slate-400 border border-slate-100 dark:border-slate-700">
-                       <Globe size={20} />
-                    </div>
-                    <div>
-                       <p className="font-bold text-slate-900 dark:text-white">Idioma do Sistema</p>
-                       <p className="text-xs text-slate-500 dark:text-slate-400">Língua padrão da interface administrativa</p>
-                    </div>
-                  </div>
-                  <select
-                    value={language}
-                    onChange={(e) => {
-                      setLanguage(e.target.value);
-                      setLanguageState(e.target.value as any);
-                    }}
-                    disabled={saving}
-                    className="bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 font-bold focus:border-primary outline-none text-slate-900 dark:text-white text-xs select-none"
-                  >
-                    <option value="pt">Português (Brasil)</option>
-                    <option value="en">English (US)</option>
-                    <option value="es">Español</option>
-                  </select>
-                </div>
               </div>
 
               <div className="pt-8 flex justify-end">
