@@ -135,6 +135,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { error: 'Credenciais inválidas' };
       }
 
+      if (data.ativo === false) {
+        setLoading(false);
+        return { error: 'Esta conta está desabilitada.' };
+      }
+
       const newSessionId = crypto.randomUUID();
       
       // Update session ID in DB

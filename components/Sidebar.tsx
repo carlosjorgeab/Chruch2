@@ -5,23 +5,25 @@ import { LayoutDashboard, Users, UsersRound, BookOpen, ClipboardCheck, Wallet, S
 import { useIgreja } from '@/context/IgrejaContext';
 import { useAuth } from '@/context/AuthContext';
 import { Logo } from '@/components/Logo';
+import { useLanguage } from '@/context/LanguageContext';
 
 export function Sidebar({ isOpen = false, setIsOpen }: { isOpen?: boolean, setIsOpen?: (v: boolean) => void }) {
   const pathname = usePathname();
   const { selectedIgreja } = useIgreja();
   const { logout, hasPermission, user } = useAuth();
+  const { t } = useLanguage();
 
   const navItems = [
-    { href: '/', icon: LayoutDashboard, label: 'Painel Principal', disabled: false, id: '/' },
-    { href: '/membros', icon: Users, label: 'Membros', disabled: false, id: '/membros' },
-    { href: '/comunidades', icon: UsersRound, label: 'Comunidades', disabled: false, id: '/comunidades' },
-    { href: '/licoes', icon: BookOpen, label: 'Lições', disabled: false, id: '/licoes' },
-    { href: '/presencas', icon: ClipboardCheck, label: 'Asistência', disabled: false, id: '/presencas' },
-    { href: '/financeiro', icon: Wallet, label: 'Financeiro', disabled: false, id: '/financeiro' },
-    { href: '/igrejas', icon: Building, label: 'Igrejas', disabled: false, id: '/igrejas' },
-    { href: '/perfis', icon: Shield, label: 'Perfis', disabled: false, id: '/perfis' },
-    { href: '/usuarios', icon: Users, label: 'Usuários', disabled: false, id: '/usuarios' },
-    { href: '/configuracoes', icon: Settings, label: 'Configurações', disabled: false, id: '/configuracoes' },
+    { href: '/', icon: LayoutDashboard, label: t('menu_dashboard'), disabled: false, id: '/' },
+    { href: '/membros', icon: Users, label: t('menu_membros'), disabled: false, id: '/membros' },
+    { href: '/comunidades', icon: UsersRound, label: t('menu_comunidades'), disabled: false, id: '/comunidades' },
+    { href: '/licoes', icon: BookOpen, label: t('menu_licoes'), disabled: false, id: '/licoes' },
+    { href: '/presencas', icon: ClipboardCheck, label: t('menu_presencas'), disabled: false, id: '/presencas' },
+    { href: '/financeiro', icon: Wallet, label: t('menu_financeiro'), disabled: false, id: '/financeiro' },
+    { href: '/igrejas', icon: Building, label: t('menu_igrejas'), disabled: false, id: '/igrejas' },
+    { href: '/perfis', icon: Shield, label: t('menu_perfis'), disabled: false, id: '/perfis' },
+    { href: '/usuarios', icon: Users, label: t('menu_usuarios'), disabled: false, id: '/usuarios' },
+    { href: '/configuracoes', icon: Settings, label: t('menu_configuracoes'), disabled: false, id: '/configuracoes' },
   ].filter(item => {
     if (item.id === '/perfis' || item.id === '/usuarios' || item.id === '/configuracoes' || item.id === '/igrejas') {
       return user?.is_admin || hasPermission(item.id);
@@ -34,7 +36,7 @@ export function Sidebar({ isOpen = false, setIsOpen }: { isOpen?: boolean, setIs
   };
 
   return (
-    <aside className={`h-screen w-64 fixed left-0 top-0 pt-16 z-50 bg-[#251A36] dark:bg-[#1A1226] text-white flex flex-col justify-between py-6 border-r border-slate-800 font-['Inter'] text-sm font-medium transition-transform duration-300 overflow-y-auto ${isOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}>
+    <aside className={`h-screen w-64 fixed left-0 top-0 pt-16 z-50 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-white flex flex-col justify-between py-6 border-r border-slate-200 dark:border-slate-800 font-['Inter'] text-sm font-medium transition-all duration-300 overflow-y-auto ${isOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}>
       <div className="px-4 space-y-2">
         <div className="mb-8 px-2 flex items-center gap-3">
           <div className="h-10 w-10 rounded bg-[#E4A232] flex items-center justify-center text-white flex-shrink-0 shadow-md">
@@ -42,18 +44,18 @@ export function Sidebar({ isOpen = false, setIsOpen }: { isOpen?: boolean, setIs
               // eslint-disable-next-line @next/next/no-img-element
               <img 
                 alt={`Logo de ${selectedIgreja.nome}`} 
-                className="w-8 h-8 object-cover" 
+                className="w-8 h-8 object-cover rounded" 
                 src={selectedIgreja.logo_url} 
               />
             ) : (
-                <Building size={20} />
+              <Building size={20} />
             )}
           </div>
           <div className="overflow-hidden">
-            <h2 className="text-md font-bold text-white leading-tight truncate">
+            <h2 className="text-md font-bold text-slate-900 dark:text-white leading-tight truncate">
               {selectedIgreja ? selectedIgreja.nome : 'Congregación'}
             </h2>
-            <p className="text-xs text-slate-300 font-normal truncate mt-0.5">
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-normal truncate mt-0.5">
               Pentecostés
             </p>
           </div>
@@ -68,7 +70,7 @@ export function Sidebar({ isOpen = false, setIsOpen }: { isOpen?: boolean, setIs
               return (
                 <div 
                   key={item.href}
-                  className="flex items-center gap-3 px-4 py-3 rounded-lg font-semibold text-slate-500 cursor-not-allowed"
+                  className="flex items-center gap-3 px-4 py-3 rounded-lg font-semibold text-slate-450 dark:text-slate-500 cursor-not-allowed"
                   title="Em breve"
                 >
                   <Icon size={20} />
@@ -82,10 +84,10 @@ export function Sidebar({ isOpen = false, setIsOpen }: { isOpen?: boolean, setIs
                 key={item.href}
                 href={item.href} 
                 onClick={() => setIsOpen && setIsOpen(false)}
-                className={`flex items-center gap-3 px-4 py-3 rounded-lg font-semibold cursor-pointer transition-all ${
+                className={`flex items-center gap-3 px-4 py-3 rounded-lg font-bold cursor-pointer transition-all ${
                   isActive 
                     ? 'bg-[#E4A232] text-white shadow-md active:scale-98' 
-                    : 'text-slate-300 hover:bg-white/10 hover:translate-x-1 duration-200'
+                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-150 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white hover:translate-x-1 duration-200'
                 }`}
               >
                 <Icon size={20} />
@@ -97,9 +99,9 @@ export function Sidebar({ isOpen = false, setIsOpen }: { isOpen?: boolean, setIs
       </div>
       
       <div className="px-4 space-y-1 mt-6">
-        <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg cursor-pointer transition-all text-sm font-medium">
+        <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 text-slate-500 dark:text-slate-400 hover:text-red-650 dark:hover:text-white hover:bg-red-50/50 dark:hover:bg-white/5 rounded-lg cursor-pointer transition-all text-sm font-bold">
           <LogOut size={20} />
-          <span>Cerrar Sesión</span>
+          <span>{t('logout')}</span>
         </button>
       </div>
     </aside>

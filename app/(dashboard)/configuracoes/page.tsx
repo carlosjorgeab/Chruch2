@@ -2,12 +2,16 @@
 import { useState, useEffect } from 'react';
 import { Settings, Save, Bell, Shield, Globe, Moon, Clock, Lock, MonitorStop, RefreshCw, CheckCircle, AlertTriangle, Database, FileText, Copy, Check } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { useLanguage } from '@/context/LanguageContext';
+import { defaultTranslations } from '@/lib/translations';
 
 export default function ConfiguracoesPage() {
   const [activeTab, setActiveTab] = useState('geral');
   const [darkMode, setDarkMode] = useState(false);
   const [sessionTimeout, setSessionTimeout] = useState('30');
   const [disableMultiLogin, setDisableMultiLogin] = useState(false);
+  const { language: sysLanguage, setLanguage: setLanguageState, saveOverride, overrides } = useLanguage();
+  const [editingTranslations, setEditingTranslations] = useState<Record<string, string>>({});
   const [language, setLanguage] = useState('pt');
   
   // Notification states
@@ -178,6 +182,7 @@ export default function ConfiguracoesPage() {
 
   const tabs = [
     { id: 'geral', label: 'Geral', icon: Settings },
+    { id: 'traducoes', label: 'Idiomas & Traduções', icon: Globe },
     { id: 'seguranca', label: 'Segurança', icon: Shield },
     { id: 'notificacoes', label: 'Notificações', icon: Bell },
     { id: 'database', label: 'Banco de Dados', icon: Database },
@@ -268,7 +273,10 @@ export default function ConfiguracoesPage() {
                   </div>
                   <select
                     value={language}
-                    onChange={(e) => setLanguage(e.target.value)}
+                    onChange={(e) => {
+                      setLanguage(e.target.value);
+                      setLanguageState(e.target.value as any);
+                    }}
                     disabled={saving}
                     className="bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 font-bold focus:border-primary outline-none text-slate-900 dark:text-white text-xs select-none"
                   >
@@ -288,6 +296,93 @@ export default function ConfiguracoesPage() {
                   {saving ? <RefreshCw size={18} className="animate-spin" /> : <Save size={18} />}
                   {saving ? 'Salvando...' : 'Salvar Alterações'}
                 </button>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'traducoes' && (
+            <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
+              <div className="border-b border-slate-100 dark:border-slate-700 pb-4">
+                <h3 className="text-xl font-black font-headline text-slate-900 dark:text-white uppercase">Idiomas & Traduções</h3>
+                <p className="text-slate-500 dark:text-slate-400 text-sm">Personalize os termos e nomes de cada tela ou campo para os 3 idiomas</p>
+              </div>
+
+              {/* Language Selector in Translation tab */}
+              <div className="p-4 bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div>
+                  <p className="font-bold text-slate-900 dark:text-white">Idioma para Customizar</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Escolha para qual idioma deseja ajustar as traduções ou termos de tela</p>
+                </div>
+                <div className="flex gap-2">
+                  {(['pt', 'es', 'en'] as const).map(lang => (
+                    <button
+                      key={lang}
+                      type="button"
+                      onClick={() => {
+                        setLanguage(lang);
+                        setLanguageState(lang);
+                      }}
+                      className={`px-3 py-1.5 rounded-xl font-bold transition-all text-xs uppercase ${
+                        language === lang
+                          ? 'bg-amber-600 text-white shadow-md'
+                          : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-705 hover:bg-slate-50 dark:hover:bg-slate-900/50'
+                      }`}
+                    >
+                      {lang === 'pt' ? 'Português' : lang === 'es' ? 'Español' : 'English'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Translation entries */}
+              <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <h4 className="text-xs font-black uppercase text-slate-400 dark:text-slate-500 tracking-wider">Campos Disponíveis</h4>
+                  <p className="text-[9px] text-slate-400">As alterações salvam e aplicam instantaneamente</p>
+                </div>
+
+                <div className="divide-y divide-slate-100 dark:divide-slate-800 border border-slate-100 dark:border-slate-800 rounded-2xl overflow-hidden bg-slate-50/50 dark:bg-slate-900/30">
+                  {Object.keys(defaultTranslations[language as 'pt' | 'es' | 'en'] || {}).map((key) => {
+                    const defaultText = (defaultTranslations[language as 'pt' | 'es' | 'en'] as any)[key];
+                    const currentOverride = overrides[`${language}_${key}`] || '';
+                    
+                    return (
+                      <div key={key} className="p-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 hover:bg-slate-100/30 dark:hover:bg-slate-900/40 transition-all bg-transparent">
+                        <div className="w-full md:w-1/3">
+                          <p className="font-mono text-xs text-amber-600 dark:text-amber-500 font-bold">{key}</p>
+                          <p className="text-xs text-slate-400 mt-0.5">Padrão: <span className="italic">"{defaultText}"</span></p>
+                        </div>
+                        <div className="w-full md:w-2/3 flex gap-2">
+                          <input
+                            type="text"
+                            value={editingTranslations[key] !== undefined ? editingTranslations[key] : (currentOverride || defaultText)}
+                            onChange={(e) => {
+                              setEditingTranslations(prev => ({
+                                ...prev,
+                                [key]: e.target.value
+                              }));
+                            }}
+                            className="w-full px-4 py-2 border-2 border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-xl text-sm focus:border-amber-500 outline-none font-semibold transition-all"
+                            placeholder={defaultText}
+                          />
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const val = editingTranslations[key] !== undefined ? editingTranslations[key] : (currentOverride || defaultText);
+                              await saveOverride(key, val);
+                              setStatusMessage({ type: 'success', text: `Termo "${key}" personalizado com sucesso!` });
+                              setTimeout(() => setStatusMessage(null), 3000);
+                            }}
+                            className="bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-4 py-2 rounded-xl text-xs font-bold hover:opacity-90 transition-all flex items-center gap-1"
+                          >
+                            <Save size={12} />
+                            Salvar
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           )}

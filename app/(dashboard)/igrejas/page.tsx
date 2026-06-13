@@ -15,6 +15,10 @@ type Igreja = {
   logo_url: string | null;
   slug: string | null;
   ativo: boolean;
+  cor_fundo?: string | null;
+  cor_paineis?: string | null;
+  cor_bordas?: string | null;
+  cor_fontes?: string | null;
 };
 
 export default function IgrejasPage() {
@@ -31,6 +35,10 @@ export default function IgrejasPage() {
     logo_url: '',
     slug: '',
     ativo: true,
+    cor_fundo: '',
+    cor_paineis: '',
+    cor_bordas: '',
+    cor_fontes: '',
   });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -76,6 +84,10 @@ export default function IgrejasPage() {
       logo_url: '',
       slug: '',
       ativo: true,
+      cor_fundo: '',
+      cor_paineis: '',
+      cor_bordas: '',
+      cor_fontes: '',
     });
     setIsEditing(true);
     setError('');
@@ -139,20 +151,55 @@ export default function IgrejasPage() {
       logo_url: currentIgreja.logo_url || null,
       slug: slugToSave,
       ativo: currentIgreja.ativo !== undefined ? currentIgreja.ativo : true,
+      cor_fundo: currentIgreja.cor_fundo || null,
+      cor_paineis: currentIgreja.cor_paineis || null,
+      cor_bordas: currentIgreja.cor_bordas || null,
+      cor_fontes: currentIgreja.cor_fontes || null,
     };
 
     try {
       if (currentIgreja.id) {
         // Update
-        const { error: err } = await supabase
+        let { error: err } = await supabase
           .from('igrejas')
           .update(payload)
           .eq('id', currentIgreja.id);
+          
+        if (err && err.message?.includes('column "cor_fundo" of relation "igrejas" does not exist')) {
+          const fallbackPayload: any = { ...payload };
+          delete fallbackPayload.cor_fundo;
+          delete fallbackPayload.cor_paineis;
+          delete fallbackPayload.cor_bordas;
+          delete fallbackPayload.cor_fontes;
+          const fallbackRes = await supabase
+            .from('igrejas')
+            .update(fallbackPayload)
+            .eq('id', currentIgreja.id);
+          err = fallbackRes.error;
+          if (!err) {
+            alert("Alerta: A igreja foi atualizada, mas as novas colunas de cores ainda não existem no banco de dados. Acesse Configurações -> Banco de Dados para ver o SQL de migração.");
+          }
+        }
+
         if (err) throw err;
         setSuccess('Igreja atualizada com sucesso!');
       } else {
         // Insert
-        const { error: err } = await supabase.from('igrejas').insert(payload);
+        let { error: err } = await supabase.from('igrejas').insert(payload);
+        
+        if (err && err.message?.includes('column "cor_fundo" of relation "igrejas" does not exist')) {
+          const fallbackPayload: any = { ...payload };
+          delete fallbackPayload.cor_fundo;
+          delete fallbackPayload.cor_paineis;
+          delete fallbackPayload.cor_bordas;
+          delete fallbackPayload.cor_fontes;
+          const fallbackRes = await supabase.from('igrejas').insert(fallbackPayload);
+          err = fallbackRes.error;
+          if (!err) {
+            alert("Alerta: A igreja foi cadastrada, mas as novas colunas de cores ainda não existem no banco de dados. Acesse Configurações -> Banco de Dados para ver o SQL de migração.");
+          }
+        }
+
         if (err) throw err;
         setSuccess('Igreja cadastrada com sucesso!');
       }
@@ -317,6 +364,102 @@ export default function IgrejasPage() {
                   className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-semibold"
                   placeholder="Rua, Número, Bairro, Cidade - Estado"
                 />
+              </div>
+
+              <div className="md:col-span-2 border-t border-slate-100 dark:border-slate-755 pt-6 bg-transparent">
+                <h4 className="text-xs font-black uppercase text-slate-400 dark:text-slate-500 tracking-wider mb-4 ml-1">
+                  Identidade Visual (Cores Customizadas)
+                </h4>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div>
+                    <label className="block text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 ml-1">
+                      Fundo do App
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="color"
+                        value={currentIgreja.cor_fundo || '#f8fafc'}
+                        onChange={(e) => {
+                          setCurrentIgreja({ ...currentIgreja, cor_fundo: e.target.value });
+                        }}
+                        className="w-10 h-10 rounded-lg cursor-pointer border-0 bg-transparent p-0 flex-shrink-0"
+                      />
+                      <input
+                        type="text"
+                        value={currentIgreja.cor_fundo || ''}
+                        onChange={(e) => setCurrentIgreja({ ...currentIgreja, cor_fundo: e.target.value })}
+                        className="w-full px-2 py-1 border-2 border-slate-100 dark:border-slate-700 rounded-lg text-xs bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 uppercase outline-none font-semibold text-center"
+                        placeholder="#F8FAFC"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 ml-1">
+                      Painéis (Cards)
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="color"
+                        value={currentIgreja.cor_paineis || '#ffffff'}
+                        onChange={(e) => setCurrentIgreja({ ...currentIgreja, cor_paineis: e.target.value })}
+                        className="w-10 h-10 rounded-lg cursor-pointer border-0 bg-transparent p-0 flex-shrink-0"
+                      />
+                      <input
+                        type="text"
+                        value={currentIgreja.cor_paineis || ''}
+                        onChange={(e) => setCurrentIgreja({ ...currentIgreja, cor_paineis: e.target.value })}
+                        className="w-full px-2 py-1 border-2 border-slate-100 dark:border-slate-700 rounded-lg text-xs bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 uppercase outline-none font-semibold text-center"
+                        placeholder="#FFFFFF"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 ml-1">
+                      Bordas
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="color"
+                        value={currentIgreja.cor_bordas || '#e2e8f0'}
+                        onChange={(e) => setCurrentIgreja({ ...currentIgreja, cor_bordas: e.target.value })}
+                        className="w-10 h-10 rounded-lg cursor-pointer border-0 bg-transparent p-0 flex-shrink-0"
+                      />
+                      <input
+                        type="text"
+                        value={currentIgreja.cor_bordas || ''}
+                        onChange={(e) => setCurrentIgreja({ ...currentIgreja, cor_bordas: e.target.value })}
+                        className="w-full px-2 py-1 border-2 border-slate-100 dark:border-slate-700 rounded-lg text-xs bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 uppercase outline-none font-semibold text-center"
+                        placeholder="#E2E8F0"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 ml-1">
+                      Fontes (Texto)
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="color"
+                        value={currentIgreja.cor_fontes || '#0f172a'}
+                        onChange={(e) => setCurrentIgreja({ ...currentIgreja, cor_fontes: e.target.value })}
+                        className="w-10 h-10 rounded-lg cursor-pointer border-0 bg-transparent p-0 flex-shrink-0"
+                      />
+                      <input
+                        type="text"
+                        value={currentIgreja.cor_fontes || ''}
+                        onChange={(e) => setCurrentIgreja({ ...currentIgreja, cor_fontes: e.target.value })}
+                        className="w-full px-2 py-1 border-2 border-slate-100 dark:border-slate-700 rounded-lg text-xs bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 uppercase outline-none font-semibold text-center"
+                        placeholder="#0F172A"
+                      />
+                    </div>
+                  </div>
+                </div>
+                <p className="mt-2 text-slate-400 dark:text-slate-500 text-[10px] leading-relaxed">
+                  * Deixe em branco se desejar utilizar as cores originais do sistema. A barra lateral e barra superior administrativas permanecerão com as cores originais, sendo afetadas apenas pelo modo Claro/Escuro.
+                </p>
               </div>
 
               <div className="md:col-span-2 flex items-center gap-3">

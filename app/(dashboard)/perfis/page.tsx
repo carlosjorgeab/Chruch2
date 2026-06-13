@@ -15,7 +15,7 @@ const MENU_OPTIONS = [
   { id: '/membros', label: 'Gestão de Membros' },
   { id: '/comunidades', label: 'Gestão de Comunidades' },
   { id: '/licoes', label: 'Gestão de Lições' },
-  { id: '/presencas', label: 'Controle de Presenças' },
+  { id: '/presencas', label: 'Controle de Presenças / Assistências' },
   { id: '/financeiro', label: 'Gestão Financeira' },
   { id: '/igrejas', label: 'Gestão de Igrejas' },
   { id: '/perfis', label: 'Gestão de Perfis' },

@@ -2,6 +2,7 @@ import type {Metadata} from 'next';
 import './globals.css';
 import { IgrejaProvider } from '@/context/IgrejaContext';
 import { AuthProvider } from '@/context/AuthContext';
+import { LanguageProvider } from '@/context/LanguageContext';
 
 export const metadata: Metadata = {
   title: 'Church Management',
@@ -13,9 +14,11 @@ export default function RootLayout({children}: {children: React.ReactNode}) {
     <html lang="pt-BR" suppressHydrationWarning>
       <body suppressHydrationWarning>
         <AuthProvider>
-          <IgrejaProvider>
-            {children}
-          </IgrejaProvider>
+          <LanguageProvider>
+            <IgrejaProvider>
+              {children}
+            </IgrejaProvider>
+          </LanguageProvider>
         </AuthProvider>
       </body>
     </html>

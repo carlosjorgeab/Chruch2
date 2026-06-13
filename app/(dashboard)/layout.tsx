@@ -91,6 +91,78 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       <Sidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />
       <Topbar />
+      
+      {(() => {
+        const corFundo = (selectedIgreja as any)?.cor_fundo;
+        const corPaineis = (selectedIgreja as any)?.cor_paineis;
+        const corBordas = (selectedIgreja as any)?.cor_bordas;
+        const corFontes = (selectedIgreja as any)?.cor_fontes;
+
+        if (!corFundo && !corPaineis && !corBordas && !corFontes) return null;
+
+        return (
+          <style dangerouslySetInnerHTML={{ __html: `
+            :root {
+              --church-bg: ${corFundo || '#f8fafc'};
+              --church-panel: ${corPaineis || '#ffffff'};
+              --church-border: ${corBordas || '#e2e8f0'};
+              --church-font: ${corFontes || '#0f172a'};
+            }
+            .dark {
+              --church-bg: ${corFundo || '#0f172a'};
+              --church-panel: ${corPaineis || '#1e293b'};
+              --church-border: ${corBordas || '#334155'};
+              --church-font: ${corFontes || '#f8fafc'};
+            }
+            
+            /* Main content area overrides */
+            main {
+              background-color: var(--church-bg) !important;
+              color: var(--church-font) !important;
+            }
+            
+            /* Panels/Cards overrides */
+            main .bg-white,
+            main [class*="bg-white/"],
+            main .bg-slate-50,
+            main .dark\\:bg-slate-800,
+            main .dark\\:bg-slate-900,
+            main .bg-slate-100 {
+              background-color: var(--church-panel) !important;
+            }
+            
+            /* Borders overrides */
+            main .border,
+            main .border-slate-100,
+            main .border-slate-200,
+            main .dark\\:border-slate-700,
+            main .dark\\:border-slate-800 {
+              border-color: var(--church-border) !important;
+            }
+            
+            /* Fonts overrides */
+            main h1,
+            main h2,
+            main h3,
+            main h4,
+            main h5,
+            main p,
+            main label,
+            main .text-slate-950,
+            main .text-slate-900,
+            main .text-slate-800,
+            main .text-slate-700,
+            main .text-slate-600,
+            main .dark\\:text-white,
+            main .dark\\:text-slate-100,
+            main .dark\\:text-slate-200,
+            main .dark\\:text-slate-300 {
+              color: var(--church-font) !important;
+            }
+          ` }} />
+        );
+      })()}
+
       <main className="md:ml-64 pt-16 min-h-screen transition-all duration-300">
         {children}
       </main>

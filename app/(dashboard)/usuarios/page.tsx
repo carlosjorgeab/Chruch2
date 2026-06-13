@@ -12,6 +12,7 @@ type Usuario = {
   id_perfil: string | null;
   id_igreja: string | null;
   is_admin: boolean;
+  ativo?: boolean;
   perfil?: { nome: string };
   igreja?: { nome: string };
 };
@@ -28,7 +29,8 @@ export default function UsuariosPage() {
     senha: '', 
     id_perfil: '', 
     id_igreja: '',
-    is_admin: false
+    is_admin: false,
+    ativo: true
   });
   const [error, setError] = useState('');
 
@@ -82,7 +84,8 @@ export default function UsuariosPage() {
       email: currentUser.email,
       id_perfil: currentUser.is_admin ? null : currentUser.id_perfil,
       id_igreja: currentUser.is_admin ? null : currentUser.id_igreja,
-      is_admin: currentUser.is_admin || false
+      is_admin: currentUser.is_admin || false,
+      ativo: currentUser.ativo !== false
     };
 
     if (currentUser.senha) {
@@ -90,15 +93,37 @@ export default function UsuariosPage() {
     }
 
     if (currentUser.id) {
-      const { error } = await supabase.from('usuarios').update(userData).eq('id', currentUser.id);
-      if (error) setError('Erro ao atualizar usuário. O e-mail pode já estar em uso.');
+      let { error: err } = await supabase.from('usuarios').update(userData).eq('id', currentUser.id);
+      
+      if (err && err.message?.includes('column "ativo" of relation "usuarios" does not exist')) {
+        const fallbackData = { ...userData };
+        delete fallbackData.ativo;
+        const fallbackRes = await supabase.from('usuarios').update(fallbackData).eq('id', currentUser.id);
+        err = fallbackRes.error;
+        if (!err) {
+          alert("Alerta: O usuário foi atualizado, porém a coluna 'ativo' ainda não existe no seu Supabase. Por favor, acesse Configurações -> Banco de Dados para ver o comando SQL de atualização.");
+        }
+      }
+
+      if (err) setError('Erro ao atualizar usuário. O e-mail pode já estar em uso.');
       else {
         setIsEditing(false);
         fetchData();
       }
     } else {
-      const { error } = await supabase.from('usuarios').insert([userData]);
-      if (error) setError('Erro ao criar usuário. O e-mail pode já estar em uso.');
+      let { error: err } = await supabase.from('usuarios').insert([userData]);
+
+      if (err && err.message?.includes('column "ativo" of relation "usuarios" does not exist')) {
+        const fallbackData = { ...userData };
+        delete fallbackData.ativo;
+        const fallbackRes = await supabase.from('usuarios').insert([fallbackData]);
+        err = fallbackRes.error;
+        if (!err) {
+          alert("Alerta: O usuário foi criado, porém a coluna 'ativo' ainda não existe no seu Supabase. Por favor, acesse Configurações -> Banco de Dados para ver o comando SQL de atualização.");
+        }
+      }
+
+      if (err) setError('Erro ao criar usuário. O e-mail pode já estar em uso.');
       else {
         setIsEditing(false);
         fetchData();
@@ -173,17 +198,31 @@ export default function UsuariosPage() {
               />
             </div>
 
-            <div className="md:col-span-2 flex items-center gap-3 p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
-              <input 
-                type="checkbox" 
-                id="is_admin"
-                checked={currentUser.is_admin}
-                onChange={(e) => setCurrentUser({...currentUser, is_admin: e.target.checked})}
-                className="w-5 h-5 text-amber-500 rounded focus:ring-amber-500" 
-              />
-              <label htmlFor="is_admin" className="text-sm font-bold text-slate-700 dark:text-slate-300 cursor-pointer">
-                Usuário Administrador (Acesso total a todas as telas e igrejas)
-              </label>
+            <div className="md:col-span-2 flex flex-col sm:flex-row gap-4 p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
+              <div className="flex items-center gap-3">
+                <input 
+                  type="checkbox" 
+                  id="is_admin"
+                  checked={currentUser.is_admin}
+                  onChange={(e) => setCurrentUser({...currentUser, is_admin: e.target.checked})}
+                  className="w-5 h-5 text-amber-500 rounded focus:ring-amber-500" 
+                />
+                <label htmlFor="is_admin" className="text-sm font-bold text-slate-700 dark:text-slate-300 cursor-pointer">
+                  Usuário Administrador (Acesso total)
+                </label>
+              </div>
+              <div className="flex items-center gap-3 sm:border-l sm:pl-4 border-slate-200 dark:border-slate-700">
+                <input 
+                  type="checkbox" 
+                  id="ativo"
+                  checked={currentUser.ativo !== false}
+                  onChange={(e) => setCurrentUser({...currentUser, ativo: e.target.checked})}
+                  className="w-5 h-5 text-amber-500 rounded focus:ring-amber-500" 
+                />
+                <label htmlFor="ativo" className="text-sm font-bold text-slate-700 dark:text-slate-300 cursor-pointer">
+                  Conta Ativa (Habilitar Acesso do Usuário)
+                </label>
+              </div>
             </div>
 
             {!currentUser.is_admin && (
@@ -258,6 +297,11 @@ export default function UsuariosPage() {
                       <td className="p-4 font-bold text-slate-900 dark:text-white flex items-center gap-2">
                         {u.email}
                         {u.is_admin && <span className="px-2 py-0.5 bg-red-100 text-red-700 text-[10px] uppercase tracking-wider font-black rounded">Admin</span>}
+                        {u.ativo === false ? (
+                          <span className="px-2 py-0.5 bg-red-500/10 text-red-600 text-[10px] uppercase tracking-wider font-black rounded">Desabilitado</span>
+                        ) : (
+                          <span className="px-2 py-0.5 bg-green-500/10 text-green-600 text-[10px] uppercase tracking-wider font-black rounded">Habilitado</span>
+                        )}
                       </td>
                       <td className="p-4 text-slate-600 dark:text-slate-400">
                         {u.is_admin ? 'Acesso Total' : (u.perfil?.nome || '-')}

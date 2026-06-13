@@ -16,6 +16,10 @@ CREATE TABLE IF NOT EXISTS igrejas (
   logo_url TEXT,
   slug VARCHAR(100) UNIQUE,
   ativo BOOLEAN DEFAULT true,
+  cor_fundo VARCHAR(50),
+  cor_paineis VARCHAR(50),
+  cor_bordas VARCHAR(50),
+  cor_fontes VARCHAR(50),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -38,6 +42,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
   last_activity_at TIMESTAMP WITH TIME ZONE,
   current_session_id TEXT,
   theme_preference TEXT DEFAULT 'light',
+  ativo BOOLEAN DEFAULT true,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -147,3 +152,15 @@ VALUES (
   (SELECT id FROM igrejas LIMIT 1)
 )
 ON CONFLICT (email) DO NOTHING;
+
+
+-- ==========================================================
+-- COMANDOS PARA ATUALIZAÇÃO DE BANCOS DE DADOS EXISTENTES (MIGRAÇÃO)
+-- Execute estes comandos no Editor SQL do seu Supabase para habilitar novos recursos:
+-- ==========================================================
+-- ALTER TABLE igrejas ADD COLUMN IF NOT EXISTS cor_fundo VARCHAR(50) DEFAULT '#f8fafc';
+-- ALTER TABLE igrejas ADD COLUMN IF NOT EXISTS cor_paineis VARCHAR(50) DEFAULT '#ffffff';
+-- ALTER TABLE igrejas ADD COLUMN IF NOT EXISTS cor_bordas VARCHAR(50) DEFAULT '#e2e8f0';
+-- ALTER TABLE igrejas ADD COLUMN IF NOT EXISTS cor_fontes VARCHAR(50) DEFAULT '#0f172a';
+-- ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS ativo BOOLEAN DEFAULT true;
+

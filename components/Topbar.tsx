@@ -6,10 +6,12 @@ import { Search, Bell, UserCircle, ChevronDown, Building2, Settings, Users, LogO
 import { useIgreja } from '@/context/IgrejaContext';
 import { useAuth } from '@/context/AuthContext';
 import { Logo } from '@/components/Logo';
+import { useLanguage } from '@/context/LanguageContext';
 
 export function Topbar() {
   const { igrejas, selectedIgreja, setSelectedIgreja } = useIgreja();
   const { user, logout } = useAuth();
+  const { t } = useLanguage();
   const [searchQuery, setSearchQuery] = useState('');
   const router = useRouter();
 
@@ -28,18 +30,18 @@ export function Topbar() {
 
       <div className="flex items-center gap-2 md:gap-4">
         {igrejas.length > 1 && (
-          <div className="relative flex items-center bg-white rounded-lg px-2 md:px-3 py-1.5 border border-slate-200 shadow-sm max-w-[120px] md:max-w-none">
+          <div className="relative flex items-center bg-white dark:bg-slate-900 rounded-lg px-2 md:px-3 py-1.5 border border-slate-200 dark:border-slate-800 shadow-sm max-w-[120px] md:max-w-none">
             <select 
-              className="bg-transparent border-none focus:ring-0 text-xs md:text-sm font-bold text-slate-800 outline-none cursor-pointer appearance-none pr-6 w-full truncate"
+              className="bg-transparent border-none focus:ring-0 text-xs md:text-sm font-bold text-slate-800 dark:text-white outline-none cursor-pointer appearance-none pr-6 w-full truncate"
               value={selectedIgreja?.id || ''}
               onChange={(e) => {
                 const ig = igrejas.find(d => d.id === e.target.value);
                 setSelectedIgreja(ig || null);
               }}
             >
-              <option value="" disabled>Selecione uma Igreja</option>
+              <option value="" disabled className="bg-white dark:bg-slate-900">{t('select_church') || 'Selecione uma Igreja'}</option>
               {igrejas.map(ig => (
-                <option key={ig.id} value={ig.id}>
+                <option key={ig.id} value={ig.id} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-white">
                   {ig.nome} {!ig.ativo ? '(Inativa)' : ''}
                 </option>
               ))}
@@ -51,8 +53,8 @@ export function Topbar() {
         <form onSubmit={handleSearch} className="hidden lg:flex relative items-center bg-slate-100 dark:bg-slate-900 rounded-full px-4 py-1.5 w-64 border border-slate-200 dark:border-slate-800">
           <Search className="text-slate-400" size={16} />
           <input 
-            className="bg-transparent border-none focus:ring-0 text-sm w-full font-body placeholder:text-slate-400 ml-2 outline-none" 
-            placeholder="Buscar..." 
+            className="bg-transparent border-none focus:ring-0 text-sm w-full font-body placeholder:text-slate-400 ml-2 outline-none text-slate-800 dark:text-white" 
+            placeholder={t('search_placeholder') || 'Buscar...'} 
             type="text" 
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -89,31 +91,31 @@ export function Topbar() {
                   className="flex items-center gap-3 px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50 hover:text-amber-500 transition-colors"
                 >
                   <UserCircle size={16} />
-                  <span>Perfil</span>
+                  <span>{t('menu_perfis') || 'Perfis'}</span>
                 </Link>
                 <Link 
                   href="/usuarios" 
                   className="flex items-center gap-3 px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50 hover:text-amber-500 transition-colors"
                 >
                   <Users size={16} />
-                  <span>Usuários</span>
+                  <span>{t('menu_usuarios') || 'Usuários'}</span>
                 </Link>
                 <Link 
                   href="/configuracoes" 
                   className="flex items-center gap-3 px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50 hover:text-amber-500 transition-colors"
                 >
                   <Settings size={16} />
-                  <span>Configurações</span>
+                  <span>{t('menu_configuracoes') || 'Configurações'}</span>
                 </Link>
               </>
             )}
             
             <button 
               onClick={() => logout()}
-              className="w-full flex items-center gap-3 px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors border-t border-slate-50 dark:border-slate-700 mt-2"
+              className="w-full flex items-center gap-3 px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors border-t border-slate-50 dark:border-slate-700 mt-2 font-bold"
             >
               <LogOut size={16} /> 
-              <span>Sair</span>
+              <span>{t('logout') || 'Sair'}</span>
             </button>
           </div>
         </div>
