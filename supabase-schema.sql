@@ -20,6 +20,8 @@ CREATE TABLE IF NOT EXISTS igrejas (
   cor_paineis VARCHAR(50),
   cor_bordas VARCHAR(50),
   cor_fontes VARCHAR(50),
+  cor_botoes VARCHAR(50),
+  idioma_padrao VARCHAR(10) DEFAULT 'pt',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -162,5 +164,7 @@ ON CONFLICT (email) DO NOTHING;
 -- ALTER TABLE igrejas ADD COLUMN IF NOT EXISTS cor_paineis VARCHAR(50) DEFAULT '#ffffff';
 -- ALTER TABLE igrejas ADD COLUMN IF NOT EXISTS cor_bordas VARCHAR(50) DEFAULT '#e2e8f0';
 -- ALTER TABLE igrejas ADD COLUMN IF NOT EXISTS cor_fontes VARCHAR(50) DEFAULT '#0f172a';
+-- ALTER TABLE igrejas ADD COLUMN IF NOT EXISTS cor_botoes VARCHAR(50) DEFAULT '#E4A232';
+-- ALTER TABLE igrejas ADD COLUMN IF NOT EXISTS idioma_padrao VARCHAR(10) DEFAULT 'pt';
 -- ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS ativo BOOLEAN DEFAULT true;
 

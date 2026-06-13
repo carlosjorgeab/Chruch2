@@ -320,7 +320,8 @@ export default function ConfiguracoesPage() {
                 <div className="divide-y divide-slate-100 dark:divide-slate-800 border border-slate-100 dark:border-slate-800 rounded-2xl overflow-hidden bg-slate-50/50 dark:bg-slate-900/30">
                   {Object.keys(defaultTranslations[language as 'pt' | 'es' | 'en'] || {}).map((key) => {
                     const defaultText = (defaultTranslations[language as 'pt' | 'es' | 'en'] as any)[key];
-                    const currentOverride = overrides[`${language}_${key}`] || '';
+                    const stateKey = `${language}_${key}`;
+                    const currentOverride = overrides[stateKey] || '';
                     
                     return (
                       <div key={key} className="p-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 hover:bg-slate-100/30 dark:hover:bg-slate-900/40 transition-all bg-transparent">
@@ -331,11 +332,11 @@ export default function ConfiguracoesPage() {
                         <div className="w-full md:w-2/3 flex gap-2">
                           <input
                             type="text"
-                            value={editingTranslations[key] !== undefined ? editingTranslations[key] : (currentOverride || defaultText)}
+                            value={editingTranslations[stateKey] !== undefined ? editingTranslations[stateKey] : (currentOverride || defaultText)}
                             onChange={(e) => {
                               setEditingTranslations(prev => ({
                                 ...prev,
-                                [key]: e.target.value
+                                [stateKey]: e.target.value
                               }));
                             }}
                             className="w-full px-4 py-2 border-2 border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-xl text-sm focus:border-amber-500 outline-none font-semibold transition-all"
@@ -344,7 +345,7 @@ export default function ConfiguracoesPage() {
                           <button
                             type="button"
                             onClick={async () => {
-                              const val = editingTranslations[key] !== undefined ? editingTranslations[key] : (currentOverride || defaultText);
+                              const val = editingTranslations[stateKey] !== undefined ? editingTranslations[stateKey] : (currentOverride || defaultText);
                               await saveOverride(key, val);
                               setStatusMessage({ type: 'success', text: `Termo "${key}" personalizado com sucesso!` });
                               setTimeout(() => setStatusMessage(null), 3000);
