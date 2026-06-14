@@ -10,20 +10,27 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.108.1",
+    "clsx": "^2.1.1",
+    "jspdf": "^2.5.1",
+    "jspdf-autotable": "^5.0.8",
+    "lucide-react": "^0.454.0",
+    "motion": "^11.11.17",
     "next": "^15.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "lucide-react": "^0.454.0",
-    "motion": "^11.11.17",
-    "jspdf": "^2.5.1"
+    "recharts": "^3.8.1",
+    "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
-    "typescript": "^5.0.0",
+    "@tailwindcss/postcss": "4.0.0-beta.4",
+    "@types/node": "^20.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "@types/node": "^20.0.0",
+    "eslint": "^9.39.4",
+    "eslint-config-next": "^16.2.9",
     "postcss": "^8.0.0",
     "tailwindcss": "4.0.0-beta.4",
-    "@tailwindcss/postcss": "4.0.0-beta.4"
+    "typescript": "^5.0.0"
   }
 }

@@ -363,11 +363,12 @@ export default function MembrosPage() {
             const preloadedImg = preloadedImagesMap[memberId];
             if (preloadedImg) {
               try {
-                doc.saveState();
-                doc.arc(x + size/2, y + size/2, size/2, 0, 2 * Math.PI, 'F');
-                doc.clip();
-                doc.addImage(preloadedImg, 'JPEG', x, y, size, size);
-                doc.restoreState();
+                const d = doc as any;
+                d.saveGraphicsState();
+                d.arc(x + size/2, y + size/2, size/2, 0, 2 * Math.PI, 'F');
+                d.clip();
+                d.addImage(preloadedImg, 'JPEG', x, y, size, size);
+                d.restoreGraphicsState();
               } catch (err) {
                 drawInitials(doc, memberName, x, y, size);
               }
