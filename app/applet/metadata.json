@@ -1,0 +1,6 @@
+{
+  "name": "Igreja Painel de Membros",
+  "description": "Painel de gestão de membros e emissor de carteirinhas de membro com foto e recorte circular em PDF.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
