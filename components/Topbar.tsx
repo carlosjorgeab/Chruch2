@@ -172,7 +172,7 @@ export function Topbar() {
   return (
     <header className="fixed top-0 w-full z-40 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl flex justify-between items-center px-4 md:px-6 h-16 shadow-[0_1px_3px_rgba(0,0,0,0.05)] border-b border-slate-200 dark:border-slate-800">
       <div className="flex items-center gap-2 md:gap-3 ml-10 md:ml-64">
-        <Logo className="w-6 h-6 md:w-8 md:h-8 shrink-0" />
+        <Logo className="w-10 h-10 md:w-12 md:h-12 shrink-0 animate-in fade-in duration-300" />
       </div>
 
       <div className="flex items-center gap-2 md:gap-4">

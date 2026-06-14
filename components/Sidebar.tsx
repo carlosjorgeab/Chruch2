@@ -39,17 +39,19 @@ export function Sidebar({ isOpen = false, setIsOpen }: { isOpen?: boolean, setIs
   return (
     <aside className={`h-screen w-64 fixed left-0 top-0 pt-16 z-50 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-white flex flex-col justify-between py-6 border-r border-slate-200 dark:border-slate-800 font-['Inter'] text-sm font-medium transition-all duration-300 overflow-y-auto ${isOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}>
       <div className="px-4 space-y-2">
-        <div className="mb-8 px-2 flex items-center gap-3">
-          <div className="h-10 w-10 rounded bg-[#E4A232] flex items-center justify-center text-white flex-shrink-0 shadow-md">
+        <div className="mb-8 px-2 flex items-center gap-3 justify-between">
+          <div className="h-12 w-12 rounded-xl bg-[#E4A232] flex items-center justify-end text-white flex-shrink-0 shadow-md overflow-hidden">
             {selectedIgreja?.logo_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img 
                 alt={`Logo de ${selectedIgreja.nome}`} 
-                className="w-8 h-8 object-cover rounded" 
+                className="w-full h-full object-cover object-left rounded-xl" 
                 src={selectedIgreja.logo_url} 
               />
             ) : (
-              <Building size={20} />
+              <div className="w-full h-full flex items-center justify-center">
+                <Building size={24} />
+              </div>
             )}
           </div>
           <div className="overflow-hidden">
