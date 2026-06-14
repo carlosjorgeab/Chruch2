@@ -204,7 +204,7 @@ export default function MembrosPage() {
 
   const drawInitials = (doc: jsPDF, name: string, x: number, y: number, size: number) => {
     const initial = name ? name.charAt(0).toUpperCase() : '?';
-    doc.setFillColor(228, 162, 50); // E4A232 Amber Gold
+    doc.setFillColor(0, 0, 0); // Black circle
     doc.circle(x + size/2, y + size/2, size/2, 'F');
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(8);
@@ -234,14 +234,37 @@ export default function MembrosPage() {
         return;
       }
 
-      // 2. Preload photos for members who have a foto_url
+      // 2. Preload church logo and member photos/placeholders
+      let preloadedLogoImg: HTMLImageElement | null = null;
+      if (selectedIgreja?.logo_url) {
+        try {
+          preloadedLogoImg = await loadImage(selectedIgreja.logo_url);
+        } catch (e) {
+          console.warn("Could not load church logo image: " + selectedIgreja.logo_url);
+        }
+      }
+      // Fallback church logo placeholder
+      if (!preloadedLogoImg) {
+        try {
+          preloadedLogoImg = await loadImage('https://images.unsplash.com/photo-1438232992991-995b7058bbb3?w=100&h=100&fit=crop');
+        } catch (e) {
+          console.warn("Could not load default church logo");
+        }
+      }
+
       const preloadedImagesMap: Record<string, HTMLImageElement> = {};
+      const defaultAvatar = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop';
+      
       const imageLoadPromises = membersToExport.map(async (m) => {
-        if (m.foto_url) {
+        const urlToLoad = m.foto_url || defaultAvatar;
+        try {
+          const img = await loadImage(urlToLoad);
+          preloadedImagesMap[m.id] = img;
+        } catch (e) {
           try {
-            const img = await loadImage(m.foto_url);
-            preloadedImagesMap[m.id] = img;
-          } catch (e) {
+            const fallbackImg = await loadImage(defaultAvatar);
+            preloadedImagesMap[m.id] = fallbackImg;
+          } catch (err) {
             // failed gracefully, let fallback draw initials
           }
         }
@@ -255,7 +278,7 @@ export default function MembrosPage() {
         format: 'a4',
       });
 
-      // 4. Elegantly style PDF Brand Header Card
+      // 4. Elegantly style PDF Brand Header Card (all lines in black)
       const churchName = selectedIgreja?.nome || 'Minha Congregação';
       const docTitle = reportType === 'alphabetical'
         ? 'RELATÓRIO GERAL DE MEMBROS (ORDEM ALFABÉTICA)'
@@ -269,29 +292,39 @@ export default function MembrosPage() {
         minute: '2-digit',
       });
 
-      // Header block card
-      doc.setFillColor(248, 250, 252);
-      doc.rect(10, 10, 190, 24, 'F');
-      
-      // Amber sidebar accent
-      doc.setFillColor(228, 162, 50); // E4A232 amber brand gold
-      doc.rect(10, 10, 2.5, 24, 'F');
+      // Header block card (white fill, black stroke)
+      doc.setFillColor(255, 255, 255);
+      doc.setDrawColor(0, 0, 0); // Black lines (as linhas do cabeçalho)
+      doc.setLineWidth(0.4);
+      doc.rect(10, 10, 190, 24, 'FD');
 
-      // Title & metrics texts
-      doc.setTextColor(30, 41, 59);
+      // Draw the church logo at the beginning of the header CARD
+      const logoSize = 16;
+      let textStartX = 15;
+      if (preloadedLogoImg) {
+        try {
+          doc.addImage(preloadedLogoImg, 'JPEG', 14, 14, logoSize, logoSize);
+          textStartX = 14 + logoSize + 4; // 34
+        } catch (err) {
+          console.error("Error drawing logo", err);
+        }
+      }
+
+      // Title & metrics texts (all in black theme color)
+      doc.setTextColor(0, 0, 0); // Black
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(13);
-      doc.text(churchName.toUpperCase(), 16, 17);
+      doc.setFontSize(12);
+      doc.text(churchName.toUpperCase(), textStartX, 17);
 
-      doc.setTextColor(180, 83, 9); // Amber-700
+      doc.setTextColor(0, 0, 0); // Black
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(9.5);
-      doc.text(docTitle, 16, 23);
+      doc.setFontSize(9);
+      doc.text(docTitle, textStartX, 23);
 
-      doc.setTextColor(148, 163, 184); // Slate 400
+      doc.setTextColor(80, 80, 80); // Dark Gray
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
-      doc.text(`Gerado em: ${generationDate}  |  Total de Registros: ${membersToExport.length}`, 16, 29);
+      doc.setFontSize(7.5);
+      doc.text(`Gerado em: ${generationDate}  |  Total de Registros: ${membersToExport.length}`, textStartX, 29);
 
       // 5. Map rows
       let tableHeaders: string[] = [];
@@ -326,16 +359,20 @@ export default function MembrosPage() {
         body: tableRows,
         theme: 'striped',
         headStyles: {
-          fillColor: [228, 162, 50],
+          fillColor: [0, 0, 0], // Pure Black background for head!
           textColor: [255, 255, 255],
           fontStyle: 'bold',
           fontSize: 9,
           valign: 'middle',
+          lineColor: [0, 0, 0],
+          lineWidth: 0.1,
         },
         bodyStyles: {
           fontSize: 8.5,
           valign: 'middle',
-          textColor: [51, 65, 85],
+          textColor: [0, 0, 0], // black text
+          lineColor: [0, 0, 0],
+          lineWidth: 0.1,
         },
         columnStyles: {
           0: { cellWidth: 16, halign: 'center' },
@@ -344,6 +381,8 @@ export default function MembrosPage() {
           font: 'helvetica',
           cellPadding: 4,
           overflow: 'linebreak',
+          lineColor: [0, 0, 0], // black table borders
+          lineWidth: 0.1,
         },
         alternateRowStyles: {
           fillColor: [248, 250, 252],

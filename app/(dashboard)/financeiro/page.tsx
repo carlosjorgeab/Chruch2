@@ -60,7 +60,7 @@ type ArquivoAnexo = {
 export default function FinanceiroPage() {
   const { user, hasPermission } = useAuth();
   const { selectedIgreja } = useIgreja();
-  const [activeTab, setActiveTab] = useState<'lancamentos' | 'contas' | 'categorias' | 'formas_pagamento'>('lancamentos');
+  const [activeTab, setActiveTab] = useState<'lancamentos' | 'contas' | 'categorias' | 'formas_pagamento' | 'fluxo_caixa'>('lancamentos');
   
   // Transactions data states
   const [transacoes, setTransacoes] = useState<Transacao[]>([]);
@@ -593,6 +593,16 @@ export default function FinanceiroPage() {
             >
               Lançamentos
             </button>
+            {(user?.is_admin || hasPermission('/financeiro') || hasPermission('/financeiro/fluxo_caixa')) && (
+              <button
+                onClick={() => setActiveTab('fluxo_caixa')}
+                className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${
+                  activeTab === 'fluxo_caixa' ? 'bg-amber-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                }`}
+              >
+                Fluxo de Caixa
+              </button>
+            )}
             {(user?.is_admin || hasPermission('/financeiro/contas')) && (
               <button
                 onClick={() => setActiveTab('contas')}
@@ -1027,16 +1037,6 @@ export default function FinanceiroPage() {
                   Novo Lançamento
                 </button>
               </div>
-
-              {/* Charts view */}
-              {chartData.length > 0 && (
-                <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
-                  <h4 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-6 font-headline">Fluxo Diário / Histórico Próximo</h4>
-                  <div className="h-64 w-full">
-                    <FinancialChart chartData={chartData} />
-                  </div>
-                </div>
-              )}
 
               {/* Modal showing attachments on transaction list row click */}
               {selectedTransacaoForAnexos && (
@@ -1546,6 +1546,56 @@ export default function FinanceiroPage() {
                 )}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* FLUXO DE CAIXA SUBMODULE TAB */}
+      {activeTab === 'fluxo_caixa' && (
+        <div className="space-y-8 animate-in fade-in duration-300">
+          {/* Bento-grid of balances */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 flex items-center justify-between shadow-sm relative overflow-hidden">
+              <div className="space-y-1">
+                <span className="text-[10px] uppercase font-black tracking-widest text-slate-400">Total Receitas</span>
+                <p className="text-3xl font-black text-green-600 dark:text-green-400">R$ {totalEntradas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+              </div>
+              <div className="w-12 h-12 bg-green-50 dark:bg-green-950/40 text-green-600 dark:text-green-400 rounded-2xl flex items-center justify-center">
+                <TrendingUp size={24} />
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 flex items-center justify-between shadow-sm relative overflow-hidden">
+              <div className="space-y-1">
+                <span className="text-[10px] uppercase font-black tracking-widest text-slate-400">Total Despesas</span>
+                <p className="text-3xl font-black text-red-500 dark:text-red-400">R$ {totalSaidas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+              </div>
+              <div className="w-12 h-12 bg-red-50 dark:bg-red-950/30 text-red-500 dark:text-red-400 rounded-2xl flex items-center justify-center">
+                <TrendingDown size={24} />
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 flex items-center justify-between shadow-sm relative overflow-hidden">
+              <div className="space-y-1">
+                <span className="text-[10px] uppercase font-black tracking-widest text-slate-400">Saldo Consolidado</span>
+                <p className={`text-3xl font-black ${saldoTotal >= 0 ? 'text-amber-600 dark:text-amber-400' : 'text-red-650'}`}>R$ {saldoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+              </div>
+              <div className="w-12 h-12 bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 rounded-2xl flex items-center justify-center">
+                <Wallet size={24} />
+              </div>
+            </div>
+          </div>
+
+          {/* Charts view */}
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
+            <h4 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-6 font-headline">Fluxo Diário / Histórico Próximo</h4>
+            {chartData.length > 0 ? (
+              <div className="h-64 w-full">
+                <FinancialChart chartData={chartData} />
+              </div>
+            ) : (
+              <div className="h-64 w-full flex items-center justify-center text-slate-400 font-bold uppercase tracking-widest text-xs">Sem dados suficientes para exibição</div>
+            )}
           </div>
         </div>
       )}
