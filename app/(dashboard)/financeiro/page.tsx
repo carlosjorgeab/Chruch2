@@ -6,9 +6,11 @@ import { useIgreja } from '@/context/IgrejaContext';
 import { useAuth } from '@/context/AuthContext';
 import { 
   Plus, Trash2, TrendingUp, TrendingDown, Wallet, Calendar, Tag, RefreshCw, 
-  Save, X, DollarSign, Upload, File, FileText, Check, AlertCircle, Link2, Settings, Briefcase, Landmark, Edit2, ChevronDown, Search
+  Save, X, DollarSign, Upload, File, FileText, Check, AlertCircle, Link2, Settings, Briefcase, Landmark, Edit2, ChevronDown, Search, Printer
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 const FinancialChart = dynamic(() => import('@/components/FinancialChart'), {
   ssr: false,
@@ -31,6 +33,7 @@ type Transacao = {
   id_fornecedor?: string | null;
   data_vencimento?: string | null;
   data_pagamento?: string | null;
+  arquivos_transacao?: { id: string }[];
 };
 
 type Conta = {
@@ -115,6 +118,15 @@ export default function FinanceiroPage() {
   const [filterCategorias, setFilterCategorias] = useState<string[]>([]);
   const [filterFormasPagamento, setFilterFormasPagamento] = useState<string[]>([]);
 
+  // Pagination States
+  const [pageSize, setPageSize] = useState<number>(25);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+
+  // Reset page when filters or pageSize change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterText, filterTipo, filterVencimentoOpt, filterCategorias, filterFormasPagamento, pageSize]);
+
   // Toggles for Custom Multiple Select Combo Dropdowns
   const [showCatDropdown, setShowCatDropdown] = useState(false);
   const [showFormaDropdown, setShowFormaDropdown] = useState(false);
@@ -162,13 +174,200 @@ export default function FinanceiroPage() {
     }
   };
 
+  const getProxyUrl = (url: string) => {
+    if (!url) return '';
+    if (url.startsWith('data:')) return url;
+    return `/api/proxy-image?url=${encodeURIComponent(url)}`;
+  };
+
+  const loadImage = (url: string): Promise<HTMLImageElement> => {
+    return new Promise((resolve, reject) => {
+      if (!url) {
+        reject();
+        return;
+      }
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => resolve(img);
+      img.onerror = () => reject();
+      img.src = getProxyUrl(url);
+    });
+  };
+
+  const getRoundedRectBase64 = (img: HTMLImageElement, radiusPct = 0.15): string => {
+    try {
+      const canvas = document.createElement('canvas');
+      const w = img.width || 128;
+      const h = img.height || 128;
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.beginPath();
+        const r = Math.min(w, h) * radiusPct;
+        ctx.moveTo(r, 0);
+        ctx.lineTo(w - r, 0);
+        ctx.quadraticCurveTo(w, 0, w, r);
+        ctx.lineTo(w, h - r);
+        ctx.quadraticCurveTo(w, h, w - r, h);
+        ctx.lineTo(r, h);
+        ctx.quadraticCurveTo(0, h, 0, h - r);
+        ctx.lineTo(0, r);
+        ctx.quadraticCurveTo(0, 0, r, 0);
+        ctx.closePath();
+        ctx.clip();
+        ctx.drawImage(img, 0, 0, w, h);
+        return canvas.toDataURL('image/png', 0.85);
+      }
+    } catch (e) {
+      console.error('Error rounding rect image', e);
+    }
+    return '';
+  };
+
+  const handlePrintReport = async () => {
+    try {
+      const filteredList = getFilteredTransactions();
+      if (filteredList.length === 0) {
+        alert('Nenhum lançamento encontrado para os filtros selecionados.');
+        return;
+      }
+
+      // Preload church logo
+      let preloadedLogoImg: HTMLImageElement | null = null;
+      if (selectedIgreja?.logo_url) {
+        try {
+          preloadedLogoImg = await loadImage(selectedIgreja.logo_url);
+        } catch (e) {
+          console.warn("Could not load church logo image: " + selectedIgreja.logo_url);
+        }
+      }
+      if (!preloadedLogoImg) {
+        try {
+          preloadedLogoImg = await loadImage('https://images.unsplash.com/photo-1438232992991-995b7058bbb3?w=100&h=100&fit=crop');
+        } catch (e) {
+          console.warn("Could not load default church logo");
+        }
+      }
+
+      let logoBase64 = '';
+      if (preloadedLogoImg) {
+        logoBase64 = getRoundedRectBase64(preloadedLogoImg, 0.2);
+      }
+
+      const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+      });
+
+      const churchName = selectedIgreja?.nome || 'Minha Congregação';
+      const docTitle = 'RELATÓRIO FINANCEIRO DE LANÇAMENTOS';
+      
+      const generationDate = new Date().toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+
+      // Header block card (white fill, black stroke)
+      doc.setFillColor(255, 255, 255);
+      doc.setDrawColor(0, 0, 0); // Black lines (as linhas do cabeçalho)
+      doc.setLineWidth(0.4);
+      doc.rect(10, 10, 190, 24, 'FD');
+
+      const logoSize = 12; // 12mm size
+      let textStartX = 15;
+      if (logoBase64) {
+        try {
+          doc.addImage(logoBase64, 'PNG', 14, 16, logoSize, logoSize);
+          textStartX = 14 + logoSize + 4; // 30
+        } catch (err) {
+          console.error("Error drawing logo", err);
+        }
+      }
+
+      // Title & metrics texts
+      doc.setTextColor(0, 0, 0); // Black
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.text(churchName.toUpperCase(), textStartX, 17);
+
+      doc.setTextColor(0, 0, 0); // Black
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.text(docTitle, textStartX, 23);
+
+      doc.setTextColor(80, 80, 80); // Dark Gray
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.text(`Gerado em: ${generationDate}  |  Total de Lançamentos: ${filteredList.length}`, textStartX, 29);
+
+      // Map rows for the table
+      const tableHeaders = ['Vencimento', 'Lançamento (Descrição / Doc)', 'Categoria', 'Cliente / Fornecedor', 'Data Pgto.', 'Valor'];
+      const tableRows = filteredList.map(t => {
+        const vencStr = t.data_vencimento ? new Date(t.data_vencimento + 'T00:00:00').toLocaleDateString('pt-BR') : '-';
+        const docDateStr = t.data ? new Date(t.data + 'T00:00:00').toLocaleDateString('pt-BR') : '-';
+        const descAndDoc = `${t.descricao} (Doc: ${docDateStr})`;
+        
+        const associatedForn = dbFornecedores.find(f => f.id === t.id_fornecedor);
+        const sourceDest = associatedForn ? associatedForn.razao_social : (t.membro_contribuinte || 'Coletivo / Caixa');
+        const pgtoStr = t.data_pagamento ? new Date(t.data_pagamento + 'T00:00:00').toLocaleDateString('pt-BR') : 'Pendente';
+        const valorFormatted = `${t.tipo === 'Entrada' ? '+' : '-'} R$ ${t.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+
+        return [
+          vencStr,
+          descAndDoc,
+          t.categoria,
+          sourceDest,
+          pgtoStr,
+          valorFormatted
+        ];
+      });
+
+      autoTable(doc, {
+        startY: 38,
+        head: [tableHeaders],
+        body: tableRows,
+        theme: 'striped',
+        headStyles: {
+          fillColor: [0, 0, 0], // Pure Black background for head!
+          textColor: [255, 255, 255],
+          fontStyle: 'bold',
+          fontSize: 8.5,
+          valign: 'middle',
+          lineColor: [0, 0, 0],
+          lineWidth: 0.1,
+        },
+        bodyStyles: {
+          fontSize: 8,
+          valign: 'middle',
+          textColor: [0, 0, 0], // black text
+          lineColor: [180, 180, 180],
+          lineWidth: 0.1,
+        },
+        styles: {
+          font: 'helvetica',
+          cellPadding: 3,
+        }
+      });
+
+      doc.save(`relatorio_financeiro_${new Date().toISOString().split('T')[0]}.pdf`);
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao gerar relatório de impressão.');
+    }
+  };
+
   const fetchTransacoes = async () => {
     if (!selectedIgreja) return;
     try {
       setLoading(true);
       const { data, error: err } = await supabase
         .from('transacoes')
-        .select('*')
+        .select('*, arquivos_transacao(id)')
         .eq('id_igreja', selectedIgreja.id)
         .order('data', { ascending: false });
 
@@ -227,7 +426,11 @@ export default function FinanceiroPage() {
         .select('*')
         .eq('id_transacao', transacaoId);
       if (data) {
-        setActiveTransacaoAnexos(data);
+        setActiveTransacaoAnexos(data.map((item: any) => ({
+          id: item.id,
+          nome_arquivo: item.nome || item.nome_arquivo || '',
+          url_arquivo: item.url || item.url_arquivo || ''
+        })));
       } else {
         setActiveTransacaoAnexos([]);
       }
@@ -273,7 +476,11 @@ export default function FinanceiroPage() {
         .select('*')
         .eq('id_transacao', transacao.id);
       if (data) {
-        setAnexos(data);
+        setAnexos(data.map((item: any) => ({
+          id: item.id,
+          nome_arquivo: item.nome || item.nome_arquivo || '',
+          url_arquivo: item.url || item.url_arquivo || ''
+        })));
       } else {
         setAnexos([]);
       }
@@ -391,10 +598,11 @@ export default function FinanceiroPage() {
         if (anexos.length > 0) {
           const filesPayload = anexos.map(anexo => ({
             id_transacao: savedTransacaoId,
-            nome_arquivo: anexo.nome_arquivo,
-            url_arquivo: anexo.url_arquivo
+            nome: anexo.nome_arquivo,
+            url: anexo.url_arquivo
           }));
-          await supabase.from('arquivos_transacao').insert(filesPayload);
+          const { error: insertErr } = await supabase.from('arquivos_transacao').insert(filesPayload);
+          if (insertErr) throw insertErr;
         }
       }
 
@@ -551,7 +759,7 @@ export default function FinanceiroPage() {
       return true;
     });
 
-    // 5. Always sort by Expiration Date (Data Vencimento)
+    // 5. Always sort by Expiration Date (Data Vencimento) in ASCENDING order (da menor para a maior data)
     return filtered.sort((a, b) => {
       if (!a.data_vencimento && !b.data_vencimento) return 0;
       if (!a.data_vencimento) return 1; // Put records without a due date at the end
@@ -559,7 +767,7 @@ export default function FinanceiroPage() {
       
       const dateA = new Date(a.data_vencimento + 'T00:00:00').getTime();
       const dateB = new Date(b.data_vencimento + 'T00:00:00').getTime();
-      return dateB - dateA;
+      return dateA - dateB;
     });
   };
 
@@ -716,6 +924,12 @@ export default function FinanceiroPage() {
       </div>
     );
   }
+
+  const filteredTransactions = getFilteredTransactions();
+  const totalRecords = filteredTransactions.length;
+  const totalPages = Math.ceil(totalRecords / pageSize) || 1;
+  const activePage = Math.min(currentPage, totalPages);
+  const paginatedTransactions = filteredTransactions.slice((activePage - 1) * pageSize, activePage * pageSize);
 
   return (
     <div className="p-8 space-y-8 max-w-6xl mx-auto">
@@ -1282,25 +1496,35 @@ export default function FinanceiroPage() {
                 {/* Header list panel containing the active search and combos filters requested in 1c */}
                 <div className="px-6 py-5 bg-slate-50/50 dark:bg-slate-950/20 border-b border-slate-100 dark:border-slate-850 space-y-4">
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
-                    <span className="text-[11px] uppercase font-black text-slate-400 tracking-widest block">
+                    <span className="text-[11px] uppercase font-black text-slate-400 tracking-widest block font-sans">
                       Filtros de Pesquisa & Lançamentos
                     </span>
-                    {(filterText || filterTipo !== 'Todos' || filterVencimentoOpt !== 'Todo Período' || filterCategorias.length > 0 || filterFormasPagamento.length > 0) && (
+                    <div className="flex items-center gap-3">
+                      {(filterText || filterTipo !== 'Todos' || filterVencimentoOpt !== 'Todo Período' || filterCategorias.length > 0 || filterFormasPagamento.length > 0) && (
+                        <button
+                          onClick={() => {
+                            setFilterText('');
+                            setFilterTipo('Todos');
+                            setFilterVencimentoOpt('Todo Período');
+                            setFilterVencimentoInicio('');
+                            setFilterVencimentoFim('');
+                            setFilterCategorias([]);
+                            setFilterFormasPagamento([]);
+                          }}
+                          className="text-[10px] text-amber-600 dark:text-amber-450 hover:underline font-bold uppercase tracking-wider flex items-center gap-1"
+                        >
+                          Limpar Filtros
+                        </button>
+                      )}
+                      
                       <button
-                        onClick={() => {
-                          setFilterText('');
-                          setFilterTipo('Todos');
-                          setFilterVencimentoOpt('Todo Período');
-                          setFilterVencimentoInicio('');
-                          setFilterVencimentoFim('');
-                          setFilterCategorias([]);
-                          setFilterFormasPagamento([]);
-                        }}
-                        className="text-[10px] text-amber-600 dark:text-amber-450 hover:underline font-bold uppercase tracking-wider flex items-center gap-1"
+                        onClick={handlePrintReport}
+                        className="flex items-center gap-1.5 bg-[#E4A232] hover:bg-[#c98e2a] text-white px-3.5 py-1.5 rounded-xl text-xs font-bold font-sans uppercase tracking-widest hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer shadow-sm"
                       >
-                        Limpar Filtros
+                        <Printer size={13} />
+                        <span>Imprimir</span>
                       </button>
-                    )}
+                    </div>
                   </div>
 
                   {/* Filter grid row */}
@@ -1483,7 +1707,8 @@ export default function FinanceiroPage() {
                     Nenhum lançamento encontrado para os filtros selecionados.
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
+                  <>
+                    <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse min-w-[800px]">
                       <thead>
                         <tr className="bg-slate-50/20 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800 text-slate-450 text-[10px] font-black uppercase tracking-widest">
@@ -1498,7 +1723,7 @@ export default function FinanceiroPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 dark:divide-slate-850 text-slate-700 dark:text-slate-350 font-medium">
-                        {getFilteredTransactions().map((t) => {
+                        {paginatedTransactions.map((t) => {
                           // Find client/fornecedor name
                           const associatedForn = dbFornecedores.find(f => f.id === t.id_fornecedor);
 
@@ -1557,27 +1782,31 @@ export default function FinanceiroPage() {
                                 </span>
                               </td>
                               <td className="px-6 py-2">
-                                <button
-                                  type="button"
-                                  onClick={() => loadAttachmentsForTransacao(t.id)}
-                                  className="text-black dark:text-white hover:text-slate-700 dark:hover:text-slate-300 font-black text-xs uppercase flex items-center gap-1 hover:underline"
-                                >
-                                  <File size={14} className="text-black dark:text-white" />
-                                  <span>Ver</span>
-                                </button>
+                                {t.arquivos_transacao && t.arquivos_transacao.length > 0 ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => loadAttachmentsForTransacao(t.id)}
+                                    className="text-black dark:text-white hover:text-slate-700 dark:hover:text-slate-300 font-bold text-xs uppercase flex items-center gap-1 hover:underline cursor-pointer"
+                                  >
+                                    <File size={14} className="text-black dark:text-white" />
+                                    <span>Ver</span>
+                                  </button>
+                                ) : (
+                                  <span className="text-slate-400 text-xs">-</span>
+                                )}
                               </td>
                               <td className="px-6 py-2 text-right">
                                 <div className="flex justify-end gap-1.5">
                                   <button
                                     onClick={() => handleEdit(t)}
-                                    className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-slate-50 dark:hover:bg-slate-900 transition rounded-lg"
+                                    className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-slate-50 dark:hover:bg-slate-900 transition rounded-lg cursor-pointer"
                                     title="Editar"
                                   >
                                     <Tag size={15} />
                                   </button>
                                   <button
                                     onClick={() => handleDelete(t.id)}
-                                    className="p-1.5 text-slate-400 hover:text-red-650 hover:bg-slate-50 dark:hover:bg-slate-900 transition rounded-lg"
+                                    className="p-1.5 text-slate-400 hover:text-red-650 hover:bg-slate-50 dark:hover:bg-slate-900 transition rounded-lg cursor-pointer"
                                     title="Remover"
                                   >
                                     <Trash2 size={15} />
@@ -1590,6 +1819,58 @@ export default function FinanceiroPage() {
                       </tbody>
                     </table>
                   </div>
+
+                  {/* Pagination Footer */}
+                  <div className="px-6 py-4 bg-slate-50/30 dark:bg-slate-950/20 border-t border-slate-100 dark:border-slate-850 flex flex-col sm:flex-row justify-between items-center gap-4">
+                    <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
+                      <span>Exibindo</span>
+                      <select
+                        value={pageSize}
+                        onChange={(e) => setPageSize(Number(e.target.value))}
+                        className="px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-white text-xs outline-none focus:border-amber-500 transition-colors font-bold cursor-pointer"
+                      >
+                        <option value={25}>25</option>
+                        <option value={50}>50</option>
+                        <option value={100}>100</option>
+                      </select>
+                      <span>registros de um total de <strong>{totalRecords}</strong></span>
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => setCurrentPage(1)}
+                        disabled={activePage === 1}
+                        className="p-1 px-2.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 text-xs font-semibold select-none cursor-pointer text-slate-700 dark:text-slate-300 transition-all"
+                      >
+                        Primeira
+                      </button>
+                      <button
+                        onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                        disabled={activePage === 1}
+                        className="p-1 px-2.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 text-xs font-semibold select-none cursor-pointer text-slate-700 dark:text-slate-300 transition-all"
+                      >
+                        Anterior
+                      </button>
+                      <span className="text-xs text-slate-500 font-bold px-3">
+                        Página {activePage} de {totalPages}
+                      </span>
+                      <button
+                        onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                        disabled={activePage === totalPages}
+                        className="p-1 px-2.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 text-xs font-semibold select-none cursor-pointer text-slate-700 dark:text-slate-300 transition-all"
+                      >
+                        Próxima
+                      </button>
+                      <button
+                        onClick={() => setCurrentPage(totalPages)}
+                        disabled={activePage === totalPages}
+                        className="p-1 px-2.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 text-xs font-semibold select-none cursor-pointer text-slate-700 dark:text-slate-300 transition-all"
+                      >
+                        Última
+                      </button>
+                    </div>
+                  </div>
+                </>
                 )}
               </div>
             </div>
