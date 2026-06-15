@@ -108,6 +108,9 @@ export default function FinanceiroPage() {
 
   // Drag state
   const [isDragging, setIsDragging] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+
+
 
   // Filter States
   const [filterTipo, setFilterTipo] = useState<string>('Todos');
@@ -351,6 +354,14 @@ export default function FinanceiroPage() {
         styles: {
           font: 'helvetica',
           cellPadding: 3,
+        },
+        columnStyles: {
+          0: { cellWidth: 20 }, // Vencimento (fixed width)
+          1: { cellWidth: 'auto' }, // Lançamento (Descrição / Doc) (flexible width)
+          2: { cellWidth: 23 }, // Categoria (fixed width)
+          3: { cellWidth: 38 }, // Cliente / Fornecedor (fixed width)
+          4: { cellWidth: 20 }, // Data Pgto. (fixed width)
+          5: { cellWidth: 37, fontStyle: 'bold', halign: 'right' }, // Valor (no wrapping, right aligned)
         }
       });
 
@@ -645,21 +656,44 @@ export default function FinanceiroPage() {
     setAnexos(prev => prev.filter((_, i) => i !== index));
   };
 
-  const handleFileSelection = (files: File[]) => {
-    files.forEach(file => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64String = reader.result as string;
-        setAnexos(prev => [...prev, {
-          nome_arquivo: file.name,
-          url_arquivo: base64String
-        }]);
-      };
-      reader.onerror = (e) => {
-        console.error('Error reading file:', e);
-      };
-      reader.readAsDataURL(file);
-    });
+  const handleFileSelection = async (selectedFiles: File[]) => {
+    if (selectedFiles.length === 0) return;
+    
+    setIsUploading(true);
+    setError('');
+    
+    for (const file of selectedFiles) {
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        const response = await fetch('/api/financeiro/upload', {
+          method: 'POST',
+          body: formData,
+        });
+        
+        const result = await response.json();
+        
+        if (!response.ok) {
+          throw new Error(result.error || 'Erro inesperado no servidor de carregamento.');
+        }
+        
+        if (result.success && result.url) {
+          setAnexos(prev => [...prev, {
+            nome_arquivo: file.name,
+            url_arquivo: result.url
+          }]);
+          setSuccess(`Sucesso: "${file.name}" foi salvo com segurança no MEGA.nz!`);
+        } else {
+          throw new Error('Formato de resposta inválido do servidor ao carregar .');
+        }
+      } catch (err: any) {
+        console.error('Erro de upload ao MEGA:', err);
+        setError(`Erro no upload de "${file.name}": ${err.message || err}`);
+      }
+    }
+    
+    setIsUploading(false);
   };
 
   const getFilteredTransactions = () => {
@@ -1251,64 +1285,82 @@ export default function FinanceiroPage() {
                 </div>
 
                 {/* SUPPORT FILE UPLOAD SYSTEM (arquivos_transacao storage) */}
-                <div 
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    setIsDragging(true);
-                  }}
-                  onDragLeave={() => {
-                    setIsDragging(false);
-                  }}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    setIsDragging(false);
-                    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-                      const files = Array.from(e.dataTransfer.files);
-                      handleFileSelection(files);
-                    }
-                  }}
-                  onClick={() => {
-                    document.getElementById('file-upload-input')?.click();
-                  }}
-                  className={`md:col-span-2 p-6 rounded-2xl border-2 border-dashed transition-all duration-200 cursor-pointer space-y-4 ${
-                    isDragging 
-                      ? 'border-amber-500 bg-amber-50/20 dark:bg-amber-950/20' 
-                      : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 hover:border-amber-500/55'
-                  }`}
-                >
-                  <input
-                    type="file"
-                    id="file-upload-input"
-                    className="hidden"
-                    multiple
-                    onClick={(e) => e.stopPropagation()}
-                    onChange={(e) => {
-                      if (e.target.files && e.target.files.length > 0) {
-                        handleFileSelection(Array.from(e.target.files));
-                      }
-                    }}
-                  />
-                  
-                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4" onClick={(e) => e.stopPropagation()}>
-                    <div>
-                      <h4 className="text-xs font-black uppercase text-slate-500 tracking-wider flex items-center gap-2">
-                        <Upload size={14} className="text-amber-500" />
-                        Comprovantes & Anexos Financeiros
-                      </h4>
-                      <p className="text-[11px] text-slate-450 mt-0.5">
-                        Arraste e solte arquivos aqui, ou <span className="text-amber-600 dark:text-amber-400 font-bold underline cursor-pointer" onClick={() => document.getElementById('file-upload-input')?.click()}>clique para selecionar</span>.
-                      </p>
+                 <div 
+                   onDragOver={(e) => {
+                     e.preventDefault();
+                     if (!isUploading) setIsDragging(true);
+                   }}
+                   onDragLeave={() => {
+                     setIsDragging(false);
+                   }}
+                   onDrop={(e) => {
+                     e.preventDefault();
+                     setIsDragging(false);
+                     if (isUploading) return;
+                     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                       const files = Array.from(e.dataTransfer.files);
+                       handleFileSelection(files);
+                     }
+                   }}
+                   onClick={() => {
+                     if (!isUploading) {
+                       document.getElementById('file-upload-input')?.click();
+                     }
+                   }}
+                   className={`md:col-span-2 p-6 rounded-2xl border-2 border-dashed transition-all duration-200 space-y-4 ${
+                     isDragging 
+                       ? 'border-amber-500 bg-amber-50/20 dark:bg-amber-950/20 cursor-pointer' 
+                       : isUploading
+                         ? 'border-amber-500/50 bg-amber-500/5 dark:bg-amber-950/5 cursor-wait opacity-80'
+                         : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 hover:border-amber-500/55 cursor-pointer'
+                   }`}
+                 >
+                   <input
+                     type="file"
+                     id="file-upload-input"
+                     className="hidden"
+                     multiple
+                     disabled={isUploading}
+                     onClick={(e) => e.stopPropagation()}
+                     onChange={(e) => {
+                       if (e.target.files && e.target.files.length > 0) {
+                         handleFileSelection(Array.from(e.target.files));
+                       }
+                     }}
+                   />
+                   
+                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4" onClick={(e) => e.stopPropagation()}>
+                     <div className="flex-1">
+                       <h4 className="text-xs font-black uppercase text-slate-500 tracking-wider flex items-center gap-2">
+                         {isUploading ? (
+                           <div className="w-3.5 h-3.5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+                         ) : (
+                           <Upload size={14} className="text-amber-500" />
+                         )}
+                         Comprovantes & Anexos Financeiros {isUploading && <span className="text-amber-500 font-bold ml-1 animate-pulse">(Enviando para o MEGA...)</span>}
+                       </h4>
+                       {isUploading ? (
+                         <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                           Enviando anexo de forma segura para os servidores do **MEGA.nz**, por favor aguarde...
+                         </p>
+                       ) : (
+                         <p className="text-[11px] text-slate-450 mt-0.5">
+                           Arraste e solte arquivos aqui, ou <span className="text-amber-600 dark:text-amber-400 font-bold underline cursor-pointer" onClick={() => document.getElementById('file-upload-input')?.click()}>clique para selecionar</span>.
+                         </p>
+                       )}
+                     </div>
+                     {!isUploading && (
+                       <button
+                         type="button"
+                         onClick={() => setShowAnexosForm(!showAnexosForm)}
+                         className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white font-bold text-[10px] uppercase tracking-wider rounded-lg transition-colors"
+                       >
+                         {showAnexosForm ? 'Esconder Formulário' : 'Adicionar Anexo URL'}
+                       </button>
+                     )}
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => setShowAnexosForm(!showAnexosForm)}
-                      className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white font-bold text-[10px] uppercase tracking-wider rounded-lg transition-colors"
-                    >
-                      {showAnexosForm ? 'Esconder Formulário' : 'Adicionar Anexo URL'}
-                    </button>
-                  </div>
 
-                  {showAnexosForm && (
+                    {showAnexosForm && (
                     <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3 animate-in fade-in duration-200" onClick={(e) => e.stopPropagation()}>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
@@ -1774,8 +1826,8 @@ export default function FinanceiroPage() {
                                   <span className="text-red-500 dark:text-red-450 font-bold uppercase text-[9px] tracking-wider px-2 py-0.5 bg-red-50 dark:bg-red-950/30 rounded border border-red-100 dark:border-red-900/30">Pendente</span>
                                 )}
                               </td>
-                              <td className="px-6 py-2">
-                                <span className={`font-black text-sm ${
+                              <td className="px-6 py-2 whitespace-nowrap">
+                                <span className={`font-black text-sm whitespace-nowrap ${
                                   t.tipo === 'Entrada' ? 'text-blue-600 dark:text-blue-450' : 'text-red-500'
                                 }`}>
                                   {t.tipo === 'Entrada' ? '+' : '-'} R$ {t.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
