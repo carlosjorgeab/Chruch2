@@ -30,6 +30,7 @@ type Transacao = {
   id_conta?: string | null;
   id_fornecedor?: string | null;
   data_vencimento?: string | null;
+  data_pagamento?: string | null;
 };
 
 type Conta = {
@@ -90,7 +91,8 @@ export default function FinanceiroPage() {
     id_forma_pagamento: '',
     id_conta: '',
     id_fornecedor: '',
-    data_vencimento: ''
+    data_vencimento: '',
+    data_pagamento: ''
   });
 
   // Attachments state
@@ -244,7 +246,8 @@ export default function FinanceiroPage() {
       id_forma_pagamento: transacao.id_forma_pagamento || '',
       id_conta: transacao.id_conta || '',
       id_fornecedor: transacao.id_fornecedor || '',
-      data_vencimento: transacao.data_vencimento || ''
+      data_vencimento: transacao.data_vencimento || '',
+      data_pagamento: transacao.data_pagamento || ''
     });
 
     // Load attachments from database for this transaction to allow editing
@@ -285,7 +288,8 @@ export default function FinanceiroPage() {
       id_forma_pagamento: dbFormasPagamento[0]?.id || '',
       id_conta: dbContas[0]?.id || '',
       id_fornecedor: '',
-      data_vencimento: ''
+      data_vencimento: '',
+      data_pagamento: ''
     });
     setAnexos([]);
     setIsEditing(true);
@@ -338,6 +342,7 @@ export default function FinanceiroPage() {
       id_conta: currentTransacao.id_conta || null,
       id_fornecedor: currentTransacao.id_fornecedor || null,
       data_vencimento: currentTransacao.data_vencimento || null,
+      data_pagamento: currentTransacao.data_pagamento || null,
     };
 
     try {
@@ -739,6 +744,20 @@ export default function FinanceiroPage() {
                   </select>
                 </div>
 
+                <div className="md:col-span-2">
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
+                    Descrição ou Observações *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={currentTransacao.descricao || ''}
+                    onChange={(e) => setCurrentTransacao({ ...currentTransacao, descricao: e.target.value })}
+                    className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-semibold shadow-inner"
+                    placeholder="Ex. Pagamento fatura de serviços, compra insumos"
+                  />
+                </div>
+
                 <div>
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
                     Valor do Lançamento (R$) *
@@ -797,6 +816,18 @@ export default function FinanceiroPage() {
                     type="date"
                     value={currentTransacao.data_vencimento || ''}
                     onChange={(e) => setCurrentTransacao({ ...currentTransacao, data_vencimento: e.target.value })}
+                    className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
+                    {currentTransacao.tipo === 'Saída' ? 'Data de Pagamento (Quitação)' : 'Data de Recebimento (Quitação)'}
+                  </label>
+                  <input
+                    type="date"
+                    value={currentTransacao.data_pagamento || ''}
+                    onChange={(e) => setCurrentTransacao({ ...currentTransacao, data_pagamento: e.target.value })}
                     className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-bold"
                   />
                 </div>
@@ -861,20 +892,6 @@ export default function FinanceiroPage() {
                       </option>
                     ))}
                   </select>
-                </div>
-
-                <div className="md:col-span-2">
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
-                    Descrição ou Observações *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={currentTransacao.descricao || ''}
-                    onChange={(e) => setCurrentTransacao({ ...currentTransacao, descricao: e.target.value })}
-                    className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-semibold"
-                    placeholder="Ex. Pagamento fatura de serviços, compra insumos"
-                  />
                 </div>
 
                 {/* SUPPORT FILE UPLOAD SYSTEM (arquivos_transacao storage) */}
@@ -998,9 +1015,9 @@ export default function FinanceiroPage() {
                 <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 flex items-center justify-between shadow-sm relative overflow-hidden">
                   <div className="space-y-1">
                     <span className="text-[10px] uppercase font-black tracking-widest text-slate-400">Total Receitas</span>
-                    <p className="text-3xl font-black text-green-600 dark:text-green-400">R$ {totalEntradas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                    <p className="text-3xl font-black text-black dark:text-white">R$ {totalEntradas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                   </div>
-                  <div className="w-12 h-12 bg-green-50 dark:bg-green-950/30 text-green-600 dark:text-green-400 rounded-2xl flex items-center justify-center">
+                  <div className="w-12 h-12 bg-transparent text-green-600 dark:text-green-400 rounded-2xl flex items-center justify-center">
                     <TrendingUp size={24} />
                   </div>
                 </div>
@@ -1008,9 +1025,9 @@ export default function FinanceiroPage() {
                 <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 flex items-center justify-between shadow-sm relative overflow-hidden">
                   <div className="space-y-1">
                     <span className="text-[10px] uppercase font-black tracking-widest text-slate-400">Total Despesas</span>
-                    <p className="text-3xl font-black text-red-500 dark:text-red-400">R$ {totalSaidas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                    <p className="text-3xl font-black text-black dark:text-white">R$ {totalSaidas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                   </div>
-                  <div className="w-12 h-12 bg-red-50 dark:bg-red-950/30 text-red-500 dark:text-red-400 rounded-2xl flex items-center justify-center">
+                  <div className="w-12 h-12 bg-transparent text-red-500 dark:text-red-400 rounded-2xl flex items-center justify-center">
                     <TrendingDown size={24} />
                   </div>
                 </div>
@@ -1018,9 +1035,9 @@ export default function FinanceiroPage() {
                 <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 flex items-center justify-between shadow-sm relative overflow-hidden">
                   <div className="space-y-1">
                     <span className="text-[10px] uppercase font-black tracking-widest text-slate-400">Saldo Consolidado</span>
-                    <p className={`text-3xl font-black ${saldoTotal >= 0 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600'}`}>R$ {saldoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                    <p className="text-3xl font-black text-black dark:text-white">R$ {saldoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                   </div>
-                  <div className="w-12 h-12 bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 rounded-2xl flex items-center justify-center">
+                  <div className="w-12 h-12 bg-transparent text-amber-600 dark:text-amber-400 rounded-2xl flex items-center justify-center">
                     <Wallet size={24} />
                   </div>
                 </div>
@@ -1099,14 +1116,14 @@ export default function FinanceiroPage() {
                     <table className="w-full text-left border-collapse min-w-[800px]">
                       <thead>
                         <tr className="bg-slate-50/20 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800 text-slate-450 text-[10px] font-black uppercase tracking-widest">
-                          <th className="px-6 py-4">Lançamento</th>
-                          <th className="px-6 py-4">Data Documento</th>
-                          <th className="px-6 py-4">Categoria</th>
-                          <th className="px-6 py-4">Cliente / Fornecedor / Canal</th>
-                          <th className="px-6 py-4">Vencimento</th>
-                          <th className="px-6 py-4">Anexos</th>
-                          <th className="px-6 py-4">Valor</th>
-                          <th className="px-6 py-4 text-right">Ações</th>
+                          <th className="px-6 py-2.5">Lançamento</th>
+                          <th className="px-6 py-2.5">Vencimento</th>
+                          <th className="px-6 py-2.5">Categoria</th>
+                          <th className="px-6 py-2.5">Cliente / Fornecedor / Canal</th>
+                          <th className="px-6 py-2.5">Data Pagamento</th>
+                          <th className="px-6 py-2.5">Valor</th>
+                          <th className="px-6 py-2.5">Anexos</th>
+                          <th className="px-6 py-2.5 text-right">Ações</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 dark:divide-slate-850 text-slate-700 dark:text-slate-350 font-medium">
@@ -1116,7 +1133,7 @@ export default function FinanceiroPage() {
 
                           return (
                             <tr key={t.id} className="hover:bg-slate-50/30 dark:hover:bg-slate-950/5 transition-all">
-                              <td className="px-6 py-4">
+                              <td className="px-6 py-2">
                                 <div className="flex items-center gap-3">
                                   <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
                                     t.tipo === 'Entrada'
@@ -1125,17 +1142,21 @@ export default function FinanceiroPage() {
                                   }`}>
                                     <DollarSign size={16} />
                                   </div>
-                                  <span className="font-bold text-slate-900 dark:text-white text-sm">{t.descricao}</span>
+                                  <div className="flex flex-col">
+                                    <span className="font-bold text-slate-900 dark:text-white text-sm">{t.descricao}</span>
+                                    <span className="text-[10px] text-slate-400 font-normal">Doc: {t.data ? new Date(t.data + 'T00:00:00').toLocaleDateString('pt-BR') : '-'}</span>
+                                  </div>
                                 </div>
                               </td>
-                              <td className="px-6 py-4">
-                                <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                                  <Calendar size={13} />
-                                  <span>{t.data ? new Date(t.data + 'T00:00:00').toLocaleDateString('pt-BR') : '-'}</span>
-                                </div>
+                              <td className="px-6 py-2">
+                                {t.data_vencimento ? (
+                                  <span className="text-amber-600 dark:text-amber-400 font-bold font-mono text-xs">{new Date(t.data_vencimento + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
+                                ) : (
+                                  <span className="text-slate-400 text-xs">-</span>
+                                )}
                               </td>
-                              <td className="px-6 py-4">
-                                <span className={`text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full ${
+                              <td className="px-6 py-2">
+                                <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${
                                   t.tipo === 'Entrada'
                                     ? 'bg-green-100 text-green-800 dark:bg-green-950/40 dark:text-green-400 border border-green-200 dark:border-green-900/30'
                                     : 'bg-red-100 text-red-800 dark:bg-red-950/40 dark:text-red-400 border border-red-200 dark:border-red-900/30'
@@ -1143,21 +1164,28 @@ export default function FinanceiroPage() {
                                   {t.categoria}
                                 </span>
                               </td>
-                              <td className="px-6 py-4 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                              <td className="px-6 py-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
                                 {associatedForn ? (
                                   <span className="text-slate-800 dark:text-slate-200 font-bold">{associatedForn.razao_social}</span>
                                 ) : (
                                   t.membro_contribuinte || 'Coletivo / Caixa'
                                 )}
                               </td>
-                              <td className="px-6 py-4 text-xs font-normal text-slate-500">
-                                {t.data_vencimento ? (
-                                  <span className="text-amber-600 dark:text-amber-400 font-bold font-mono">{new Date(t.data_vencimento + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
+                              <td className="px-6 py-2 text-xs">
+                                {t.data_pagamento ? (
+                                  <span className="text-green-700 dark:text-green-400 font-bold font-mono">{new Date(t.data_pagamento + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
                                 ) : (
-                                  '-'
+                                  <span className="text-red-500 dark:text-red-450 font-bold uppercase text-[9px] tracking-wider px-2 py-0.5 bg-red-50 dark:bg-red-950/30 rounded border border-red-100 dark:border-red-900/30">Pendente</span>
                                 )}
                               </td>
-                              <td className="px-6 py-4">
+                              <td className="px-6 py-2">
+                                <span className={`font-black text-sm ${
+                                  t.tipo === 'Entrada' ? 'text-green-600 dark:text-green-400' : 'text-red-500'
+                                }`}>
+                                  {t.tipo === 'Entrada' ? '+' : '-'} R$ {t.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                </span>
+                              </td>
+                              <td className="px-6 py-2">
                                 <button
                                   type="button"
                                   onClick={() => loadAttachmentsForTransacao(t.id)}
@@ -1167,25 +1195,18 @@ export default function FinanceiroPage() {
                                   <span>Ver</span>
                                 </button>
                               </td>
-                              <td className="px-6 py-4">
-                                <span className={`font-black text-sm ${
-                                  t.tipo === 'Entrada' ? 'text-green-600 dark:text-green-400' : 'text-red-500'
-                                }`}>
-                                  {t.tipo === 'Entrada' ? '+' : '-'} R$ {t.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                </span>
-                              </td>
-                              <td className="px-6 py-4 text-right">
-                                <div className="flex justify-end gap-2">
+                              <td className="px-6 py-2 text-right">
+                                <div className="flex justify-end gap-1.5">
                                   <button
                                     onClick={() => handleEdit(t)}
-                                    className="p-2 text-slate-400 hover:text-amber-600 hover:bg-slate-50 dark:hover:bg-slate-900 transition rounded-lg"
+                                    className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-slate-50 dark:hover:bg-slate-900 transition rounded-lg"
                                     title="Editar"
                                   >
                                     <Tag size={15} />
                                   </button>
                                   <button
                                     onClick={() => handleDelete(t.id)}
-                                    className="p-2 text-slate-400 hover:text-red-650 hover:bg-slate-50 dark:hover:bg-slate-900 transition rounded-lg"
+                                    className="p-1.5 text-slate-400 hover:text-red-650 hover:bg-slate-50 dark:hover:bg-slate-900 transition rounded-lg"
                                     title="Remover"
                                   >
                                     <Trash2 size={15} />
@@ -1558,9 +1579,9 @@ export default function FinanceiroPage() {
             <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 flex items-center justify-between shadow-sm relative overflow-hidden">
               <div className="space-y-1">
                 <span className="text-[10px] uppercase font-black tracking-widest text-slate-400">Total Receitas</span>
-                <p className="text-3xl font-black text-green-600 dark:text-green-400">R$ {totalEntradas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                <p className="text-3xl font-black text-black dark:text-white">R$ {totalEntradas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
               </div>
-              <div className="w-12 h-12 bg-green-50 dark:bg-green-950/40 text-green-600 dark:text-green-400 rounded-2xl flex items-center justify-center">
+              <div className="w-12 h-12 bg-transparent text-green-600 dark:text-green-400 rounded-2xl flex items-center justify-center">
                 <TrendingUp size={24} />
               </div>
             </div>
@@ -1568,9 +1589,9 @@ export default function FinanceiroPage() {
             <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 flex items-center justify-between shadow-sm relative overflow-hidden">
               <div className="space-y-1">
                 <span className="text-[10px] uppercase font-black tracking-widest text-slate-400">Total Despesas</span>
-                <p className="text-3xl font-black text-red-500 dark:text-red-400">R$ {totalSaidas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                <p className="text-3xl font-black text-black dark:text-white">R$ {totalSaidas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
               </div>
-              <div className="w-12 h-12 bg-red-50 dark:bg-red-950/30 text-red-500 dark:text-red-400 rounded-2xl flex items-center justify-center">
+              <div className="w-12 h-12 bg-transparent text-red-500 dark:text-red-400 rounded-2xl flex items-center justify-center">
                 <TrendingDown size={24} />
               </div>
             </div>
@@ -1578,9 +1599,9 @@ export default function FinanceiroPage() {
             <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 flex items-center justify-between shadow-sm relative overflow-hidden">
               <div className="space-y-1">
                 <span className="text-[10px] uppercase font-black tracking-widest text-slate-400">Saldo Consolidado</span>
-                <p className={`text-3xl font-black ${saldoTotal >= 0 ? 'text-amber-600 dark:text-amber-400' : 'text-red-650'}`}>R$ {saldoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                <p className="text-3xl font-black text-black dark:text-white">R$ {saldoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
               </div>
-              <div className="w-12 h-12 bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 rounded-2xl flex items-center justify-center">
+              <div className="w-12 h-12 bg-transparent text-amber-600 dark:text-amber-400 rounded-2xl flex items-center justify-center">
                 <Wallet size={24} />
               </div>
             </div>

@@ -188,6 +188,12 @@ export default function MembrosPage() {
     }
   };
 
+  const getProxyUrl = (url: string) => {
+    if (!url) return '';
+    if (url.startsWith('data:')) return url;
+    return `/api/proxy-image?url=${encodeURIComponent(url)}`;
+  };
+
   const loadImage = (url: string): Promise<HTMLImageElement> => {
     return new Promise((resolve, reject) => {
       if (!url) {
@@ -198,8 +204,59 @@ export default function MembrosPage() {
       img.crossOrigin = 'anonymous';
       img.onload = () => resolve(img);
       img.onerror = () => reject();
-      img.src = url;
+      img.src = getProxyUrl(url);
     });
+  };
+
+  const getRoundedCircleBase64 = (img: HTMLImageElement): string => {
+    try {
+      const canvas = document.createElement('canvas');
+      const size = Math.min(img.width, img.height) || 128;
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.beginPath();
+        ctx.arc(size / 2, size / 2, size / 2, 0, 2 * Math.PI);
+        ctx.clip();
+        ctx.drawImage(img, (img.width - size) / 2, (img.height - size) / 2, size, size, 0, 0, size, size);
+        return canvas.toDataURL('image/png', 0.82);
+      }
+    } catch (e) {
+      console.error('Error rounding circle image', e);
+    }
+    return '';
+  };
+
+  const getRoundedRectBase64 = (img: HTMLImageElement, radiusPct = 0.15): string => {
+    try {
+      const canvas = document.createElement('canvas');
+      const w = img.width || 128;
+      const h = img.height || 128;
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.beginPath();
+        const r = Math.min(w, h) * radiusPct;
+        ctx.moveTo(r, 0);
+        ctx.lineTo(w - r, 0);
+        ctx.quadraticCurveTo(w, 0, w, r);
+        ctx.lineTo(w, h - r);
+        ctx.quadraticCurveTo(w, h, w - r, h);
+        ctx.lineTo(r, h);
+        ctx.quadraticCurveTo(0, h, 0, h - r);
+        ctx.lineTo(0, r);
+        ctx.quadraticCurveTo(0, 0, r, 0);
+        ctx.closePath();
+        ctx.clip();
+        ctx.drawImage(img, 0, 0, w, h);
+        return canvas.toDataURL('image/png', 0.85);
+      }
+    } catch (e) {
+      console.error('Error rounding rect image', e);
+    }
+    return '';
   };
 
   const drawInitials = (doc: jsPDF, name: string, x: number, y: number, size: number) => {
@@ -252,18 +309,29 @@ export default function MembrosPage() {
         }
       }
 
-      const preloadedImagesMap: Record<string, HTMLImageElement> = {};
+      let logoBase64 = '';
+      if (preloadedLogoImg) {
+        logoBase64 = getRoundedRectBase64(preloadedLogoImg, 0.2); // rounded corner logo matching standard rounded-xl sidebar pattern
+      }
+
+      const preloadedImagesMap: Record<string, string> = {};
       const defaultAvatar = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop';
       
       const imageLoadPromises = membersToExport.map(async (m) => {
         const urlToLoad = m.foto_url || defaultAvatar;
         try {
           const img = await loadImage(urlToLoad);
-          preloadedImagesMap[m.id] = img;
+          const circleB64 = getRoundedCircleBase64(img);
+          if (circleB64) {
+            preloadedImagesMap[m.id] = circleB64;
+          }
         } catch (e) {
           try {
             const fallbackImg = await loadImage(defaultAvatar);
-            preloadedImagesMap[m.id] = fallbackImg;
+            const circleB64 = getRoundedCircleBase64(fallbackImg);
+            if (circleB64) {
+              preloadedImagesMap[m.id] = circleB64;
+            }
           } catch (err) {
             // failed gracefully, let fallback draw initials
           }
@@ -298,13 +366,13 @@ export default function MembrosPage() {
       doc.setLineWidth(0.4);
       doc.rect(10, 10, 190, 24, 'FD');
 
-      // Draw the church logo at the beginning of the header CARD
-      const logoSize = 16;
+      // Draw the church logo at the beginning of the header CARD (matching sidebar proportion)
+      const logoSize = 12; // 12mm size
       let textStartX = 15;
-      if (preloadedLogoImg) {
+      if (logoBase64) {
         try {
-          doc.addImage(preloadedLogoImg, 'JPEG', 14, 14, logoSize, logoSize);
-          textStartX = 14 + logoSize + 4; // 34
+          doc.addImage(logoBase64, 'PNG', 14, 16, logoSize, logoSize);
+          textStartX = 14 + logoSize + 4; // 30
         } catch (err) {
           console.error("Error drawing logo", err);
         }
@@ -313,7 +381,7 @@ export default function MembrosPage() {
       // Title & metrics texts (all in black theme color)
       doc.setTextColor(0, 0, 0); // Black
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(12);
+      doc.setFontSize(11);
       doc.text(churchName.toUpperCase(), textStartX, 17);
 
       doc.setTextColor(0, 0, 0); // Black
@@ -399,15 +467,10 @@ export default function MembrosPage() {
             const x = data.cell.x + (cellWidth - size) / 2;
             const y = data.cell.y + (cellHeight - size) / 2;
 
-            const preloadedImg = preloadedImagesMap[memberId];
-            if (preloadedImg) {
+            const preloadedImgB64 = preloadedImagesMap[memberId];
+            if (preloadedImgB64) {
               try {
-                const d = doc as any;
-                d.saveGraphicsState();
-                d.arc(x + size/2, y + size/2, size/2, 0, 2 * Math.PI, 'F');
-                d.clip();
-                d.addImage(preloadedImg, 'JPEG', x, y, size, size);
-                d.restoreGraphicsState();
+                doc.addImage(preloadedImgB64, 'PNG', x, y, size, size);
               } catch (err) {
                 drawInitials(doc, memberName, x, y, size);
               }

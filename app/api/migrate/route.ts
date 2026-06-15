@@ -88,16 +88,17 @@ export async function GET(req: NextRequest) {
       END IF;
     END $$;
 
-    -- 5. Add columns to \`transacoes\` table
+    -- 5. Add columns to 'transacoes' table
     ALTER TABLE transacoes ADD COLUMN IF NOT EXISTS id_forma_pagamento UUID;
     ALTER TABLE transacoes ADD COLUMN IF NOT EXISTS id_conta UUID;
     ALTER TABLE transacoes ADD COLUMN IF NOT EXISTS id_fornecedor UUID;
     ALTER TABLE transacoes ADD COLUMN IF NOT EXISTS data_vencimento DATE;
+    ALTER TABLE transacoes ADD COLUMN IF NOT EXISTS data_pagamento DATE;
 
-    -- 6. Add col to \`usuarios\`
+    -- 6. Add col to 'usuarios'
     ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS foto_url TEXT;
 
-    -- 7. Create table \`arquivos_transacao\`
+    -- 7. Create table 'arquivos_transacao'
     CREATE TABLE IF NOT EXISTS arquivos_transacao (
       id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
       id_transacao UUID REFERENCES transacoes(id) ON DELETE CASCADE,
