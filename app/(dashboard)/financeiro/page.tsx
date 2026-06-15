@@ -107,6 +107,7 @@ export default function FinanceiroPage() {
   const [isDragging, setIsDragging] = useState(false);
 
   // Filter States
+  const [filterTipo, setFilterTipo] = useState<string>('Todos');
   const [filterVencimentoOpt, setFilterVencimentoOpt] = useState<string>('Todo Período');
   const [filterVencimentoInicio, setFilterVencimentoInicio] = useState<string>('');
   const [filterVencimentoFim, setFilterVencimentoFim] = useState<string>('');
@@ -454,7 +455,12 @@ export default function FinanceiroPage() {
   };
 
   const getFilteredTransactions = () => {
-    return transacoes.filter((t) => {
+    const filtered = transacoes.filter((t) => {
+      // 0. Tipo filter
+      if (filterTipo !== 'Todos') {
+        if (t.tipo !== filterTipo) return false;
+      }
+
       // 1. Text filter
       if (filterText) {
         const text = filterText.toLowerCase();
@@ -543,6 +549,17 @@ export default function FinanceiroPage() {
       }
 
       return true;
+    });
+
+    // 5. Always sort by Expiration Date (Data Vencimento)
+    return filtered.sort((a, b) => {
+      if (!a.data_vencimento && !b.data_vencimento) return 0;
+      if (!a.data_vencimento) return 1; // Put records without a due date at the end
+      if (!b.data_vencimento) return -1;
+      
+      const dateA = new Date(a.data_vencimento + 'T00:00:00').getTime();
+      const dateB = new Date(b.data_vencimento + 'T00:00:00').getTime();
+      return dateB - dateA;
     });
   };
 
@@ -768,15 +785,15 @@ export default function FinanceiroPage() {
       </div>
 
       {error && (
-        <div className="p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl text-red-600 dark:text-red-400 font-bold text-sm flex items-center gap-2">
-          <AlertCircle size={18} />
+        <div className="p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl text-black dark:text-black font-bold text-sm flex items-center gap-2">
+          <AlertCircle size={18} className="text-red-600 dark:text-red-400" />
           <span>{error}</span>
         </div>
       )}
 
       {success && (
-        <div className="p-4 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-xl text-green-600 dark:text-green-400 font-bold text-sm flex items-center gap-2">
-          <Check size={18} />
+        <div className="p-4 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-xl text-black dark:text-black font-bold text-sm flex items-center gap-2">
+          <Check size={18} className="text-green-600 dark:text-green-400" />
           <span>{success}</span>
         </div>
       )}
@@ -1268,10 +1285,11 @@ export default function FinanceiroPage() {
                     <span className="text-[11px] uppercase font-black text-slate-400 tracking-widest block">
                       Filtros de Pesquisa & Lançamentos
                     </span>
-                    {(filterText || filterVencimentoOpt !== 'Todo Período' || filterCategorias.length > 0 || filterFormasPagamento.length > 0) && (
+                    {(filterText || filterTipo !== 'Todos' || filterVencimentoOpt !== 'Todo Período' || filterCategorias.length > 0 || filterFormasPagamento.length > 0) && (
                       <button
                         onClick={() => {
                           setFilterText('');
+                          setFilterTipo('Todos');
                           setFilterVencimentoOpt('Todo Período');
                           setFilterVencimentoInicio('');
                           setFilterVencimentoFim('');
@@ -1286,7 +1304,20 @@ export default function FinanceiroPage() {
                   </div>
 
                   {/* Filter grid row */}
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+                    {/* f. Tipo de Transação select */}
+                    <div>
+                      <select
+                        value={filterTipo}
+                        onChange={(e) => setFilterTipo(e.target.value)}
+                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-white outline-none focus:border-amber-500 transition-colors font-semibold"
+                      >
+                        <option value="Todos">Tipo: Todos</option>
+                        <option value="Entrada">Crédito (/ Entrada)</option>
+                        <option value="Saída">Débito (/ Saída)</option>
+                      </select>
+                    </div>
+
                     {/* c.2 Pesquisa de texto */}
                     <div className="relative">
                       <input
@@ -1475,10 +1506,10 @@ export default function FinanceiroPage() {
                             <tr key={t.id} className="hover:bg-slate-50/30 dark:hover:bg-slate-950/5 transition-all">
                               <td className="px-6 py-2">
                                 <div className="flex items-center gap-3">
-                                  <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                                  <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 bg-transparent ${
                                     t.tipo === 'Entrada'
-                                      ? 'bg-green-50 dark:bg-green-950/40 text-green-600'
-                                      : 'bg-red-50 dark:bg-red-950/30 text-red-500'
+                                      ? 'text-blue-600 dark:text-blue-450'
+                                      : 'text-red-500'
                                   }`}>
                                     <DollarSign size={16} />
                                   </div>
@@ -1496,10 +1527,10 @@ export default function FinanceiroPage() {
                                 )}
                               </td>
                               <td className="px-6 py-2">
-                                <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${
+                                <span className={`text-[10px] font-black uppercase tracking-widest bg-transparent ${
                                   t.tipo === 'Entrada'
-                                    ? 'bg-green-100 text-green-800 dark:bg-green-950/40 dark:text-green-400 border border-green-200 dark:border-green-900/30'
-                                    : 'bg-red-100 text-red-800 dark:bg-red-950/40 dark:text-red-400 border border-red-200 dark:border-red-900/30'
+                                    ? 'text-blue-600 dark:text-blue-450'
+                                    : 'text-red-500 dark:text-red-400'
                                 }`}>
                                   {t.categoria}
                                 </span>
@@ -1513,14 +1544,14 @@ export default function FinanceiroPage() {
                               </td>
                               <td className="px-6 py-2 text-xs">
                                 {t.data_pagamento ? (
-                                  <span className="text-green-700 dark:text-green-400 font-bold font-mono">{new Date(t.data_pagamento + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
+                                  <span className="text-black dark:text-black font-bold font-mono">{new Date(t.data_pagamento + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
                                 ) : (
                                   <span className="text-red-500 dark:text-red-450 font-bold uppercase text-[9px] tracking-wider px-2 py-0.5 bg-red-50 dark:bg-red-950/30 rounded border border-red-100 dark:border-red-900/30">Pendente</span>
                                 )}
                               </td>
                               <td className="px-6 py-2">
                                 <span className={`font-black text-sm ${
-                                  t.tipo === 'Entrada' ? 'text-green-600 dark:text-green-400' : 'text-red-500'
+                                  t.tipo === 'Entrada' ? 'text-blue-600 dark:text-blue-450' : 'text-red-500'
                                 }`}>
                                   {t.tipo === 'Entrada' ? '+' : '-'} R$ {t.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                 </span>
