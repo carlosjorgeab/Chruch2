@@ -14,8 +14,8 @@ export async function POST(req: NextRequest) {
     // Check credentials inside environment variables
     //const email = process.env.MEGA_EMAIL;
     //const password = process.env.MEGA_PASSWORD;
-    const email = 'app.chrucn.management@gmail.com';
-    const password = 'Cjl@j2326'
+    const email = 'app.chruch.management@gmail.com';
+    const password = 'Cjl@j2326';
 
     if (!email || !password) {
       return NextResponse.json({ 
