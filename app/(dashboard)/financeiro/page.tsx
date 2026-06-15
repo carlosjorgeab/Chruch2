@@ -6,7 +6,7 @@ import { useIgreja } from '@/context/IgrejaContext';
 import { useAuth } from '@/context/AuthContext';
 import { 
   Plus, Trash2, TrendingUp, TrendingDown, Wallet, Calendar, Tag, RefreshCw, 
-  Save, X, DollarSign, Upload, File, FileText, Check, AlertCircle, Link2, Settings, Briefcase, Landmark, Edit2
+  Save, X, DollarSign, Upload, File, FileText, Check, AlertCircle, Link2, Settings, Briefcase, Landmark, Edit2, ChevronDown, Search
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 
@@ -102,6 +102,21 @@ export default function FinanceiroPage() {
   const [showAnexosForm, setShowAnexosForm] = useState(false);
   const [activeTransacaoAnexos, setActiveTransacaoAnexos] = useState<ArquivoAnexo[]>([]);
   const [selectedTransacaoForAnexos, setSelectedTransacaoForAnexos] = useState<string | null>(null);
+
+  // Drag state
+  const [isDragging, setIsDragging] = useState(false);
+
+  // Filter States
+  const [filterVencimentoOpt, setFilterVencimentoOpt] = useState<string>('Todo Período');
+  const [filterVencimentoInicio, setFilterVencimentoInicio] = useState<string>('');
+  const [filterVencimentoFim, setFilterVencimentoFim] = useState<string>('');
+  const [filterText, setFilterText] = useState<string>('');
+  const [filterCategorias, setFilterCategorias] = useState<string[]>([]);
+  const [filterFormasPagamento, setFilterFormasPagamento] = useState<string[]>([]);
+
+  // Toggles for Custom Multiple Select Combo Dropdowns
+  const [showCatDropdown, setShowCatDropdown] = useState(false);
+  const [showFormaDropdown, setShowFormaDropdown] = useState(false);
 
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -419,6 +434,116 @@ export default function FinanceiroPage() {
 
   const handleRemoverAnexo = (index: number) => {
     setAnexos(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleFileSelection = (files: File[]) => {
+    files.forEach(file => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64String = reader.result as string;
+        setAnexos(prev => [...prev, {
+          nome_arquivo: file.name,
+          url_arquivo: base64String
+        }]);
+      };
+      reader.onerror = (e) => {
+        console.error('Error reading file:', e);
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const getFilteredTransactions = () => {
+    return transacoes.filter((t) => {
+      // 1. Text filter
+      if (filterText) {
+        const text = filterText.toLowerCase();
+        const valueStr = t.valor ? t.valor.toString() : '';
+        const dateStr = t.data ? new Date(t.data + 'T00:00:00').toLocaleDateString('pt-BR') : '';
+        const vencStr = t.data_vencimento ? new Date(t.data_vencimento + 'T00:00:00').toLocaleDateString('pt-BR') : '';
+        const pagStr = t.data_pagamento ? new Date(t.data_pagamento + 'T00:00:00').toLocaleDateString('pt-BR') : '';
+        
+        const associatedLabel = dbFornecedores.find(f => f.id === t.id_fornecedor)?.razao_social || '';
+        const contributorLabel = t.membro_contribuinte || '';
+        
+        const matches = 
+          (t.descricao || '').toLowerCase().includes(text) ||
+          (t.categoria || '').toLowerCase().includes(text) ||
+          associatedLabel.toLowerCase().includes(text) ||
+          contributorLabel.toLowerCase().includes(text) ||
+          valueStr.includes(text) ||
+          dateStr.includes(text) ||
+          vencStr.includes(text) ||
+          pagStr.includes(text);
+          
+        if (!matches) return false;
+      }
+
+      // 2. Category filter
+      if (filterCategorias.length > 0) {
+        if (!filterCategorias.includes(t.categoria)) {
+          return false;
+        }
+      }
+
+      // 3. Payment Method filter
+      if (filterFormasPagamento.length > 0) {
+        if (!t.id_forma_pagamento || !filterFormasPagamento.includes(t.id_forma_pagamento)) {
+          return false;
+        }
+      }
+
+      // 4. Expiration Date (Data Vencimento) Filter
+      if (filterVencimentoOpt !== 'Todo Período') {
+        if (!t.data_vencimento) {
+          return false;
+        }
+        
+        const tDate = new Date(t.data_vencimento + 'T00:00:00');
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+        
+        if (filterVencimentoOpt === 'Hoje') {
+          const tDateStr = t.data_vencimento;
+          const todayStr = now.toISOString().split('T')[0];
+          if (tDateStr !== todayStr) return false;
+        } else if (filterVencimentoOpt === 'Semana') {
+          const startOfWeek = new Date(now);
+          startOfWeek.setDate(now.getDate() - now.getDay());
+          const endOfWeek = new Date(startOfWeek);
+          endOfWeek.setDate(startOfWeek.getDate() + 6);
+          endOfWeek.setHours(23, 59, 59, 999);
+          if (tDate < startOfWeek || tDate > endOfWeek) return false;
+        } else if (filterVencimentoOpt === 'Mês') {
+          if (tDate.getMonth() !== now.getMonth() || tDate.getFullYear() !== now.getFullYear()) {
+            return false;
+          }
+        } else if (filterVencimentoOpt === 'Ano') {
+          if (tDate.getFullYear() !== now.getFullYear()) {
+            return false;
+          }
+        } else if (filterVencimentoOpt === '30 Últimos Dias') {
+          const thirtyDaysAgo = new Date(now);
+          thirtyDaysAgo.setDate(now.getDate() - 30);
+          if (tDate < thirtyDaysAgo || tDate > now) return false;
+        } else if (filterVencimentoOpt === '12 Últimos Meses') {
+          const twelveMonthsAgo = new Date(now);
+          twelveMonthsAgo.setMonth(now.getMonth() - 12);
+          if (tDate < twelveMonthsAgo || tDate > now) return false;
+        } else if (filterVencimentoOpt === 'Personalizado') {
+          if (filterVencimentoInicio) {
+            const start = new Date(filterVencimentoInicio + 'T00:00:00');
+            if (tDate < start) return false;
+          }
+          if (filterVencimentoFim) {
+            const end = new Date(filterVencimentoFim + 'T23:59:59');
+            if (tDate > end) return false;
+          }
+        }
+      }
+
+      return true;
+    });
   };
 
   // Submodule accounts (contas) CRUD Actions
@@ -895,14 +1020,53 @@ export default function FinanceiroPage() {
                 </div>
 
                 {/* SUPPORT FILE UPLOAD SYSTEM (arquivos_transacao storage) */}
-                <div className="md:col-span-2 p-4 bg-slate-50 dark:bg-slate-900/40 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700 space-y-4">
-                  <div className="flex justify-between items-center">
+                <div 
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setIsDragging(true);
+                  }}
+                  onDragLeave={() => {
+                    setIsDragging(false);
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setIsDragging(false);
+                    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                      const files = Array.from(e.dataTransfer.files);
+                      handleFileSelection(files);
+                    }
+                  }}
+                  onClick={() => {
+                    document.getElementById('file-upload-input')?.click();
+                  }}
+                  className={`md:col-span-2 p-6 rounded-2xl border-2 border-dashed transition-all duration-200 cursor-pointer space-y-4 ${
+                    isDragging 
+                      ? 'border-amber-500 bg-amber-50/20 dark:bg-amber-950/20' 
+                      : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 hover:border-amber-500/55'
+                  }`}
+                >
+                  <input
+                    type="file"
+                    id="file-upload-input"
+                    className="hidden"
+                    multiple
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files.length > 0) {
+                        handleFileSelection(Array.from(e.target.files));
+                      }
+                    }}
+                  />
+                  
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4" onClick={(e) => e.stopPropagation()}>
                     <div>
                       <h4 className="text-xs font-black uppercase text-slate-500 tracking-wider flex items-center gap-2">
                         <Upload size={14} className="text-amber-500" />
                         Comprovantes & Anexos Financeiros
                       </h4>
-                      <p className="text-[11px] text-slate-450 mt-0.5">Vincule comprovantes, faturas ou contratos a este lançamento</p>
+                      <p className="text-[11px] text-slate-450 mt-0.5">
+                        Arraste e solte arquivos aqui, ou <span className="text-amber-600 dark:text-amber-400 font-bold underline cursor-pointer" onClick={() => document.getElementById('file-upload-input')?.click()}>clique para selecionar</span>.
+                      </p>
                     </div>
                     <button
                       type="button"
@@ -914,7 +1078,7 @@ export default function FinanceiroPage() {
                   </div>
 
                   {showAnexosForm && (
-                    <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3 animate-in fade-in duration-200">
+                    <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3 animate-in fade-in duration-200" onClick={(e) => e.stopPropagation()}>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                           <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Título do Documento</label>
@@ -922,7 +1086,7 @@ export default function FinanceiroPage() {
                             type="text"
                             value={novoAnexoNome}
                             onChange={(e) => setNovoAnexoNome(e.target.value)}
-                            className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white outline-none"
+                            className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-650 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white outline-none"
                             placeholder="Ex: Recibo de Luz.pdf"
                           />
                         </div>
@@ -932,7 +1096,7 @@ export default function FinanceiroPage() {
                             type="text"
                             value={novoAnexoUrl}
                             onChange={(e) => setNovoAnexoUrl(e.target.value)}
-                            className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white outline-none"
+                            className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-650 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white outline-none"
                             placeholder="https://servidor.com/recibo.pdf"
                           />
                         </div>
@@ -964,7 +1128,7 @@ export default function FinanceiroPage() {
                   {anexos.length === 0 ? (
                     <p className="text-xs text-slate-400 italic text-center py-2">Sem anexos registrados para esta transação.</p>
                   ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2" onClick={(e) => e.stopPropagation()}>
                       {anexos.map((anexo, idx) => (
                         <div key={idx} className="flex items-center justify-between p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-2xs">
                           <div className="flex items-center gap-2 max-w-[80%]">
@@ -1098,8 +1262,180 @@ export default function FinanceiroPage() {
 
               {/* Table list of transactions */}
               <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-                <div className="px-6 py-4 bg-slate-50/50 dark:bg-slate-950/20 border-b border-slate-100 dark:border-slate-850">
-                  <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Histórico de Lançamentos</span>
+                {/* Header list panel containing the active search and combos filters requested in 1c */}
+                <div className="px-6 py-5 bg-slate-50/50 dark:bg-slate-950/20 border-b border-slate-100 dark:border-slate-850 space-y-4">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                    <span className="text-[11px] uppercase font-black text-slate-400 tracking-widest block">
+                      Filtros de Pesquisa & Lançamentos
+                    </span>
+                    {(filterText || filterVencimentoOpt !== 'Todo Período' || filterCategorias.length > 0 || filterFormasPagamento.length > 0) && (
+                      <button
+                        onClick={() => {
+                          setFilterText('');
+                          setFilterVencimentoOpt('Todo Período');
+                          setFilterVencimentoInicio('');
+                          setFilterVencimentoFim('');
+                          setFilterCategorias([]);
+                          setFilterFormasPagamento([]);
+                        }}
+                        className="text-[10px] text-amber-600 dark:text-amber-450 hover:underline font-bold uppercase tracking-wider flex items-center gap-1"
+                      >
+                        Limpar Filtros
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Filter grid row */}
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                    {/* c.2 Pesquisa de texto */}
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder="Pesquisar em todos os campos..."
+                        value={filterText}
+                        onChange={(e) => setFilterText(e.target.value)}
+                        className="w-full pl-8 pr-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-white outline-none focus:border-amber-500 transition-colors"
+                      />
+                      <Search size={12} className="absolute left-2.5 top-3 text-slate-400" />
+                    </div>
+
+                    {/* c.1 Data Vencimento combo */}
+                    <div className="space-y-1">
+                      <select
+                        value={filterVencimentoOpt}
+                        onChange={(e) => setFilterVencimentoOpt(e.target.value)}
+                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-white outline-none focus:border-amber-500 transition-colors font-semibold"
+                      >
+                        <option value="Todo Período">Vencimento: Todo Período</option>
+                        <option value="Hoje">Hoje</option>
+                        <option value="Semana">Semana</option>
+                        <option value="Mês">Mês</option>
+                        <option value="Ano">Ano</option>
+                        <option value="30 Últimos Dias">30 Últimos Dias</option>
+                        <option value="12 Últimos Meses">12 Últimos Meses</option>
+                        <option value="Personalizado">Personalizado...</option>
+                      </select>
+
+                      {filterVencimentoOpt === 'Personalizado' && (
+                        <div className="grid grid-cols-2 gap-1 mt-1 animate-in slide-in-from-top-1 duration-200">
+                          <input
+                            type="date"
+                            value={filterVencimentoInicio}
+                            onChange={(e) => setFilterVencimentoInicio(e.target.value)}
+                            className="px-2 py-1 text-[10px] rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-white outline-none focus:border-amber-500"
+                            placeholder="Início"
+                            title="Vencimento Início"
+                          />
+                          <input
+                            type="date"
+                            value={filterVencimentoFim}
+                            onChange={(e) => setFilterVencimentoFim(e.target.value)}
+                            className="px-2 py-1 text-[10px] rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-white outline-none focus:border-amber-500"
+                            placeholder="Fim"
+                            title="Vencimento Fim"
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* c.3 Categoria Multi-select combo dropdown */}
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowCatDropdown(!showCatDropdown);
+                          setShowFormaDropdown(false);
+                        }}
+                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-white outline-none flex justify-between items-center transition-all hover:bg-slate-50 dark:hover:bg-slate-850"
+                      >
+                        <span className="truncate">
+                          {filterCategorias.length === 0 
+                            ? 'Categoria: Todas' 
+                            : `Categorias: (${filterCategorias.length})`
+                          }
+                        </span>
+                        <ChevronDown size={14} className={`text-slate-400 transition-transform ${showCatDropdown ? 'rotate-180' : ''}`} />
+                      </button>
+
+                      {showCatDropdown && (
+                        <div className="absolute z-30 left-0 right-0 mt-1.5 p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-lg max-h-52 overflow-y-auto space-y-1.5 animate-in fade-in zoom-in-95 duration-150">
+                          {[
+                            'Dízimo', 'Oferta', 'Doação', 'Evento', 'Aluguel', 'Água e Energia',
+                            'Som e Luz', 'Manutenção', 'Missionário', 'Outros',
+                            ...Array.from(new Set(transacoes.map(t => t.categoria).filter(Boolean) as string[]))
+                          ].filter((v, i, self) => self.indexOf(v) === i).map((cat) => {
+                            const isChecked = filterCategorias.includes(cat);
+                            return (
+                              <label key={cat} className="flex items-center gap-2 px-2 py-1 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg cursor-pointer text-xs select-none">
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={() => {
+                                    if (isChecked) {
+                                      setFilterCategorias(filterCategorias.filter(c => c !== cat));
+                                    } else {
+                                      setFilterCategorias([...filterCategorias, cat]);
+                                    }
+                                  }}
+                                  className="rounded border-slate-300 text-amber-600 focus:ring-amber-500 h-3.5 w-3.5"
+                                />
+                                <span className="text-slate-700 dark:text-slate-200 truncate">{cat}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* c.4 Forma de Pagamento Multi-select combo dropdown */}
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowFormaDropdown(!showFormaDropdown);
+                          setShowCatDropdown(false);
+                        }}
+                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-white outline-none flex justify-between items-center transition-all hover:bg-slate-50 dark:hover:bg-slate-850"
+                      >
+                        <span className="truncate">
+                          {filterFormasPagamento.length === 0 
+                            ? 'Forma Pagamento: Todas' 
+                            : `Formas: (${filterFormasPagamento.length})`
+                          }
+                        </span>
+                        <ChevronDown size={14} className={`text-slate-400 transition-transform ${showFormaDropdown ? 'rotate-180' : ''}`} />
+                      </button>
+
+                      {showFormaDropdown && (
+                        <div className="absolute z-30 left-0 right-0 mt-1.5 p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-lg max-h-52 overflow-y-auto space-y-1.5 animate-in fade-in zoom-in-95 duration-150">
+                          {[
+                            'Dinheiro', 'PIX', 'Transferência', 'Cartão',
+                            ...dbFormasPagamento.map(f => f.nome),
+                            ...Array.from(new Set(transacoes.map(t => t.id_forma_pagamento).filter(Boolean) as string[]))
+                          ].filter((v, i, self) => self.indexOf(v) === i).map((forma) => {
+                            const isChecked = filterFormasPagamento.includes(forma);
+                            return (
+                              <label key={forma} className="flex items-center gap-2 px-2 py-1 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg cursor-pointer text-xs select-none">
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={() => {
+                                    if (isChecked) {
+                                      setFilterFormasPagamento(filterFormasPagamento.filter(f => f !== forma));
+                                    } else {
+                                      setFilterFormasPagamento([...filterFormasPagamento, forma]);
+                                    }
+                                  }}
+                                  className="rounded border-slate-300 text-amber-600 focus:ring-amber-500 h-3.5 w-3.5"
+                                />
+                                <span className="text-slate-700 dark:text-slate-200 truncate">{forma}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 {loading ? (
@@ -1110,6 +1446,10 @@ export default function FinanceiroPage() {
                 ) : transacoes.length === 0 ? (
                   <div className="p-12 text-center text-slate-500 italic">
                     Nenhuma transação financeira registrada neste caixa.
+                  </div>
+                ) : getFilteredTransactions().length === 0 ? (
+                  <div className="p-12 text-center text-slate-500 italic">
+                    Nenhum lançamento encontrado para os filtros selecionados.
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
@@ -1127,7 +1467,7 @@ export default function FinanceiroPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 dark:divide-slate-850 text-slate-700 dark:text-slate-350 font-medium">
-                        {transacoes.map((t) => {
+                        {getFilteredTransactions().map((t) => {
                           // Find client/fornecedor name
                           const associatedForn = dbFornecedores.find(f => f.id === t.id_fornecedor);
 
@@ -1150,9 +1490,9 @@ export default function FinanceiroPage() {
                               </td>
                               <td className="px-6 py-2">
                                 {t.data_vencimento ? (
-                                  <span className="text-amber-600 dark:text-amber-400 font-bold font-mono text-xs">{new Date(t.data_vencimento + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
+                                  <span className="text-black dark:text-white font-bold font-mono text-xs">{new Date(t.data_vencimento + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
                                 ) : (
-                                  <span className="text-slate-400 text-xs">-</span>
+                                  <span className="text-black dark:text-white text-xs">-</span>
                                 )}
                               </td>
                               <td className="px-6 py-2">
@@ -1164,11 +1504,11 @@ export default function FinanceiroPage() {
                                   {t.categoria}
                                 </span>
                               </td>
-                              <td className="px-6 py-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                              <td className="px-6 py-2 text-xs font-bold text-black dark:text-white">
                                 {associatedForn ? (
-                                  <span className="text-slate-800 dark:text-slate-200 font-bold">{associatedForn.razao_social}</span>
+                                  <span className="text-black dark:text-white font-bold">{associatedForn.razao_social}</span>
                                 ) : (
-                                  t.membro_contribuinte || 'Coletivo / Caixa'
+                                  <span className="text-black dark:text-white font-bold">{t.membro_contribuinte || 'Coletivo / Caixa'}</span>
                                 )}
                               </td>
                               <td className="px-6 py-2 text-xs">
@@ -1189,9 +1529,9 @@ export default function FinanceiroPage() {
                                 <button
                                   type="button"
                                   onClick={() => loadAttachmentsForTransacao(t.id)}
-                                  className="text-amber-600 hover:text-amber-700 font-black text-xs uppercase flex items-center gap-1 hover:underline"
+                                  className="text-black dark:text-white hover:text-slate-700 dark:hover:text-slate-300 font-black text-xs uppercase flex items-center gap-1 hover:underline"
                                 >
-                                  <File size={14} />
+                                  <File size={14} className="text-black dark:text-white" />
                                   <span>Ver</span>
                                 </button>
                               </td>
