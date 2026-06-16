@@ -64,7 +64,12 @@ type ArquivoAnexo = {
 export default function FinanceiroPage() {
   const { user, hasPermission } = useAuth();
   const { selectedIgreja } = useIgreja();
-  const [activeTab, setActiveTab] = useState<'lancamentos' | 'contas' | 'categorias' | 'formas_pagamento' | 'fluxo_caixa'>('lancamentos');
+  const [activeTab, setActiveTab] = useState<'lancamentos' | 'contas' | 'categorias' | 'formas_pagamento' | 'fluxo_caixa' | 'relatorios'>('lancamentos');
+  
+  // States specifically for the Reports Submodule
+  const [reportDateInicio, setReportDateInicio] = useState<string>('');
+  const [reportDateFim, setReportDateFim] = useState<string>('');
+  const [selectedReportType, setSelectedReportType] = useState<'contas_pagar' | 'contas_receber' | 'fluxo_caixa'>('contas_pagar');
   
   // Transactions data states
   const [transacoes, setTransacoes] = useState<Transacao[]>([]);
@@ -226,6 +231,315 @@ export default function FinanceiroPage() {
       console.error('Error rounding rect image', e);
     }
     return '';
+  };
+
+  const handleGenerateFinanceReport = async (type: 'contas_pagar' | 'contas_receber' | 'fluxo_caixa') => {
+    try {
+      // 1. Filter transactions by date period boundaries using due date as requested
+      let filtered = [...transacoes];
+      
+      if (reportDateInicio) {
+        filtered = filtered.filter(t => {
+          if (!t.data_vencimento) return false;
+          return t.data_vencimento >= reportDateInicio;
+        });
+      }
+      if (reportDateFim) {
+        filtered = filtered.filter(t => {
+          if (!t.data_vencimento) return false;
+          return t.data_vencimento <= reportDateFim;
+        });
+      }
+      
+      // 2. Filter by type (Contas a Pagar: Débito/Saída, Contas a Receber: Crédito/Entrada, Fluxo Caixa: Todos)
+      if (type === 'contas_pagar') {
+        filtered = filtered.filter(t => t.tipo === 'Saída');
+      } else if (type === 'contas_receber') {
+        filtered = filtered.filter(t => t.tipo === 'Entrada');
+      }
+      
+      // 3. Always sort by Expiration Date (Data Vencimento) ASCENDING (da menor para a maior data)
+      filtered.sort((a, b) => {
+        if (!a.data_vencimento && !b.data_vencimento) return 0;
+        if (!a.data_vencimento) return 1;
+        if (!b.data_vencimento) return -1;
+        return a.data_vencimento.localeCompare(b.data_vencimento);
+      });
+
+      if (filtered.length === 0) {
+        alert('Nenhum lançamento encontrado para a seleção de filtros atual.');
+        return;
+      }
+
+      // Preload church logo
+      let preloadedLogoImg: HTMLImageElement | null = null;
+      if (selectedIgreja?.logo_url) {
+        try {
+          preloadedLogoImg = await loadImage(selectedIgreja.logo_url);
+        } catch (e) {
+          console.warn("Could not load church logo image: " + selectedIgreja.logo_url);
+        }
+      }
+      if (!preloadedLogoImg) {
+        try {
+          preloadedLogoImg = await loadImage('https://images.unsplash.com/photo-1438232992991-995b7058bbb3?w=100&h=100&fit=crop');
+        } catch (e) {
+          console.warn("Could not load default church logo");
+        }
+      }
+
+      let logoBase64 = '';
+      if (preloadedLogoImg) {
+        logoBase64 = getRoundedRectBase64(preloadedLogoImg, 0.2);
+      }
+
+      const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+      });
+
+      const churchName = selectedIgreja?.nome || 'Minha Congregação';
+      
+      let docTitle = '';
+      if (type === 'contas_pagar') {
+        docTitle = 'RELATÓRIO DE CONTAS A PAGAR';
+      } else if (type === 'contas_receber') {
+        docTitle = 'RELATÓRIO DE CONTAS A RECEBER';
+      } else {
+        docTitle = 'RELATÓRIO DE FLUXO DE CAIXA CONSOLIDADO';
+      }
+
+      const periodStr = `${reportDateInicio ? new Date(reportDateInicio + 'T00:00:00').toLocaleDateString('pt-BR') : 'Início'} à ${reportDateFim ? new Date(reportDateFim + 'T00:00:00').toLocaleDateString('pt-BR') : 'Hoje'}`;
+      docTitle += ` (${periodStr})`;
+
+      const generationDate = new Date().toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+
+      // Header block card (white fill, black stroke matching other ready-made reports)
+      doc.setFillColor(255, 255, 255);
+      doc.setDrawColor(0, 0, 0); // Black lines (as linhas do cabeçalho)
+      doc.setLineWidth(0.4);
+      doc.rect(10, 10, 190, 24, 'FD');
+
+      const logoSize = 12; // 12mm size
+      let textStartX = 15;
+      if (logoBase64) {
+        try {
+          doc.addImage(logoBase64, 'PNG', 14, 16, logoSize, logoSize);
+          textStartX = 14 + logoSize + 4; // 30
+        } catch (err) {
+          console.error("Error drawing logo", err);
+        }
+      }
+
+      // Title & metrics texts (all in black theme color)
+      doc.setTextColor(0, 0, 0); // Black
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.text(churchName.toUpperCase(), textStartX, 17);
+
+      doc.setTextColor(0, 0, 0); // Black
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.text(docTitle, textStartX, 23);
+
+      doc.setTextColor(80, 80, 80); // Dark Gray
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.text(`Gerado em: ${generationDate}  |  Total de Registros: ${filtered.length}`, textStartX, 29);
+
+      // 5. Build Columns and rows
+      let tableHeaders: string[] = [];
+      let tableRows: any[][] = [];
+      let totalSum = 0;
+
+      if (type === 'contas_pagar') {
+        tableHeaders = ['Vencimento', 'Lançamento (Descrição / Doc)', 'Categoria', 'Fornecedor', 'Valor'];
+        tableRows = filtered.map(t => {
+          const vencStr = t.data_vencimento ? new Date(t.data_vencimento + 'T00:00:00').toLocaleDateString('pt-BR') : '-';
+          const docDateStr = t.data ? new Date(t.data + 'T00:00:00').toLocaleDateString('pt-BR') : '-';
+          const descAndDoc = `${t.descricao} (Doc: ${docDateStr})`;
+          
+          const associatedForn = dbFornecedores.find(f => f.id === t.id_fornecedor);
+          const fornecedorName = associatedForn ? associatedForn.razao_social : '-';
+          const val = t.valor || 0;
+          totalSum += val;
+
+          return [
+            vencStr,
+            descAndDoc,
+            t.categoria,
+            fornecedorName,
+            `R$ ${val.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+          ];
+         });
+
+        // Add Grand Total row at the end
+        tableRows.push([
+          'TOTAL',
+          '',
+          '',
+          '',
+          `R$ ${totalSum.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+        ]);
+
+      } else if (type === 'contas_receber') {
+        tableHeaders = ['Vencimento', 'Lançamento (Descrição / Doc)', 'Categoria', 'Cliente', 'Valor'];
+        tableRows = filtered.map(t => {
+          const vencStr = t.data_vencimento ? new Date(t.data_vencimento + 'T00:00:00').toLocaleDateString('pt-BR') : '-';
+          const docDateStr = t.data ? new Date(t.data + 'T00:00:00').toLocaleDateString('pt-BR') : '-';
+          const descAndDoc = `${t.descricao} (Doc: ${docDateStr})`;
+          
+          const clientName = t.membro_contribuinte || 'Coletivo / Caixa';
+          const val = t.valor || 0;
+          totalSum += val;
+
+          return [
+            vencStr,
+            descAndDoc,
+            t.categoria,
+            clientName,
+            `R$ ${val.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+          ];
+         });
+
+        // Add Grand Total row at the end
+        tableRows.push([
+          'TOTAL',
+          '',
+          '',
+          '',
+          `R$ ${totalSum.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+        ]);
+
+      } else { // fluxo_caixa
+        tableHeaders = ['Vencimento', 'Lançamento (Descrição / Doc)', 'Categoria', 'Cliente / Fornecedor', 'Tipo', 'Valor'];
+        let totalEntradas = 0;
+        let totalSaidas = 0;
+
+        tableRows = filtered.map(t => {
+          const vencStr = t.data_vencimento ? new Date(t.data_vencimento + 'T00:00:00').toLocaleDateString('pt-BR') : '-';
+          const docDateStr = t.data ? new Date(t.data + 'T00:00:00').toLocaleDateString('pt-BR') : '-';
+          const descAndDoc = `${t.descricao} (Doc: ${docDateStr})`;
+          
+          const associatedForn = dbFornecedores.find(f => f.id === t.id_fornecedor);
+          const contactName = associatedForn ? associatedForn.razao_social : (t.membro_contribuinte || 'Coletivo / Caixa');
+          const val = t.valor || 0;
+          if (t.tipo === 'Entrada') {
+            totalEntradas += val;
+          } else {
+            totalSaidas += val;
+          }
+
+          return [
+            vencStr,
+            descAndDoc,
+            t.categoria,
+            contactName,
+            t.tipo === 'Entrada' ? 'Crédito' : 'Débito',
+            `${t.tipo === 'Entrada' ? '+' : '-'} R$ ${val.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+          ];
+         });
+
+        const netBalance = totalEntradas - totalSaidas;
+        tableRows.push([
+          'TOTAL CRÉDITO (RECEITAS)',
+          '',
+          '',
+          '',
+          '',
+          `+ R$ ${totalEntradas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+        ]);
+        tableRows.push([
+          'TOTAL DÉBITO (DESPESAS)',
+          '',
+          '',
+          '',
+          '',
+          `- R$ ${totalSaidas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+        ]);
+        tableRows.push([
+          'SALDO LÍQUIDO CONSOLIDADO',
+          '',
+          '',
+          '',
+          '',
+          `${netBalance >= 0 ? '+' : '-'} R$ ${Math.abs(netBalance).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+        ]);
+      }
+
+      autoTable(doc, {
+        startY: 38,
+        head: [tableHeaders],
+        body: tableRows,
+        theme: 'striped',
+        headStyles: {
+          fillColor: [0, 0, 0], // Pure Black background for head (as in other reports)
+          textColor: [255, 255, 255],
+          fontStyle: 'bold',
+          fontSize: 8.5,
+          valign: 'middle',
+          lineColor: [0, 0, 0],
+          lineWidth: 0.1,
+        },
+        bodyStyles: {
+          fontSize: 8,
+          valign: 'middle',
+          textColor: [0, 0, 0], // black text
+          lineColor: [180, 180, 180],
+          lineWidth: 0.1,
+        },
+        styles: {
+          font: 'helvetica',
+          cellPadding: 3,
+        },
+        willDrawCell: (data) => {
+          // Highlight total rows nicely
+          const isTotalRow = data.row.index >= tableRows.length - (type === 'fluxo_caixa' ? 3 : 1);
+          if (isTotalRow) {
+            doc.setFont('helvetica', 'bold');
+            data.cell.styles.fontStyle = 'bold';
+            if (type === 'fluxo_caixa' && data.row.index === tableRows.length - 1) {
+              data.cell.styles.fillColor = [230, 242, 230]; // Soft green for final balance if positive
+            } else {
+              data.cell.styles.fillColor = [245, 245, 245];
+            }
+          }
+        },
+        columnStyles: type === 'fluxo_caixa' ? {
+          0: { cellWidth: 20 }, // Vencimento
+          1: { cellWidth: 'auto' }, // Lançamento
+          2: { cellWidth: 23 }, // Categoria
+          3: { cellWidth: 35 }, // Contato
+          4: { cellWidth: 20 }, // Tipo
+          5: { cellWidth: 35, fontStyle: 'bold', halign: 'right' }, // Valor
+        } : {
+          0: { cellWidth: 22 }, // Vencimento
+          1: { cellWidth: 'auto' }, // Lançamento
+          2: { cellWidth: 28 }, // Categoria
+          3: { cellWidth: 42 }, // Contato
+          4: { cellWidth: 38, fontStyle: 'bold', halign: 'right' }, // Valor
+        }
+      });
+
+      const nameMap = {
+        contas_pagar: 'contas_a_pagar',
+        contas_receber: 'contas_a_receber',
+        fluxo_caixa: 'fluxo_caixa_consolidado'
+      };
+
+      doc.save(`relatorio_financeiro_${nameMap[type]}_${new Date().toISOString().substring(0, 10)}.pdf`);
+      setSuccess('Relatório compilado e baixado com sucesso!');
+    } catch (err: any) {
+      console.error(err);
+      setError('Erro ao compilar documento de relatório PDF: ' + (err.message || err));
+    }
   };
 
   const handlePrintReport = async () => {
@@ -1019,16 +1333,24 @@ export default function FinanceiroPage() {
               </button>
             )}
             {(user?.is_admin || hasPermission('/financeiro/formas_pagamento')) && (
-              <button
-                onClick={() => setActiveTab('formas_pagamento')}
-                className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${
-                  activeTab === 'formas_pagamento' ? 'bg-amber-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-                }`}
-              >
-                Formas de Pagamento
-              </button>
-            )}
-          </div>
+               <button
+                 onClick={() => setActiveTab('formas_pagamento')}
+                 className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${
+                   activeTab === 'formas_pagamento' ? 'bg-amber-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                 }`}
+               >
+                 Formas de Pagamento
+               </button>
+             )}
+             <button
+               onClick={() => setActiveTab('relatorios')}
+               className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${
+                 activeTab === 'relatorios' ? 'bg-amber-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+               }`}
+             >
+               Relatórios
+             </button>
+           </div>
         )}
       </div>
 
@@ -2321,6 +2643,390 @@ export default function FinanceiroPage() {
             ) : (
               <div className="h-64 w-full flex items-center justify-center text-slate-400 font-bold uppercase tracking-widest text-xs">Sem dados suficientes para exibição</div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* FINANCE REPORTS SUBMODULE TAB */}
+      {activeTab === 'relatorios' && (
+        <div className="space-y-8 animate-in fade-in duration-300">
+          {/* Header section of sub-module */}
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
+            <h3 className="text-xl font-black font-headline uppercase tracking-tight text-slate-900 dark:text-white">
+              Submódulo de Relatórios Financeiros
+            </h3>
+            <p className="text-slate-500 text-sm mt-1">
+              Selecione o filtro por período baseado na <strong>data de vencimento</strong> dos lançamentos e baixe os documentos oficiais formatados como os outros relatórios já prontos da igreja.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Filters panel (1/3 of the screen width on large devices) */}
+            <div className="lg:col-span-1 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm h-fit space-y-6">
+              <div>
+                <h4 className="text-xs font-black text-slate-450 dark:text-slate-400 uppercase tracking-widest mb-4">
+                  Filtro por Período de Vencimento
+                </h4>
+                
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-450 dark:text-slate-400 uppercase tracking-widest mb-1.5 ml-1">
+                      Data Inicial (Vencimento)
+                    </label>
+                    <input
+                      type="date"
+                      value={reportDateInicio}
+                      onChange={(e) => setReportDateInicio(e.target.value)}
+                      className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 text-black dark:text-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-450 dark:text-slate-400 uppercase tracking-widest mb-1.5 ml-1">
+                      Data Final (Vencimento)
+                    </label>
+                    <input
+                      type="date"
+                      value={reportDateFim}
+                      onChange={(e) => setReportDateFim(e.target.value)}
+                      className="w-full bg-slate-55 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 text-black dark:text-white"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Quick Presets */}
+              <div className="space-y-2 border-t border-slate-105 dark:border-slate-800 pt-4">
+                <span className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1">
+                  Atalhos Rápidos
+                </span>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const todayStr = new Date().toISOString().split('T')[0];
+                      setReportDateInicio(todayStr);
+                      setReportDateFim(todayStr);
+                    }}
+                    className="px-3 py-2 text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl text-slate-700 dark:text-slate-350 transition text-center"
+                  >
+                    Hoje
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const now = new Date();
+                      const startOfWeek = new Date(now);
+                      startOfWeek.setDate(now.getDate() - now.getDay());
+                      const endOfWeek = new Date(startOfWeek);
+                      endOfWeek.setDate(startOfWeek.getDate() + 6);
+                      setReportDateInicio(startOfWeek.toISOString().split('T')[0]);
+                      setReportDateFim(endOfWeek.toISOString().split('T')[0]);
+                    }}
+                    className="px-3 py-2 text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl text-slate-700 dark:text-slate-350 transition text-center"
+                  >
+                    Esta Semana
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const now = new Date();
+                      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+                      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+                      setReportDateInicio(startOfMonth.toISOString().split('T')[0]);
+                      setReportDateFim(endOfMonth.toISOString().split('T')[0]);
+                    }}
+                    className="px-3 py-2 text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl text-slate-700 dark:text-slate-350 transition text-center"
+                  >
+                    Este Mês
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setReportDateInicio('');
+                      setReportDateFim('');
+                    }}
+                    className="px-3 py-2 text-xs font-bold bg-amber-55 dark:bg-amber-950/25 hover:bg-amber-100 dark:hover:bg-amber-950/40 rounded-xl text-amber-700 dark:text-amber-400 transition text-center col-span-2"
+                  >
+                    Limpar Período (Tudo)
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Reports Cards Grid (2/3 of the screen width on large devices) */}
+            <div className="lg:col-span-2 space-y-6">
+              <h4 className="text-xs font-black text-slate-450 dark:text-slate-400 uppercase tracking-widest pl-1">
+                Selecione um dos 3 Relatórios
+              </h4>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* 1) Accounts Payable */}
+                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-3xl shadow-sm flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition space-y-4">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-red-50 dark:bg-red-950/30 text-red-655 dark:text-red-400 rounded-2xl flex items-center justify-center">
+                        <TrendingDown size={20} />
+                      </div>
+                      <div>
+                        <h5 className="font-bold text-slate-900 dark:text-white text-sm">
+                          1) Contas a Pagar
+                        </h5>
+                        <p className="text-[9px] text-slate-450 uppercase tracking-widest font-black">
+                          Débitos / Despesas
+                        </p>
+                      </div>
+                    </div>
+                    <p className="text-xs text-slate-500 leading-relaxed pt-1">
+                      Relaciona unicamente os lançamentos de débito com vencimento no período especificado de forma cronológica. Exibe as colunas Vencimento, Descrição, Categoria, Fornecedor, Valor e saldo acumulado.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleGenerateFinanceReport('contas_pagar')}
+                    className="w-full mt-4 flex items-center justify-center gap-2 bg-slate-950 dark:bg-slate-800 hover:bg-slate-850 dark:hover:bg-slate-700 text-white font-bold py-3 px-4 rounded-2xl text-xs transition shadow-sm cursor-pointer"
+                  >
+                    <Printer size={15} />
+                    Imprimir Contas a Pagar
+                  </button>
+                </div>
+
+                {/* 2) Accounts Receivable */}
+                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-3xl shadow-sm flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition space-y-4">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-green-50 dark:bg-green-950/30 text-green-655 dark:text-green-400 rounded-2xl flex items-center justify-center">
+                        <TrendingUp size={20} />
+                      </div>
+                      <div>
+                        <h5 className="font-bold text-slate-900 dark:text-white text-sm">
+                          2) Contas a Receber
+                        </h5>
+                        <p className="text-[9px] text-slate-450 uppercase tracking-widest font-black">
+                          Créditos / Receitas
+                        </p>
+                      </div>
+                    </div>
+                    <p className="text-xs text-slate-500 leading-relaxed pt-1">
+                      Relaciona unicamente os lançamentos de crédito com vencimento no período especificado de forma cronológica. Exibe as colunas Vencimento, Descrição, Categoria, Cliente / Contribuinte, Valor e saldo acumulado.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleGenerateFinanceReport('contas_receber')}
+                    className="w-full mt-4 flex items-center justify-center gap-2 bg-slate-950 dark:bg-slate-800 hover:bg-slate-850 dark:hover:bg-slate-700 text-white font-bold py-3 px-4 rounded-2xl text-xs transition shadow-sm cursor-pointer"
+                  >
+                    <Printer size={15} />
+                    Imprimir Contas a Receber
+                  </button>
+                </div>
+
+                {/* 3) Consolidated Cash Flow */}
+                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-3xl shadow-sm flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition space-y-4 md:col-span-2">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-450 rounded-2xl flex items-center justify-center">
+                        <FileText size={20} />
+                      </div>
+                      <div>
+                        <h5 className="font-bold text-slate-900 dark:text-white text-sm">
+                          3) Fluxo de Caixa Consolidado
+                        </h5>
+                        <p className="text-[9px] text-slate-450 uppercase tracking-widest font-black">
+                          DRE / Consolidado Geral
+                        </p>
+                      </div>
+                    </div>
+                    <p className="text-xs text-slate-500 leading-relaxed pt-1">
+                      Combina ambos lançamentos de crédito e de débito de forma cronológica. Inclui demonstrativos e somas consolidadas das receitas totais contrabalançadas pelos custos, extraindo o saldo líquido final da igreja.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleGenerateFinanceReport('fluxo_caixa')}
+                    className="w-full mt-2 flex items-center justify-center gap-2 bg-amber-600 hover:bg-amber-700 text-white font-bold py-3.5 px-4 rounded-2xl text-xs transition shadow-sm cursor-pointer"
+                  >
+                    <Printer size={15} />
+                    Compilar Relatório de Fluxo Consolidado
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick preview grid */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-4">
+              <div>
+                <h4 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">
+                  Visualização Prévia dos Registros Selecionados
+                </h4>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Registros que farão parte do relatório no período de vencimento selecionado.
+                </p>
+              </div>
+              <div className="flex bg-slate-100 dark:bg-slate-950 p-1 rounded-xl w-fit border border-slate-200 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setSelectedReportType('contas_pagar')}
+                  className={`px-3 py-1.5 text-[10px] font-black rounded-lg transition-all cursor-pointer ${
+                    selectedReportType === 'contas_pagar'
+                      ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm'
+                      : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  Contas a Pagar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedReportType('contas_receber')}
+                  className={`px-3 py-1.5 text-[10px] font-black rounded-lg transition-all cursor-pointer ${
+                    selectedReportType === 'contas_receber'
+                      ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm'
+                      : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  Contas a Receber
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedReportType('fluxo_caixa')}
+                  className={`px-3 py-1.5 text-[10px] font-black rounded-lg transition-all cursor-pointer ${
+                    selectedReportType === 'fluxo_caixa'
+                      ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm'
+                      : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  Consolidado
+                </button>
+              </div>
+            </div>
+
+            {(() => {
+              // local filtering computation for preview
+              let prevList = [...transacoes];
+              if (reportDateInicio) {
+                prevList = prevList.filter(t => t.data_vencimento && t.data_vencimento >= reportDateInicio);
+              }
+              if (reportDateFim) {
+                prevList = prevList.filter(t => t.data_vencimento && t.data_vencimento <= reportDateFim);
+              }
+              if (selectedReportType === 'contas_pagar') {
+                prevList = prevList.filter(t => t.tipo === 'Saída');
+              } else if (selectedReportType === 'contas_receber') {
+                prevList = prevList.filter(t => t.tipo === 'Entrada');
+              }
+              
+              prevList.sort((a,b) => {
+                if (!a.data_vencimento && !b.data_vencimento) return 0;
+                if (!a.data_vencimento) return 1;
+                if (!b.data_vencimento) return -1;
+                return a.data_vencimento.localeCompare(b.data_vencimento);
+              });
+
+              const printSum = prevList.reduce((acc, current) => {
+                if (selectedReportType === 'fluxo_caixa') {
+                  return acc + (current.tipo === 'Entrada' ? current.valor : -current.valor);
+                }
+                return acc + current.valor;
+              }, 0);
+
+              if (prevList.length === 0) {
+                return (
+                  <div className="p-8 text-center border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl text-slate-400 dark:text-slate-500 text-xs uppercase tracking-widest font-black py-12">
+                    Nenhum registro correspondente no período de vencimento selecionado.
+                  </div>
+                );
+              }
+
+              return (
+                <div className="space-y-4">
+                  <div className="overflow-x-auto rounded-2xl border border-slate-150 dark:border-slate-800">
+                    <table className="w-full text-left text-xs bg-slate-50/50 dark:bg-slate-950/35">
+                      <thead>
+                        <tr className="bg-slate-100 dark:bg-slate-850 text-slate-800 dark:text-slate-200 uppercase font-black text-[9px] tracking-widest border-b border-slate-150 dark:border-slate-800">
+                          <th className="p-4">Vencimento</th>
+                          <th className="p-4">Descrição / Doc</th>
+                          <th className="p-4">Categoria</th>
+                          <th className="p-4">
+                            {selectedReportType === 'contas_pagar'
+                              ? 'Fornecedor'
+                              : selectedReportType === 'contas_receber'
+                                ? 'Cliente'
+                                : 'Cliente / Fornecedor'}
+                          </th>
+                          {selectedReportType === 'fluxo_caixa' && <th className="p-4">Tipo</th>}
+                          <th className="p-4 text-right">Valor</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {prevList.map((t) => {
+                          const contactName = dbFornecedores.find(f => f.id === t.id_fornecedor)?.razao_social || t.membro_contribuinte || 'Coletivo / Caixa';
+                          return (
+                            <tr
+                              key={t.id}
+                              className="border-b border-slate-150 dark:border-slate-850 hover:bg-slate-100 dark:hover:bg-slate-900/60 transition"
+                            >
+                              <td className="p-4 font-mono font-bold text-slate-900 dark:text-white">
+                                {t.data_vencimento ? new Date(t.data_vencimento + 'T00:00:00').toLocaleDateString('pt-BR') : '-'}
+                              </td>
+                              <td className="p-4 text-slate-700 dark:text-slate-300">
+                                <span className="font-bold">{t.descricao}</span>
+                                <span className="block text-[10px] text-slate-405 mt-0.5">
+                                  Doc: {t.data ? new Date(t.data + 'T00:00:00').toLocaleDateString('pt-BR') : '-'}
+                                </span>
+                              </td>
+                              <td className="p-4">
+                                <span className="px-2 py-0.5 rounded-md bg-slate-250 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold uppercase text-[9px]">
+                                  {t.categoria}
+                                </span>
+                              </td>
+                              <td className="p-4 font-bold text-slate-800 dark:text-slate-200">
+                                {contactName}
+                              </td>
+                              {selectedReportType === 'fluxo_caixa' && (
+                                <td className="p-4">
+                                  <span className={`px-2 py-0.5 rounded-md font-bold text-[9px] uppercase ${
+                                    t.tipo === 'Entrada'
+                                      ? 'bg-green-100 dark:bg-green-950/45 text-green-705 dark:text-green-400'
+                                      : 'bg-red-100 dark:bg-red-950/45 text-red-705 dark:text-red-400'
+                                  }`}>
+                                    {t.tipo === 'Entrada' ? 'Crédito' : 'Débito'}
+                                  </span>
+                                </td>
+                              )}
+                              <td className={`p-4 text-right font-mono font-bold text-sm ${
+                                t.tipo === 'Entrada' ? 'text-green-600 dark:text-green-400' : 'text-red-500'
+                              }`}>
+                                {t.tipo === 'Entrada' ? '+' : '-'} R$ {t.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Summary row */}
+                  <div className="flex justify-end p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-150 dark:border-slate-800">
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-xs uppercase font-black tracking-widest text-slate-450">
+                        {selectedReportType === 'fluxo_caixa'
+                          ? 'Saldo Líquido Previsto:'
+                          : 'Soma Total Prevista:'}
+                      </span>
+                      <span className={`text-xl font-mono font-black ${
+                        selectedReportType === 'fluxo_caixa' 
+                          ? (printSum >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500' )
+                          : 'text-slate-900 dark:text-white'
+                      }`}>
+                        R$ {printSum.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}
