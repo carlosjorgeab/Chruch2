@@ -259,7 +259,7 @@ export default function Home() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6" id="dashboard-stats-grid">
         {/* Panel 1: Membros Ativos */}
         <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800 flex items-center gap-5 hover:scale-102 transition-all duration-250 group cursor-default" id="stat-card-membros">
-          <div className="w-14 h-14 rounded-2xl bg-blue-50 dark:bg-blue-950/40 flex items-center justify-center text-blue-600 dark:text-blue-400 group-hover:bg-blue-100 dark:group-hover:bg-blue-900/30 transition-colors">
+          <div className="w-14 h-14 rounded-2xl bg-transparent flex items-center justify-center text-blue-600 dark:text-blue-400 transition-colors">
             <Users size={26} />
           </div>
           <div className="space-y-0.5">
@@ -276,7 +276,7 @@ export default function Home() {
 
         {/* Panel 2: Comunidades / Grupos */}
         <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800 flex items-center gap-5 hover:scale-102 transition-all duration-250 group cursor-default" id="stat-card-comunidades">
-          <div className="w-14 h-14 rounded-2xl bg-green-50 dark:bg-green-950/40 flex items-center justify-center text-green-600 dark:text-green-400 group-hover:bg-green-100 dark:group-hover:bg-green-900/30 transition-colors">
+          <div className="w-14 h-14 rounded-2xl bg-transparent flex items-center justify-center text-green-600 dark:text-green-400 transition-colors">
             <UsersRound size={26} />
           </div>
           <div className="space-y-0.5">
@@ -293,7 +293,7 @@ export default function Home() {
 
         {/* Panel 3: Lições / EBD */}
         <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800 flex items-center gap-5 hover:scale-102 transition-all duration-250 group cursor-default" id="stat-card-lecoes">
-          <div className="w-14 h-14 rounded-2xl bg-purple-50 dark:bg-purple-950/40 flex items-center justify-center text-purple-600 dark:text-purple-400 group-hover:bg-purple-100 dark:group-hover:bg-purple-900/30 transition-colors">
+          <div className="w-14 h-14 rounded-2xl bg-transparent flex items-center justify-center text-purple-600 dark:text-purple-400 transition-colors">
             <BookOpen size={26} />
           </div>
           <div className="space-y-0.5">
@@ -310,7 +310,7 @@ export default function Home() {
 
         {/* Panel 4: Entradas do Mês Atual */}
         <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800 flex items-center gap-5 hover:scale-102 transition-all duration-250 group cursor-default" id="stat-card-financeiro">
-          <div className="w-14 h-14 rounded-2xl bg-amber-50 dark:bg-amber-950/40 flex items-center justify-center text-amber-600 dark:text-amber-400 group-hover:bg-amber-100 dark:group-hover:bg-amber-900/30 transition-colors">
+          <div className="w-14 h-14 rounded-2xl bg-transparent flex items-center justify-center text-amber-600 dark:text-amber-400 transition-colors">
             <Wallet size={26} />
           </div>
           <div className="space-y-0.5">

@@ -110,6 +110,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(interval);
   }, [user, sessionId]);
 
+  // Inactivity timeout monitor
+  useEffect(() => {
+    if (!user) return;
+
+    let lastActivity = Date.now();
+
+    const updateActivity = () => {
+      lastActivity = Date.now();
+    };
+
+    // List of events that indicate user activity
+    window.addEventListener('mousemove', updateActivity);
+    window.addEventListener('keydown', updateActivity);
+    window.addEventListener('click', updateActivity);
+    window.addEventListener('scroll', updateActivity, { passive: true });
+    window.addEventListener('touchstart', updateActivity, { passive: true });
+
+    // Check every 10 seconds if elapsed time exceeds user's timeout config
+    const timeoutChecker = setInterval(() => {
+      const storedTimeout = localStorage.getItem('session_timeout');
+      const timeoutMinutes = parseInt(storedTimeout || '30', 10);
+      const timeoutMs = timeoutMinutes * 60 * 1000;
+
+      if (Date.now() - lastActivity >= timeoutMs) {
+        clearInterval(timeoutChecker);
+        alert(`Sua sessão foi encerrada automaticamente por inatividade (${timeoutMinutes} minutos).`);
+        logout();
+      }
+    }, 10000);
+
+    return () => {
+      window.removeEventListener('mousemove', updateActivity);
+      window.removeEventListener('keydown', updateActivity);
+      window.removeEventListener('click', updateActivity);
+      window.removeEventListener('scroll', updateActivity);
+      window.removeEventListener('touchstart', updateActivity);
+      clearInterval(timeoutChecker);
+    };
+  }, [user]);
+
   useEffect(() => {
     if (!loading) {
       const isPublicRoute = pathname?.startsWith('/p/');

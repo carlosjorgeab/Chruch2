@@ -2082,12 +2082,12 @@ export default function FinanceiroPage() {
                   </div>
                 ) : (
                   <>
-                    <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse min-w-[800px]">
-                      <thead>
+                    <div className="overflow-x-auto md:overflow-x-visible">
+                    <table className="w-full text-left border-collapse md:min-w-[800px] block md:table">
+                      <thead className="hidden md:table-header-group">
                         <tr className="bg-slate-50/20 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800 text-slate-450 text-[10px] font-black uppercase tracking-widest">
                           <th className="px-6 py-2.5">Lançamento</th>
-                          <th className="px-6 py-2.5">Vencimento</th>
+                          <th className="px-6 py-2.5 md:w-36 min-w-[145px]">Vencimento</th>
                           <th className="px-6 py-2.5">Categoria</th>
                           <th className="px-6 py-2.5">Cliente / Fornecedor / Canal</th>
                           <th className="px-6 py-2.5">Data Pagamento</th>
@@ -2096,14 +2096,14 @@ export default function FinanceiroPage() {
                           <th className="px-6 py-2.5 text-right">Ações</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-100 dark:divide-slate-850 text-slate-700 dark:text-slate-350 font-medium">
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-850 text-slate-700 dark:text-slate-350 font-medium block md:table-row-group">
                         {paginatedTransactions.map((t) => {
                           // Find client/fornecedor name
                           const associatedForn = dbFornecedores.find(f => f.id === t.id_fornecedor);
 
                           return (
-                            <tr key={t.id} className="hover:bg-slate-50/30 dark:hover:bg-slate-950/5 transition-all">
-                              <td className="px-6 py-2">
+                            <tr key={t.id} className="block md:table-row hover:bg-slate-50/30 dark:hover:bg-slate-950/5 transition-all p-4 md:p-0 space-y-2 md:space-y-0 border-b border-slate-100 dark:border-slate-850 last:border-0">
+                              <td className="block md:table-cell px-6 py-2 md:py-2">
                                 <div className="flex items-center gap-3">
                                   <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 bg-transparent ${
                                     t.tipo === 'Entrada'
@@ -2118,73 +2118,103 @@ export default function FinanceiroPage() {
                                   </div>
                                 </div>
                               </td>
-                              <td className="px-6 py-2">
-                                {t.data_vencimento ? (
-                                  <span className="text-black dark:text-white font-bold font-mono text-xs">{new Date(t.data_vencimento + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
-                                ) : (
-                                  <span className="text-black dark:text-white text-xs">-</span>
-                                )}
+
+                              <td className="block md:table-cell px-6 py-1.5 md:py-2">
+                                <div className="flex md:block items-center justify-between md:justify-start">
+                                  <span className="inline-block md:hidden text-[9px] text-slate-400 font-black uppercase tracking-wider">Vencimento:</span>
+                                  {t.data_vencimento ? (
+                                    <span className="text-black dark:text-white font-bold font-mono text-xs">{new Date(t.data_vencimento + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
+                                  ) : (
+                                    <span className="text-black dark:text-white text-xs">-</span>
+                                  )}
+                                </div>
                               </td>
-                              <td className="px-6 py-2">
-                                <span className={`text-[10px] font-black uppercase tracking-widest bg-transparent ${
-                                  t.tipo === 'Entrada'
-                                    ? 'text-blue-600 dark:text-blue-450'
-                                    : 'text-red-500 dark:text-red-400'
-                                }`}>
-                                  {t.categoria}
-                                </span>
+
+                              <td className="block md:table-cell px-6 py-1.5 md:py-2">
+                                <div className="flex md:block items-center justify-between md:justify-start">
+                                  <span className="inline-block md:hidden text-[9px] text-slate-400 font-black uppercase tracking-wider">Categoria:</span>
+                                  <span className={`text-[10px] font-black uppercase tracking-widest bg-transparent ${
+                                    t.tipo === 'Entrada'
+                                      ? 'text-blue-600 dark:text-blue-450'
+                                      : 'text-red-500 dark:text-red-400'
+                                  }`}>
+                                    {t.categoria}
+                                  </span>
+                                </div>
                               </td>
-                              <td className="px-6 py-2 text-xs font-bold text-black dark:text-white">
-                                {associatedForn ? (
-                                  <span className="text-black dark:text-white font-bold">{associatedForn.razao_social}</span>
-                                ) : (
-                                  <span className="text-black dark:text-white font-bold">{t.membro_contribuinte || 'Coletivo / Caixa'}</span>
-                                )}
+
+                              <td className="block md:table-cell px-6 py-1.5 md:py-2">
+                                <div className="flex md:block items-center justify-between md:justify-start">
+                                  <span className="inline-block md:hidden text-[9px] text-slate-400 font-black uppercase tracking-wider">Origem/Destino:</span>
+                                  {associatedForn ? (
+                                    <span className="text-black dark:text-white font-bold text-xs">{associatedForn.razao_social}</span>
+                                  ) : (
+                                    <span className="text-black dark:text-white font-bold text-xs">{t.membro_contribuinte || 'Coletivo / Caixa'}</span>
+                                  )}
+                                </div>
                               </td>
-                              <td className="px-6 py-2 text-xs">
-                                {t.data_pagamento ? (
-                                  <span className="text-black dark:text-black font-bold font-mono">{new Date(t.data_pagamento + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
-                                ) : (
-                                  <span className="text-red-500 dark:text-red-450 font-bold uppercase text-[9px] tracking-wider px-2 py-0.5 bg-red-50 dark:bg-red-950/30 rounded border border-red-100 dark:border-red-900/30">Pendente</span>
-                                )}
+
+                              <td className="block md:table-cell px-6 py-1.5 md:py-2">
+                                <div className="flex md:block items-center justify-between md:justify-start">
+                                  <span className="inline-block md:hidden text-[9px] text-slate-400 font-black uppercase tracking-wider">Pagamento:</span>
+                                  {t.data_pagamento ? (
+                                    <span className="text-black dark:text-black font-bold font-mono text-xs">{new Date(t.data_pagamento + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
+                                  ) : (
+                                    <span className="text-red-500 dark:text-red-450 font-bold uppercase text-[9px] tracking-wider px-2 py-0.5 bg-red-50 dark:bg-red-950/30 rounded border border-red-100 dark:border-red-900/30">Pendente</span>
+                                  )}
+                                </div>
                               </td>
-                              <td className="px-6 py-2 whitespace-nowrap">
-                                <span className={`font-black text-sm whitespace-nowrap ${
-                                  t.tipo === 'Entrada' ? 'text-blue-600 dark:text-blue-450' : 'text-red-500'
-                                }`}>
-                                  {t.tipo === 'Entrada' ? '+' : '-'} R$ {t.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                </span>
+
+                              <td className="block md:table-cell px-6 py-1.5 md:py-2">
+                                <div className="flex md:block items-center justify-between md:justify-start">
+                                  <span className="inline-block md:hidden text-[9px] text-slate-400 font-black uppercase tracking-wider">Valor:</span>
+                                  <span className={`font-black text-sm whitespace-nowrap ${
+                                    t.tipo === 'Entrada' ? 'text-blue-600 dark:text-blue-450' : 'text-red-500'
+                                  }`}>
+                                    {t.tipo === 'Entrada' ? '+' : '-'} R$ {t.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                  </span>
+                                </div>
                               </td>
-                              <td className="px-6 py-2">
-                                {t.arquivos_transacao && t.arquivos_transacao.length > 0 ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => loadAttachmentsForTransacao(t.id)}
-                                    className="text-black dark:text-white hover:text-slate-700 dark:hover:text-slate-300 font-bold text-xs uppercase flex items-center gap-1 hover:underline cursor-pointer"
-                                  >
-                                    <File size={14} className="text-black dark:text-white" />
-                                    <span>Ver</span>
-                                  </button>
-                                ) : (
-                                  <span className="text-slate-400 text-xs">-</span>
-                                )}
+
+                              <td className="block md:table-cell px-6 py-1.5 md:py-2">
+                                <div className="flex md:block items-center justify-between md:justify-start">
+                                  <span className="inline-block md:hidden text-[9px] text-slate-400 font-black uppercase tracking-wider">Anexos:</span>
+                                  {t.arquivos_transacao && t.arquivos_transacao.length > 0 ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => loadAttachmentsForTransacao(t.id)}
+                                      className="text-black dark:text-white hover:text-slate-700 dark:hover:text-slate-300 font-bold text-xs uppercase flex items-center gap-1 hover:underline cursor-pointer"
+                                    >
+                                      <File size={14} className="text-black dark:text-white" />
+                                      <span>Ver</span>
+                                    </button>
+                                  ) : (
+                                    <span className="text-slate-400 text-xs">-</span>
+                                  )}
+                                </div>
                               </td>
-                              <td className="px-6 py-2 text-right">
-                                <div className="flex justify-end gap-1.5">
-                                  <button
-                                    onClick={() => handleEdit(t)}
-                                    className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-slate-50 dark:hover:bg-slate-900 transition rounded-lg cursor-pointer"
-                                    title="Editar"
-                                  >
-                                    <Tag size={15} />
-                                  </button>
-                                  <button
-                                    onClick={() => handleDelete(t.id)}
-                                    className="p-1.5 text-slate-400 hover:text-red-650 hover:bg-slate-50 dark:hover:bg-slate-900 transition rounded-lg cursor-pointer"
-                                    title="Remover"
-                                  >
-                                    <Trash2 size={15} />
-                                  </button>
+
+                              <td className="block md:table-cell px-6 py-2.5 md:py-2 text-right border-t md:border-t-0 border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/35 md:bg-transparent -mx-6 md:mx-0 px-6 mt-2 rounded-b-2xl">
+                                <div className="flex justify-between md:justify-end items-center gap-1.5">
+                                  <span className="inline-block md:hidden text-[9px] text-slate-450 font-black uppercase tracking-wider font-bold">Ações:</span>
+                                  <div className="flex gap-1.5">
+                                    <button
+                                      onClick={() => handleEdit(t)}
+                                      className="p-1.5 text-slate-400 hover:text-amber-650 hover:bg-white dark:hover:bg-slate-800 transition rounded-lg cursor-pointer flex items-center gap-1"
+                                      title="Editar"
+                                    >
+                                      <Tag size={14} />
+                                      <span className="inline md:hidden text-[10px] font-bold">Editar</span>
+                                    </button>
+                                    <button
+                                      onClick={() => handleDelete(t.id)}
+                                      className="p-1.5 text-slate-400 hover:text-red-650 hover:bg-white dark:hover:bg-slate-800 transition rounded-lg cursor-pointer flex items-center gap-1"
+                                      title="Remover"
+                                    >
+                                      <Trash2 size={14} />
+                                      <span className="inline md:hidden text-[10px] font-bold">Remover</span>
+                                    </button>
+                                  </div>
                                 </div>
                               </td>
                             </tr>
@@ -2689,14 +2719,14 @@ export default function FinanceiroPage() {
                       type="date"
                       value={reportDateFim}
                       onChange={(e) => setReportDateFim(e.target.value)}
-                      className="w-full bg-slate-55 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 text-black dark:text-white"
+                      className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 text-black dark:text-white"
                     />
                   </div>
                 </div>
               </div>
 
               {/* Quick Presets */}
-              <div className="space-y-2 border-t border-slate-105 dark:border-slate-800 pt-4">
+              <div className="space-y-2 border-t border-slate-100 dark:border-slate-800 pt-4">
                 <span className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1">
                   Atalhos Rápidos
                 </span>
@@ -2708,7 +2738,7 @@ export default function FinanceiroPage() {
                       setReportDateInicio(todayStr);
                       setReportDateFim(todayStr);
                     }}
-                    className="px-3 py-2 text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl text-slate-700 dark:text-slate-350 transition text-center"
+                    className="px-3 py-2.5 text-xs font-black bg-slate-100 hover:bg-slate-200 dark:bg-slate-850 dark:hover:bg-slate-800 border-2 border-slate-205 dark:border-slate-700 hover:border-amber-500 rounded-xl text-slate-850 dark:text-slate-200 transition-all text-center cursor-pointer shadow-sm"
                   >
                     Hoje
                   </button>
@@ -2723,7 +2753,7 @@ export default function FinanceiroPage() {
                       setReportDateInicio(startOfWeek.toISOString().split('T')[0]);
                       setReportDateFim(endOfWeek.toISOString().split('T')[0]);
                     }}
-                    className="px-3 py-2 text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl text-slate-700 dark:text-slate-350 transition text-center"
+                    className="px-3 py-2.5 text-xs font-black bg-slate-100 hover:bg-slate-200 dark:bg-slate-850 dark:hover:bg-slate-800 border-2 border-slate-205 dark:border-slate-700 hover:border-amber-500 rounded-xl text-slate-850 dark:text-slate-200 transition-all text-center cursor-pointer shadow-sm"
                   >
                     Esta Semana
                   </button>
@@ -2736,7 +2766,7 @@ export default function FinanceiroPage() {
                       setReportDateInicio(startOfMonth.toISOString().split('T')[0]);
                       setReportDateFim(endOfMonth.toISOString().split('T')[0]);
                     }}
-                    className="px-3 py-2 text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl text-slate-700 dark:text-slate-350 transition text-center"
+                    className="px-3 py-2.5 text-xs font-black bg-slate-100 hover:bg-slate-200 dark:bg-slate-850 dark:hover:bg-slate-805 border-2 border-slate-205 dark:border-slate-700 hover:border-amber-500 rounded-xl text-slate-850 dark:text-slate-200 transition-all text-center cursor-pointer shadow-sm"
                   >
                     Este Mês
                   </button>
@@ -2746,7 +2776,7 @@ export default function FinanceiroPage() {
                       setReportDateInicio('');
                       setReportDateFim('');
                     }}
-                    className="px-3 py-2 text-xs font-bold bg-amber-55 dark:bg-amber-950/25 hover:bg-amber-100 dark:hover:bg-amber-950/40 rounded-xl text-amber-700 dark:text-amber-400 transition text-center col-span-2"
+                    className="px-3 py-2.5 text-xs font-black bg-amber-600 hover:bg-amber-700 rounded-xl text-white transition text-center col-span-2 cursor-pointer shadow-sm"
                   >
                     Limpar Período (Tudo)
                   </button>
@@ -2765,7 +2795,7 @@ export default function FinanceiroPage() {
                 <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-3xl shadow-sm flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition space-y-4">
                   <div className="space-y-2">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-red-50 dark:bg-red-950/30 text-red-655 dark:text-red-400 rounded-2xl flex items-center justify-center">
+                      <div className="w-10 h-10 bg-transparent text-red-655 dark:text-red-400 rounded-2xl flex items-center justify-center">
                         <TrendingDown size={20} />
                       </div>
                       <div>
@@ -2784,7 +2814,7 @@ export default function FinanceiroPage() {
                   <button
                     type="button"
                     onClick={() => handleGenerateFinanceReport('contas_pagar')}
-                    className="w-full mt-4 flex items-center justify-center gap-2 bg-slate-950 dark:bg-slate-800 hover:bg-slate-850 dark:hover:bg-slate-700 text-white font-bold py-3 px-4 rounded-2xl text-xs transition shadow-sm cursor-pointer"
+                    className="w-full mt-4 flex items-center justify-center gap-2 bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 px-4 rounded-2xl text-xs transition shadow-sm cursor-pointer"
                   >
                     <Printer size={15} />
                     Imprimir Contas a Pagar
@@ -2795,7 +2825,7 @@ export default function FinanceiroPage() {
                 <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-3xl shadow-sm flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition space-y-4">
                   <div className="space-y-2">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-green-50 dark:bg-green-950/30 text-green-655 dark:text-green-400 rounded-2xl flex items-center justify-center">
+                      <div className="w-10 h-10 bg-transparent text-green-655 dark:text-green-400 rounded-2xl flex items-center justify-center">
                         <TrendingUp size={20} />
                       </div>
                       <div>
@@ -2814,7 +2844,7 @@ export default function FinanceiroPage() {
                   <button
                     type="button"
                     onClick={() => handleGenerateFinanceReport('contas_receber')}
-                    className="w-full mt-4 flex items-center justify-center gap-2 bg-slate-950 dark:bg-slate-800 hover:bg-slate-850 dark:hover:bg-slate-700 text-white font-bold py-3 px-4 rounded-2xl text-xs transition shadow-sm cursor-pointer"
+                    className="w-full mt-4 flex items-center justify-center gap-2 bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 px-4 rounded-2xl text-xs transition shadow-sm cursor-pointer"
                   >
                     <Printer size={15} />
                     Imprimir Contas a Receber
@@ -2825,7 +2855,7 @@ export default function FinanceiroPage() {
                 <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-3xl shadow-sm flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition space-y-4 md:col-span-2">
                   <div className="space-y-2">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-450 rounded-2xl flex items-center justify-center">
+                      <div className="w-10 h-10 bg-transparent text-amber-600 dark:text-amber-450 rounded-2xl flex items-center justify-center">
                         <FileText size={20} />
                       </div>
                       <div>
