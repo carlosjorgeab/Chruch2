@@ -1279,6 +1279,56 @@ export default function FinanceiroPage() {
   const activePage = Math.min(currentPage, totalPages);
   const paginatedTransactions = filteredTransactions.slice((activePage - 1) * pageSize, activePage * pageSize);
 
+  // Compute metrics for the filtered transactions
+  const todayObj = new Date();
+  const year = todayObj.getFullYear();
+  const month = String(todayObj.getMonth() + 1).padStart(2, '0');
+  const day = String(todayObj.getDate()).padStart(2, '0');
+  const todayStr = `${year}-${month}-${day}`;
+
+  let creditAVencer = 0;
+  let creditHoje = 0;
+  let creditVencido = 0;
+  let creditPago = 0;
+  let creditTotal = 0;
+
+  let debitAVencer = 0;
+  let debitHoje = 0;
+  let debitVencido = 0;
+  let debitPago = 0;
+  let debitTotal = 0;
+
+  filteredTransactions.forEach((t) => {
+    const valor = Number(t.valor || 0);
+    if (t.tipo === 'Entrada') {
+      creditTotal += valor;
+      if (t.data_pagamento) {
+        creditPago += valor;
+      } else if (t.data_vencimento) {
+        if (t.data_vencimento === todayStr) {
+          creditHoje += valor;
+        } else if (t.data_vencimento > todayStr) {
+          creditAVencer += valor;
+        } else {
+          creditVencido += valor;
+        }
+      }
+    } else if (t.tipo === 'Saída') {
+      debitTotal += valor;
+      if (t.data_pagamento) {
+        debitPago += valor;
+      } else if (t.data_vencimento) {
+        if (t.data_vencimento === todayStr) {
+          debitHoje += valor;
+        } else if (t.data_vencimento > todayStr) {
+          debitAVencer += valor;
+        } else {
+          debitVencido += valor;
+        }
+      }
+    }
+  });
+
   return (
     <div className="p-8 space-y-8 max-w-6xl mx-auto">
       {/* Top Header */}
@@ -2063,6 +2113,73 @@ export default function FinanceiroPage() {
                           })}
                         </div>
                       )}
+                    </div>
+                  </div>
+
+                  {/* Resumo de lançamentos filtrados */}
+                  <div className="pt-4 border-t border-slate-100 dark:border-slate-800 space-y-2">
+                    <span className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500 tracking-wider block font-sans">
+                      Resumo Financeiro dos Lançamentos Filtrados
+                    </span>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse min-w-[700px]">
+                        <thead>
+                          <tr className="border-b border-slate-150 dark:border-slate-800 text-slate-400 dark:text-slate-500 text-[10px] font-black uppercase tracking-widest">
+                            <th className="py-2.5 pr-4">Tipo</th>
+                            <th className="py-2.5 px-4 text-right">A Vencer</th>
+                            <th className="py-2.5 px-4 text-right">Vencem hoje</th>
+                            <th className="py-2.5 px-4 text-right">Vencidos</th>
+                            <th className="py-2.5 px-4 text-right">Pagos</th>
+                            <th className="py-2.5 pl-4 text-right">Total Período</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 text-slate-700 dark:text-slate-300 font-medium">
+                          {(filterTipo === 'Todos' || filterTipo === 'Entrada') && (
+                            <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-950/10 transition-all font-sans">
+                              <td className="py-3 pr-4 text-xs font-black text-blue-600 dark:text-blue-450 uppercase tracking-wide">
+                                Crédito
+                              </td>
+                              <td className="py-3 px-4 text-right font-bold font-mono text-xs text-black dark:text-white">
+                                R$ {creditAVencer.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              </td>
+                              <td className="py-3 px-4 text-right font-bold font-mono text-xs text-black dark:text-white">
+                                R$ {creditHoje.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              </td>
+                              <td className="py-3 px-4 text-right font-bold font-mono text-xs text-black dark:text-white">
+                                R$ {creditVencido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              </td>
+                              <td className="py-3 px-4 text-right font-bold font-mono text-xs text-black dark:text-white">
+                                R$ {creditPago.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              </td>
+                              <td className="py-3 pl-4 text-right font-black font-mono text-xs text-blue-600 dark:text-blue-450 bg-blue-50/10 dark:bg-blue-950/5 rounded-r-xl">
+                                R$ {creditTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              </td>
+                            </tr>
+                          )}
+                          {(filterTipo === 'Todos' || filterTipo === 'Saída') && (
+                            <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-950/10 transition-all font-sans">
+                              <td className="py-3 pr-4 text-xs font-black text-red-500 dark:text-red-400 uppercase tracking-wide">
+                                Débito
+                              </td>
+                              <td className="py-3 px-4 text-right font-bold font-mono text-xs text-black dark:text-white">
+                                R$ {debitAVencer.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              </td>
+                              <td className="py-3 px-4 text-right font-bold font-mono text-xs text-black dark:text-white">
+                                R$ {debitHoje.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              </td>
+                              <td className="py-3 px-4 text-right font-bold font-mono text-xs text-black dark:text-white">
+                                R$ {debitVencido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              </td>
+                              <td className="py-3 px-4 text-right font-bold font-mono text-xs text-black dark:text-white">
+                                R$ {debitPago.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              </td>
+                              <td className="py-3 pl-4 text-right font-black font-mono text-xs text-red-500 dark:text-red-400 bg-red-50/10 dark:bg-red-950/5 rounded-r-xl">
+                                R$ {debitTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
                 </div>
