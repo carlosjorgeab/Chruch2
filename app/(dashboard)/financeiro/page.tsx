@@ -2498,10 +2498,9 @@ export default function FinanceiroPage() {
                                     <button
                                       onClick={() => handleEdit(t)}
                                       className="p-1.5 text-slate-400 hover:text-amber-650 hover:bg-white dark:hover:bg-slate-800 transition rounded-lg cursor-pointer flex items-center gap-1"
-                                      title="Editar"
+                                      title="Editar Lançamento"
                                     >
                                       <Tag size={14} />
-                                      <span className="text-[10px] font-bold">Editar</span>
                                     </button>
                                     <button
                                       onClick={() => handleClone(t)}
@@ -2509,15 +2508,13 @@ export default function FinanceiroPage() {
                                       title="Clonar Lançamento"
                                     >
                                       <Copy size={13} />
-                                      <span className="text-[10px] font-bold">Clonar</span>
                                     </button>
                                     <button
                                       onClick={() => handleDelete(t.id)}
                                       className="p-1.5 text-slate-400 hover:text-red-650 hover:bg-white dark:hover:bg-slate-800 transition rounded-lg cursor-pointer flex items-center gap-1"
-                                      title="Remover"
+                                      title="Excluir Lançamento"
                                     >
                                       <Trash2 size={14} />
-                                      <span className="text-[10px] font-bold">Remover</span>
                                     </button>
                                   </div>
                                 </div>
