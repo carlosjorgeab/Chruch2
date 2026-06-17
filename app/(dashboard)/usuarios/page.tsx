@@ -9,6 +9,7 @@ import { Plus, Edit2, Trash2, Save, Users } from 'lucide-react';
 
 type Usuario = {
   id: string;
+  nome: string;
   email: string;
   id_perfil: string | null;
   id_igreja: string | null;
@@ -28,6 +29,7 @@ export default function UsuariosPage() {
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [currentUser, setCurrentUser] = useState<Partial<Usuario> & { senha?: string }>({ 
+    nome: '',
     email: '', 
     senha: '', 
     id_perfil: '', 
@@ -85,6 +87,7 @@ export default function UsuariosPage() {
 
     setError('');
     const userData: any = {
+      nome: currentUser.nome || '',
       email: currentUser.email,
       id_perfil: currentUser.is_admin ? null : currentUser.id_perfil,
       id_igreja: currentUser.is_admin ? null : currentUser.id_igreja,
@@ -164,7 +167,7 @@ export default function UsuariosPage() {
         {!isEditing && (
           <button 
             onClick={() => { 
-              setCurrentUser({ email: '', senha: '', id_perfil: '', id_igreja: '', is_admin: false }); 
+              setCurrentUser({ nome: '', email: '', senha: '', id_perfil: '', id_igreja: '', is_admin: false }); 
               setIsEditing(true); 
             }}
             className="flex items-center gap-2 bg-amber-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-amber-700 transition-colors"
@@ -182,6 +185,17 @@ export default function UsuariosPage() {
           {error && <div className="mb-4 p-3 bg-red-50 text-red-600 rounded-lg text-sm">{error}</div>}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="md:col-span-2">
+              <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Nome Completo</label>
+              <input 
+                type="text" 
+                value={currentUser.nome || ''} 
+                onChange={(e) => setCurrentUser({...currentUser, nome: e.target.value})}
+                className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500 outline-none"
+                placeholder="Nome do usuário"
+              />
+            </div>
+
             <div>
               <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">E-mail ou Usuário</label>
               <input 
@@ -319,13 +333,14 @@ export default function UsuariosPage() {
                             // eslint-disable-next-line @next/next/no-img-element
                             <img src={u.foto_url} alt="profile" className="w-full h-full object-cover" onError={(e) => { (e.target as any).style.display = 'none' }} />
                           ) : (
-                            <div className="font-bold text-xs uppercase text-slate-500">{u.email.charAt(0)}</div>
+                            <div className="font-bold text-xs uppercase text-slate-500">{(u.nome || u.email).charAt(0)}</div>
                           )}
                         </div>
                         <div className="flex flex-col">
                           <span className="flex items-center gap-1.5 text-sm font-bold text-slate-950 dark:text-white leading-tight">
-                            {u.email}
+                            {u.nome || 'Sem Nome'}
                           </span>
+                          <span className="text-xs text-slate-500 font-normal">{u.email}</span>
                         </div>
                         {u.is_admin && <span className="px-2 py-0.5 bg-red-100 text-red-700 text-[10px] uppercase tracking-wider font-black rounded">Admin</span>}
                         {u.ativo === false ? (

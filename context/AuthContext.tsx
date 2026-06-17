@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 
 export type User = {
   id: string;
+  nome?: string;
   email: string;
   id_perfil: string | null;
   id_igreja: string | null;
@@ -221,6 +222,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const userData: User = {
         id: data.id,
+        nome: data.nome,
         email: data.email,
         id_perfil: data.id_perfil,
         id_igreja: data.id_igreja,
