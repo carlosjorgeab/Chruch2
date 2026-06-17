@@ -112,7 +112,6 @@ export async function GET(req: NextRequest) {
       created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
     );
 
-    -- Seed translations system keys
     INSERT INTO configuracoes_sistema (chave, valor, descricao)
     VALUES 
       ('translation_overrides_pt', '{}', 'Ajustes de traducción en portugués'),

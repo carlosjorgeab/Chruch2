@@ -59,27 +59,46 @@ export default function IgrejasPage() {
     try {
       const today = new Date();
       for (const ig of loadedIgrejas) {
+        let isExpired = false;
         if (ig.assinatura_vigencia) {
           const expirationDate = new Date(ig.assinatura_vigencia + 'T23:59:59');
           if (expirationDate < today) {
-            // Check if there are active users to suspend
-            const { data: activeUsers, error: fetchErr } = await supabase
-              .from('usuarios')
-              .select('id, ativo')
-              .eq('id_igreja', ig.id)
-              .eq('ativo', true);
+            isExpired = true;
+          }
+        }
 
-            if (!fetchErr && activeUsers && activeUsers.length > 0) {
-              await supabase
-                .from('usuarios')
-                .update({ ativo: false })
-                .eq('id_igreja', ig.id);
-            }
+        if (isExpired || ig.ativo === false) {
+          // Check if there are active users to suspend for this specific church
+          const { data: activeUsers, error: fetchErr } = await supabase
+            .from('usuarios')
+            .select('id, ativo')
+            .eq('id_igreja', ig.id)
+            .eq('ativo', true);
+
+          if (!fetchErr && activeUsers && activeUsers.length > 0) {
+            await supabase
+              .from('usuarios')
+              .update({ ativo: false })
+              .eq('id_igreja', ig.id);
+          }
+        } else {
+          // Check if there are inactive users to activate for this specific church
+          const { data: inactiveUsers, error: fetchErr } = await supabase
+            .from('usuarios')
+            .select('id, ativo')
+            .eq('id_igreja', ig.id)
+            .eq('ativo', false);
+
+          if (!fetchErr && inactiveUsers && inactiveUsers.length > 0) {
+            await supabase
+              .from('usuarios')
+              .update({ ativo: true })
+              .eq('id_igreja', ig.id);
           }
         }
       }
     } catch (e) {
-      console.error('Error in auto suspension of expired church users:', e);
+      console.error('Error in auto suspension/activation of church users:', e);
     }
   }
 
@@ -148,20 +167,37 @@ export default function IgrejasPage() {
     setSuccess('');
   };
 
-  const generateSlug = (nome: string) => {
-    return nome
+  const generateUniqueSlug = (nome: string, currentId?: string | null) => {
+    const stopWords = ['de', 'do', 'da', 'dos', 'das', 'e', 'em', 'para', 'com', 'o', 'a', 'os', 'as', 'igreja', 'congregacao', 'comunidade', 'paroquia', 'templo', 'capela', 'matriz'];
+    const cleanWords = nome
       .toLowerCase()
-      .trim()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
       .replace(/[^\w\s-]/g, '')
-      .replace(/[\s_-]+/g, '-')
-      .replace(/^-+|-+$/g, '');
+      .split(/[\s_-]+/)
+      .filter(w => w && !stopWords.includes(w));
+    
+    const shortWords = cleanWords.slice(0, 2);
+    let baseSlug = shortWords.join('-');
+    if (baseSlug.length > 20) {
+      baseSlug = baseSlug.substring(0, 20);
+    }
+    baseSlug = baseSlug.replace(/^-+|-+$/g, '') || 'igr';
+
+    let uniqueSlug = baseSlug;
+    let counter = 1;
+    while (igrejas.some(ig => ig.slug === uniqueSlug && ig.id !== currentId)) {
+      counter++;
+      uniqueSlug = `${baseSlug}-${counter}`;
+    }
+    return uniqueSlug;
   };
 
   const handleNameChange = (nome: string) => {
     setCurrentIgreja(prev => ({
       ...prev,
       nome,
-      slug: prev.id ? prev.slug : generateSlug(nome), // Auto slug only on create
+      slug: prev.id ? prev.slug : generateUniqueSlug(nome, prev.id), // Auto slug only on create
     }));
   };
 
@@ -195,7 +231,21 @@ export default function IgrejasPage() {
       return;
     }
 
-    const slugToSave = currentIgreja.slug || generateSlug(currentIgreja.nome);
+    const slugToSave = (currentIgreja.slug || generateUniqueSlug(currentIgreja.nome, currentIgreja.id))
+      .toLowerCase()
+      .trim()
+      .replace(/[^\w\s-]/g, '')
+      .replace(/[\s_-]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+
+    const slugExists = igrejas.some(
+      ig => ig.slug?.toLowerCase().trim() === slugToSave && ig.id !== currentIgreja.id
+    );
+
+    if (slugExists) {
+      setError('Este Slug já está sendo utilizado por outra igreja. Por favor, insira um Slug que seja único.');
+      return;
+    }
 
     const addressToSave = currentIgreja.endereco ? 
       (currentIgreja.assinatura_vigencia ? `${currentIgreja.endereco || ''} | VIGENCIA:${currentIgreja.assinatura_vigencia}` : currentIgreja.endereco)
