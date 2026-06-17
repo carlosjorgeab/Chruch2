@@ -8,7 +8,7 @@ import { useConfirm } from '@/context/ConfirmContext';
 import { 
   Plus, Trash2, TrendingUp, TrendingDown, Wallet, Calendar, Tag, RefreshCw, 
   Save, X, DollarSign, Upload, File, FileText, Check, AlertCircle, Link2, Settings, Briefcase, Landmark, Edit2, ChevronDown, Search, Printer,
-  ChevronLeft, ChevronRight
+  ChevronLeft, ChevronRight, Copy
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import jsPDF from 'jspdf';
@@ -820,6 +820,44 @@ export default function FinanceiroPage() {
       if (data) {
         setAnexos(data.map((item: any) => ({
           id: item.id,
+          nome_arquivo: item.nome || item.nome_arquivo || '',
+          url_arquivo: item.url || item.url_arquivo || ''
+        })));
+      } else {
+        setAnexos([]);
+      }
+    } catch (e) {
+      setAnexos([]);
+    }
+
+    setIsEditing(true);
+    setError('');
+    setSuccess('');
+  };
+
+  const handleClone = async (transacao: Transacao) => {
+    setCurrentTransacao({
+      tipo: transacao.tipo,
+      categoria: transacao.categoria || '',
+      descricao: transacao.descricao,
+      valor: transacao.valor || 0,
+      data: transacao.data || new Date().toISOString().split('T')[0],
+      membro_contribuinte: transacao.membro_contribuinte || '',
+      id_forma_pagamento: transacao.id_forma_pagamento || '',
+      id_conta: transacao.id_conta || '',
+      id_fornecedor: transacao.id_fornecedor || '',
+      data_vencimento: transacao.data_vencimento || '',
+      data_pagamento: transacao.data_pagamento || ''
+    });
+
+    // Load attachments from database for this transaction to clone them
+    try {
+      const { data } = await supabase
+        .from('arquivos_transacao')
+        .select('*')
+        .eq('id_transacao', transacao.id);
+      if (data) {
+        setAnexos(data.map((item: any) => ({
           nome_arquivo: item.nome || item.nome_arquivo || '',
           url_arquivo: item.url || item.url_arquivo || ''
         })));
@@ -2478,6 +2516,14 @@ export default function FinanceiroPage() {
                                     >
                                       <Tag size={14} />
                                       <span className="inline md:hidden text-[10px] font-bold">Editar</span>
+                                    </button>
+                                    <button
+                                      onClick={() => handleClone(t)}
+                                      className="p-1.5 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-white dark:hover:bg-slate-800 transition rounded-lg cursor-pointer flex items-center gap-1"
+                                      title="Clonar Lançamento"
+                                    >
+                                      <Copy size={13} />
+                                      <span className="inline md:hidden text-[10px] font-bold">Clonar</span>
                                     </button>
                                     <button
                                       onClick={() => handleDelete(t.id)}
