@@ -4,9 +4,11 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useIgreja } from '@/context/IgrejaContext';
 import { useAuth } from '@/context/AuthContext';
+import { useConfirm } from '@/context/ConfirmContext';
 import { 
   Plus, Trash2, TrendingUp, TrendingDown, Wallet, Calendar, Tag, RefreshCw, 
-  Save, X, DollarSign, Upload, File, FileText, Check, AlertCircle, Link2, Settings, Briefcase, Landmark, Edit2, ChevronDown, Search, Printer
+  Save, X, DollarSign, Upload, File, FileText, Check, AlertCircle, Link2, Settings, Briefcase, Landmark, Edit2, ChevronDown, Search, Printer,
+  ChevronLeft, ChevronRight
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import jsPDF from 'jspdf';
@@ -64,6 +66,7 @@ type ArquivoAnexo = {
 export default function FinanceiroPage() {
   const { user, hasPermission } = useAuth();
   const { selectedIgreja } = useIgreja();
+  const { confirmDelete } = useConfirm();
   const [activeTab, setActiveTab] = useState<'lancamentos' | 'contas' | 'categorias' | 'formas_pagamento' | 'fluxo_caixa' | 'relatorios'>('lancamentos');
   
   // States specifically for the Reports Submodule
@@ -125,6 +128,18 @@ export default function FinanceiroPage() {
   const [filterText, setFilterText] = useState<string>('');
   const [filterCategorias, setFilterCategorias] = useState<string[]>([]);
   const [filterFormasPagamento, setFilterFormasPagamento] = useState<string[]>([]);
+
+  // Navigation and Delete Confirm States
+  const [vencimentoRefDate, setVencimentoRefDate] = useState<Date>(new Date());
+  const [confirmModal, setConfirmModal] = useState<{
+    message: string;
+    onConfirm: () => void | Promise<void>;
+  } | null>(null);
+
+  // Reset vencimentoRefDate when filterVencimentoOpt shifts
+  useEffect(() => {
+    setVencimentoRefDate(new Date());
+  }, [filterVencimentoOpt]);
 
   // Pagination States
   const [pageSize, setPageSize] = useState<number>(25);
@@ -764,22 +779,24 @@ export default function FinanceiroPage() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Deseja realmente remover este lançamento financeiro?')) {
-      return;
-    }
-    try {
-      // First delete associated attachments
-      await supabase.from('arquivos_transacao').delete().eq('id_transacao', id);
+  const handleDelete = (id: string) => {
+    confirmDelete({
+      message: 'Deseja realmente remover este lançamento financeiro? Esta ação é irreversível.',
+      onConfirm: async () => {
+        try {
+          // First delete associated attachments
+          await supabase.from('arquivos_transacao').delete().eq('id_transacao', id);
 
-      const { error: err } = await supabase.from('transacoes').delete().eq('id', id);
-      if (err) throw err;
-      const updated = transacoes.filter((t) => t.id !== id);
-      setTransacoes(updated);
-      setSuccess('Lançamento removido com sucesso!');
-    } catch (e: any) {
-      setError('Erro ao excluir transação: ' + (e.message || e));
-    }
+          const { error: err } = await supabase.from('transacoes').delete().eq('id', id);
+          if (err) throw err;
+          const updated = transacoes.filter((t) => t.id !== id);
+          setTransacoes(updated);
+          setSuccess('Lançamento removido com sucesso!');
+        } catch (e: any) {
+          setError('Erro ao excluir transação: ' + (e.message || e));
+        }
+      }
+    });
   };
 
   const handleEdit = async (transacao: Transacao) => {
@@ -1062,7 +1079,7 @@ export default function FinanceiroPage() {
         }
         
         const tDate = new Date(t.data_vencimento + 'T00:00:00');
-        const now = new Date();
+        const now = new Date(vencimentoRefDate);
         now.setHours(0, 0, 0, 0);
         
         if (filterVencimentoOpt === 'Hoje') {
@@ -1144,14 +1161,18 @@ export default function FinanceiroPage() {
     }
   };
 
-  const handleDeleteConta = async (id: string) => {
-    if (!confirm('Deseja realmente remover esta conta?')) return;
-    try {
-      await supabase.from('contas').delete().eq('id', id);
-      loadSubmodulesData();
-    } catch (err) {
-      console.error(err);
-    }
+  const handleDeleteConta = (id: string) => {
+    confirmDelete({
+      message: 'Deseja realmente remover esta conta? Esta ação é irreversível.',
+      onConfirm: async () => {
+        try {
+          await supabase.from('contas').delete().eq('id', id);
+          loadSubmodulesData();
+        } catch (err) {
+          console.error(err);
+        }
+      }
+    });
   };
 
   // Submodule categories CRUD Actions
@@ -1177,14 +1198,18 @@ export default function FinanceiroPage() {
     }
   };
 
-  const handleDeleteCategoria = async (id: string) => {
-    if (!confirm('Deseja realmente remover esta categoria?')) return;
-    try {
-      await supabase.from('categorias').delete().eq('id', id);
-      loadSubmodulesData();
-    } catch (err) {
-      console.error(err);
-    }
+  const handleDeleteCategoria = (id: string) => {
+    confirmDelete({
+      message: 'Deseja realmente remover esta categoria? Esta ação é irreversível.',
+      onConfirm: async () => {
+        try {
+          await supabase.from('categorias').delete().eq('id', id);
+          loadSubmodulesData();
+        } catch (err) {
+          console.error(err);
+        }
+      }
+    });
   };
 
   // Submodule payment methods CRUD Actions
@@ -1217,15 +1242,19 @@ export default function FinanceiroPage() {
     }
   };
 
-  const handleDeleteForma = async (id: string) => {
-    if (!confirm('Deseja realmente remover esta forma de pagamento?')) return;
-    try {
-      const { error: err } = await supabase.from('forma_pagamento').delete().eq('id', id);
-      if (err) throw err;
-      loadSubmodulesData();
-    } catch (err) {
-      console.error(err);
-    }
+  const handleDeleteForma = (id: string) => {
+    confirmDelete({
+      message: 'Deseja realmente remover esta forma de pagamento? Esta ação é irreversível.',
+      onConfirm: async () => {
+        try {
+          const { error: err } = await supabase.from('forma_pagamento').delete().eq('id', id);
+          if (err) throw err;
+          loadSubmodulesData();
+        } catch (err) {
+          console.error(err);
+        }
+      }
+    });
   };
 
   // Balances calculation
@@ -1280,7 +1309,7 @@ export default function FinanceiroPage() {
   const paginatedTransactions = filteredTransactions.slice((activePage - 1) * pageSize, activePage * pageSize);
 
   // Compute metrics for the filtered transactions
-  const todayObj = new Date();
+  const todayObj = new Date(vencimentoRefDate);
   const year = todayObj.getFullYear();
   const month = String(todayObj.getMonth() + 1).padStart(2, '0');
   const day = String(todayObj.getDate()).padStart(2, '0');
@@ -1916,9 +1945,15 @@ export default function FinanceiroPage() {
               )}
 
               {/* Table list of transactions */}
-              <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+              <div 
+                className="rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden"
+                style={{ backgroundColor: 'var(--church-panel)' }}
+              >
                 {/* Header list panel containing the active search and combos filters requested in 1c */}
-                <div className="px-6 py-5 bg-slate-50/50 dark:bg-slate-950/20 border-b border-slate-100 dark:border-slate-850 space-y-4">
+                <div 
+                  className="px-6 py-5 border-b border-slate-102 dark:border-slate-850 space-y-4"
+                  style={{ backgroundColor: 'var(--church-panel)' }}
+                >
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
                     <span className="text-[11px] uppercase font-black text-slate-400 tracking-widest block font-sans">
                       Filtros de Pesquisa & Lançamentos
@@ -1980,20 +2015,135 @@ export default function FinanceiroPage() {
 
                     {/* c.1 Data Vencimento combo */}
                     <div className="space-y-1">
-                      <select
-                        value={filterVencimentoOpt}
-                        onChange={(e) => setFilterVencimentoOpt(e.target.value)}
-                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-white outline-none focus:border-amber-500 transition-colors font-semibold"
-                      >
-                        <option value="Todo Período">Vencimento: Todo Período</option>
-                        <option value="Hoje">Hoje</option>
-                        <option value="Semana">Semana</option>
-                        <option value="Mês">Mês</option>
-                        <option value="Ano">Ano</option>
-                        <option value="30 Últimos Dias">30 Últimos Dias</option>
-                        <option value="12 Últimos Meses">12 Últimos Meses</option>
-                        <option value="Personalizado">Personalizado...</option>
-                      </select>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newDate = new Date(vencimentoRefDate);
+                            if (filterVencimentoOpt === 'Hoje') {
+                              newDate.setDate(newDate.getDate() - 1);
+                            } else if (filterVencimentoOpt === 'Semana') {
+                              newDate.setDate(newDate.getDate() - 7);
+                            } else if (filterVencimentoOpt === 'Mês') {
+                              newDate.setMonth(newDate.getMonth() - 1);
+                            } else if (filterVencimentoOpt === 'Ano') {
+                              newDate.setFullYear(newDate.getFullYear() - 1);
+                            } else if (filterVencimentoOpt === '30 Últimos Dias') {
+                              newDate.setDate(newDate.getDate() - 30);
+                            } else if (filterVencimentoOpt === '12 Últimos Meses') {
+                              newDate.setMonth(newDate.getMonth() - 12);
+                            } else if (filterVencimentoOpt === 'Personalizado') {
+                              if (filterVencimentoInicio && filterVencimentoFim) {
+                                const start = new Date(filterVencimentoInicio + 'T00:00:00');
+                                const end = new Date(filterVencimentoFim + 'T00:00:00');
+                                const diffTime = Math.abs(end.getTime() - start.getTime());
+                                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
+                                const newStart = new Date(start);
+                                newStart.setDate(start.getDate() - diffDays);
+                                const newEnd = new Date(end);
+                                newEnd.setDate(end.getDate() - diffDays);
+                                setFilterVencimentoInicio(newStart.toISOString().split('T')[0]);
+                                setFilterVencimentoFim(newEnd.toISOString().split('T')[0]);
+                              }
+                            }
+                            setVencimentoRefDate(newDate);
+                          }}
+                          disabled={filterVencimentoOpt === 'Todo Período'}
+                          className="px-2 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 select-none cursor-pointer hover:border-amber-500 shrink-0 transition-colors"
+                          title="Recuar data de vencimento"
+                        >
+                          <ChevronLeft size={14} />
+                        </button>
+
+                        <select
+                          value={filterVencimentoOpt}
+                          onChange={(e) => setFilterVencimentoOpt(e.target.value)}
+                          className="flex-1 min-w-0 px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-white outline-none focus:border-amber-500 transition-colors font-semibold"
+                        >
+                          <option value="Todo Período">Vencimento: Todo Período</option>
+                          <option value="Hoje">Hoje</option>
+                          <option value="Semana">Semana</option>
+                          <option value="Mês">Mês</option>
+                          <option value="Ano">Ano</option>
+                          <option value="30 Últimos Dias">30 Últimos Dias</option>
+                          <option value="12 Últimos Meses">12 Últimos Meses</option>
+                          <option value="Personalizado">Personalizado...</option>
+                        </select>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newDate = new Date(vencimentoRefDate);
+                            if (filterVencimentoOpt === 'Hoje') {
+                              newDate.setDate(newDate.getDate() + 1);
+                            } else if (filterVencimentoOpt === 'Semana') {
+                              newDate.setDate(newDate.getDate() + 7);
+                            } else if (filterVencimentoOpt === 'Mês') {
+                              newDate.setMonth(newDate.getMonth() + 1);
+                            } else if (filterVencimentoOpt === 'Ano') {
+                              newDate.setFullYear(newDate.getFullYear() + 1);
+                            } else if (filterVencimentoOpt === '30 Últimos Dias') {
+                              newDate.setDate(newDate.getDate() + 30);
+                            } else if (filterVencimentoOpt === '12 Últimos Meses') {
+                              newDate.setMonth(newDate.getMonth() + 12);
+                            } else if (filterVencimentoOpt === 'Personalizado') {
+                              if (filterVencimentoInicio && filterVencimentoFim) {
+                                const start = new Date(filterVencimentoInicio + 'T00:00:00');
+                                const end = new Date(filterVencimentoFim + 'T00:00:00');
+                                const diffTime = Math.abs(end.getTime() - start.getTime());
+                                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
+                                const newStart = new Date(start);
+                                newStart.setDate(start.getDate() + diffDays);
+                                const newEnd = new Date(end);
+                                newEnd.setDate(end.getDate() + diffDays);
+                                setFilterVencimentoInicio(newStart.toISOString().split('T')[0]);
+                                setFilterVencimentoFim(newEnd.toISOString().split('T')[0]);
+                              }
+                            }
+                            setVencimentoRefDate(newDate);
+                          }}
+                          disabled={filterVencimentoOpt === 'Todo Período'}
+                          className="px-2 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 select-none cursor-pointer hover:border-amber-500 shrink-0 transition-colors"
+                          title="Avançar data de vencimento"
+                        >
+                          <ChevronRight size={14} />
+                        </button>
+                      </div>
+
+                      {filterVencimentoOpt !== 'Todo Período' && (() => {
+                        const now = new Date(vencimentoRefDate);
+                        
+                        let periodLabel = '';
+                        if (filterVencimentoOpt === 'Hoje') {
+                          periodLabel = now.toLocaleDateString('pt-BR');
+                        } else if (filterVencimentoOpt === 'Semana') {
+                          const startOfWeek = new Date(now);
+                          startOfWeek.setDate(now.getDate() - now.getDay());
+                          const endOfWeek = new Date(startOfWeek);
+                          endOfWeek.setDate(startOfWeek.getDate() + 6);
+                          periodLabel = `${startOfWeek.toLocaleDateString('pt-BR')} a ${endOfWeek.toLocaleDateString('pt-BR')}`;
+                        } else if (filterVencimentoOpt === 'Mês') {
+                          periodLabel = now.toLocaleString('pt-BR', { month: 'short', year: 'numeric' });
+                        } else if (filterVencimentoOpt === 'Ano') {
+                          periodLabel = String(now.getFullYear());
+                        } else if (filterVencimentoOpt === '30 Últimos Dias') {
+                          const start = new Date(now);
+                          start.setDate(now.getDate() - 30);
+                          periodLabel = `${start.toLocaleDateString('pt-BR')} a ${now.toLocaleDateString('pt-BR')}`;
+                        } else if (filterVencimentoOpt === '12 Últimos Meses') {
+                          const start = new Date(now);
+                          start.setMonth(now.getMonth() - 12);
+                          periodLabel = `${start.toLocaleDateString('pt-BR')} a ${now.toLocaleDateString('pt-BR')}`;
+                        }
+
+                        if (!periodLabel && filterVencimentoOpt !== 'Personalizado') return null;
+
+                        return (
+                          <div className="text-[10px] text-slate-500 font-semibold bg-slate-100/50 dark:bg-slate-800/40 px-2 py-0.5 rounded-md inline-block animate-in fade-in duration-200">
+                            Foco: <span className="text-amber-600 dark:text-amber-450 font-bold">{periodLabel || 'Filtro ativo'}</span>
+                          </div>
+                        );
+                      })()}
 
                       {filterVencimentoOpt === 'Personalizado' && (
                         <div className="grid grid-cols-2 gap-1 mt-1 animate-in slide-in-from-top-1 duration-200">
@@ -2121,59 +2271,59 @@ export default function FinanceiroPage() {
                     <span className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500 tracking-wider block font-sans">
                       Resumo Financeiro dos Lançamentos Filtrados
                     </span>
-                    <div className="overflow-x-auto">
+                    <div className="overflow-x-auto rounded-2xl border border-slate-150 dark:border-slate-800">
                       <table className="w-full text-left border-collapse min-w-[700px]">
                         <thead>
-                          <tr className="border-b border-slate-150 dark:border-slate-800 text-slate-400 dark:text-slate-500 text-[10px] font-black uppercase tracking-widest">
-                            <th className="py-2.5 pr-4">Tipo</th>
+                          <tr className="bg-slate-100 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-[10px] font-black uppercase tracking-widest">
+                            <th className="py-2.5 px-4">Tipo</th>
                             <th className="py-2.5 px-4 text-right">A Vencer</th>
                             <th className="py-2.5 px-4 text-right">Vencem hoje</th>
                             <th className="py-2.5 px-4 text-right">Vencidos</th>
                             <th className="py-2.5 px-4 text-right">Pagos</th>
-                            <th className="py-2.5 pl-4 text-right">Total Período</th>
+                            <th className="py-2.5 px-4 text-right">Total Período</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 text-slate-700 dark:text-slate-300 font-medium">
                           {(filterTipo === 'Todos' || filterTipo === 'Entrada') && (
-                            <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-950/10 transition-all font-sans">
-                              <td className="py-3 pr-4 text-xs font-black text-blue-600 dark:text-blue-450 uppercase tracking-wide">
+                            <tr className="hover:bg-emerald-500/5 transition-all font-sans border-l-4 border-l-emerald-500 bg-white/40 dark:bg-slate-900/30">
+                              <td className="py-3 px-4 text-xs font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-wide">
                                 Crédito
                               </td>
-                              <td className="py-3 px-4 text-right font-bold font-mono text-xs text-black dark:text-white">
+                              <td className="py-3 px-4 text-right font-bold font-mono text-xs text-slate-705 dark:text-slate-300">
                                 R$ {creditAVencer.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                               </td>
-                              <td className="py-3 px-4 text-right font-bold font-mono text-xs text-black dark:text-white">
+                              <td className="py-3 px-4 text-right font-black font-mono text-xs text-emerald-600 dark:text-emerald-400">
                                 R$ {creditHoje.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                               </td>
-                              <td className="py-3 px-4 text-right font-bold font-mono text-xs text-black dark:text-white">
+                              <td className="py-3 px-4 text-right font-bold font-mono text-xs text-orange-500 dark:text-orange-400">
                                 R$ {creditVencido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                               </td>
-                              <td className="py-3 px-4 text-right font-bold font-mono text-xs text-black dark:text-white">
+                              <td className="py-3 px-4 text-right font-bold font-mono text-xs text-slate-500 dark:text-slate-450">
                                 R$ {creditPago.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                               </td>
-                              <td className="py-3 pl-4 text-right font-black font-mono text-xs text-blue-600 dark:text-blue-450 bg-blue-50/10 dark:bg-blue-950/5 rounded-r-xl">
+                              <td className="py-3 px-4 text-right font-black font-mono text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-50/10 dark:bg-emerald-955/5 rounded-r-xl">
                                 R$ {creditTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                               </td>
                             </tr>
                           )}
                           {(filterTipo === 'Todos' || filterTipo === 'Saída') && (
-                            <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-950/10 transition-all font-sans">
-                              <td className="py-3 pr-4 text-xs font-black text-red-500 dark:text-red-400 uppercase tracking-wide">
+                            <tr className="hover:bg-red-500/5 transition-all font-sans border-l-4 border-l-red-500 bg-white/40 dark:bg-slate-900/30">
+                              <td className="py-3 px-4 text-xs font-black text-red-500 dark:text-red-400 uppercase tracking-wide">
                                 Débito
                               </td>
-                              <td className="py-3 px-4 text-right font-bold font-mono text-xs text-black dark:text-white">
+                              <td className="py-3 px-4 text-right font-bold font-mono text-xs text-slate-705 dark:text-slate-300">
                                 R$ {debitAVencer.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                               </td>
-                              <td className="py-3 px-4 text-right font-bold font-mono text-xs text-black dark:text-white">
+                              <td className="py-3 px-4 text-right font-black font-mono text-xs text-red-500 dark:text-red-400">
                                 R$ {debitHoje.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                               </td>
-                              <td className="py-3 px-4 text-right font-bold font-mono text-xs text-black dark:text-white">
+                              <td className="py-3 px-4 text-right font-bold font-mono text-xs text-red-600 dark:text-red-400">
                                 R$ {debitVencido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                               </td>
-                              <td className="py-3 px-4 text-right font-bold font-mono text-xs text-black dark:text-white">
+                              <td className="py-3 px-4 text-right font-bold font-mono text-xs text-slate-500 dark:text-slate-450">
                                 R$ {debitPago.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                               </td>
-                              <td className="py-3 pl-4 text-right font-black font-mono text-xs text-red-500 dark:text-red-400 bg-red-50/10 dark:bg-red-950/5 rounded-r-xl">
+                              <td className="py-3 px-4 text-right font-black font-mono text-xs text-red-500 dark:text-red-400 bg-red-50/10 dark:bg-red-955/5 rounded-r-xl">
                                 R$ {debitTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                               </td>
                             </tr>

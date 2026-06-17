@@ -7,6 +7,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useRouter, usePathname } from 'next/navigation';
 import { useIgreja } from '@/context/IgrejaContext';
 import { ShieldAlert } from 'lucide-react';
+import { ConfirmProvider } from '@/context/ConfirmContext';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false);
@@ -75,7 +76,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <>
+    <ConfirmProvider>
       {/* Mobile Menu Toggle */}
       <button 
         onClick={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -198,6 +199,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <main className="md:ml-64 pt-16 min-h-screen transition-all duration-300">
         {children}
       </main>
-    </>
+    </ConfirmProvider>
   );
 }
