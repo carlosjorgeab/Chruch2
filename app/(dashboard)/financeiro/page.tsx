@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { motion } from 'motion/react';
 import { supabase } from '@/lib/supabase';
 import { useIgreja } from '@/context/IgrejaContext';
 import { useAuth } from '@/context/AuthContext';
@@ -850,23 +851,8 @@ export default function FinanceiroPage() {
       data_pagamento: transacao.data_pagamento || ''
     });
 
-    // Load attachments from database for this transaction to clone them
-    try {
-      const { data } = await supabase
-        .from('arquivos_transacao')
-        .select('*')
-        .eq('id_transacao', transacao.id);
-      if (data) {
-        setAnexos(data.map((item: any) => ({
-          nome_arquivo: item.nome || item.nome_arquivo || '',
-          url_arquivo: item.url || item.url_arquivo || ''
-        })));
-      } else {
-        setAnexos([]);
-      }
-    } catch (e) {
-      setAnexos([]);
-    }
+    // Do not copy the files from the original record in the clone operation
+    setAnexos([]);
 
     setIsEditing(true);
     setError('');
@@ -2304,6 +2290,57 @@ export default function FinanceiroPage() {
                           })}
                         </div>
                       )}
+                    </div>
+                  </div>
+
+                  {/* Quick Category Selector */}
+                  <div id="category-controls" className="pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-col md:flex-row items-start md:items-center gap-2">
+                    <span className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500 tracking-wider shrink-0 mt-1 md:mt-0">
+                      Filtro Rápido por Categoria:
+                    </span>
+                    <div className="flex gap-1.5 overflow-x-auto w-full pb-1 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-800 scroll-smooth">
+                      <motion.button
+                        type="button"
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => setFilterCategorias([])}
+                        className={`text-xs font-bold px-3 py-1 rounded-full border transition-all cursor-pointer whitespace-nowrap ${
+                          filterCategorias.length === 0
+                            ? 'bg-amber-500 border-amber-500 text-white shadow-sm'
+                            : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-850'
+                        }`}
+                      >
+                        Todas
+                      </motion.button>
+                      {[
+                        'Dízimo', 'Oferta', 'Doação', 'Evento', 'Aluguel', 'Água e Energia',
+                        'Som e Luz', 'Manutenção', 'Missionário', 'Outros',
+                        ...Array.from(new Set(transacoes.map(t => t.categoria).filter(Boolean) as string[]))
+                      ].filter((v, i, self) => self.indexOf(v) === i).map((cat) => {
+                        const isActive = filterCategorias.includes(cat);
+                        return (
+                          <motion.button
+                            key={cat}
+                            type="button"
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                            onClick={() => {
+                              if (isActive) {
+                                setFilterCategorias(filterCategorias.filter(c => c !== cat));
+                              } else {
+                                setFilterCategorias([cat]);
+                              }
+                            }}
+                            className={`text-xs font-bold px-3 py-1 rounded-full border transition-all cursor-pointer whitespace-nowrap ${
+                              isActive
+                                ? 'bg-amber-500 border-amber-500 text-white shadow-sm'
+                                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-850'
+                            }`}
+                          >
+                            {cat}
+                          </motion.button>
+                        );
+                      })}
                     </div>
                   </div>
 
