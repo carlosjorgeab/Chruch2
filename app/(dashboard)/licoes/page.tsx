@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useIgreja } from '@/context/IgrejaContext';
+import { useConfirm } from '@/context/ConfirmContext';
 import { Plus, Edit2, Trash2, Save, X, Search, BookOpen, Calendar, HelpCircle, RefreshCw } from 'lucide-react';
 
 type DecodedLicao = {
@@ -25,6 +26,7 @@ type Membro = {
 
 export default function LicoesPage() {
   const { selectedIgreja } = useIgreja();
+  const { confirmDelete } = useConfirm();
   const [lecoes, setLecoes] = useState<DecodedLicao[]>([]);
   const [membros, setMembros] = useState<Membro[]>([]);
   const [loading, setLoading] = useState(true);
@@ -128,18 +130,20 @@ export default function LicoesPage() {
     setSuccess('');
   };
 
-  const handleDelete = async (id: string, titulo: string) => {
-    if (!confirm(`Deseja realmente excluir a lição "${titulo}"?`)) {
-      return;
-    }
-    try {
-      const { error: err } = await supabase.from('lecoes').delete().eq('id', id);
-      if (err) throw err;
-      setSuccess('Lição excluída com sucesso!');
-      fetchLecoes();
-    } catch (e: any) {
-      setError('Erro ao excluir lição: ' + (e.message || e));
-    }
+  const handleDelete = (id: string, titulo: string) => {
+    confirmDelete({
+      message: `Deseja realmente excluir a lição "${titulo}"? Esta ação não poderá ser desfeita.`,
+      onConfirm: async () => {
+        try {
+          const { error: err } = await supabase.from('lecoes').delete().eq('id', id);
+          if (err) throw err;
+          setSuccess('Lição excluída com sucesso!');
+          fetchLecoes();
+        } catch (e: any) {
+          setError('Erro ao excluir lição: ' + (e.message || e));
+        }
+      }
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

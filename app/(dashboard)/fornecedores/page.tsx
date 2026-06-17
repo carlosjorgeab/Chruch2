@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { useIgreja } from '@/context/IgrejaContext';
+import { useConfirm } from '@/context/ConfirmContext';
 import { Plus, Edit2, Trash2, Save, Search, Users, ExternalLink, Briefcase, AlertCircle } from 'lucide-react';
 
 type Fornecedor = {
@@ -18,6 +19,7 @@ type Fornecedor = {
 export default function FornecedoresPage() {
   const { user, hasPermission } = useAuth();
   const { selectedIgreja } = useIgreja();
+  const { confirmDelete } = useConfirm();
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
@@ -114,28 +116,29 @@ export default function FornecedoresPage() {
     }
   };
 
-  const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`Tem certeza que deseja excluir o fornecedor "${name}"?`)) {
-      return;
-    }
+  const handleDelete = (id: string, name: string) => {
+    confirmDelete({
+      message: `Tem certeza que deseja excluir o fornecedor "${name}"? Esta ação não poderá ser desfeita.`,
+      onConfirm: async () => {
+        try {
+          setError('');
+          setSuccess('');
+          
+          const { error: err } = await supabase
+            .from('fornecedor')
+            .delete()
+            .eq('id', id);
 
-    try {
-      setError('');
-      setSuccess('');
-      
-      const { error: err } = await supabase
-        .from('fornecedor')
-        .delete()
-        .eq('id', id);
+          if (err) throw err;
 
-      if (err) throw err;
-
-      setSuccess('Fornecedor excluído com sucesso!');
-      fetchData();
-    } catch (err: any) {
-      console.error(err);
-      setError('Erro ao excluir fornecedor: ' + (err?.message || err));
-    }
+          setSuccess('Fornecedor excluído com sucesso!');
+          fetchData();
+        } catch (err: any) {
+          console.error(err);
+          setError('Erro ao excluir fornecedor: ' + (err?.message || err));
+        }
+      }
+    });
   };
 
   const filteredFornecedores = fornecedores.filter(f => {

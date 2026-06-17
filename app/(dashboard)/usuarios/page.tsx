@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { useIgreja } from '@/context/IgrejaContext';
+import { useConfirm } from '@/context/ConfirmContext';
 import { Plus, Edit2, Trash2, Save, Users } from 'lucide-react';
 
 type Usuario = {
@@ -21,6 +22,7 @@ type Usuario = {
 export default function UsuariosPage() {
   const { user } = useAuth();
   const { igrejas } = useIgreja();
+  const { confirmDelete } = useConfirm();
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [perfis, setPerfis] = useState<{id: string, nome: string}[]>([]);
   const [loading, setLoading] = useState(true);
@@ -134,12 +136,15 @@ export default function UsuariosPage() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (confirm('Tem certeza que deseja excluir este usuário?')) {
-      const { error } = await supabase.from('usuarios').delete().eq('id', id);
-      if (error) alert('Erro ao excluir usuário.');
-      else fetchData();
-    }
+  const handleDelete = (id: string) => {
+    confirmDelete({
+      message: 'Tem certeza que deseja excluir este usuário? Esta ação não poderá ser desfeita.',
+      onConfirm: async () => {
+        const { error } = await supabase.from('usuarios').delete().eq('id', id);
+        if (error) alert('Erro ao excluir usuário.');
+        else fetchData();
+      }
+    });
   };
 
   if (!user?.is_admin && !user?.perfil?.permissoes.includes('/usuarios')) {

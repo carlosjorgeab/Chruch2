@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
+import { useConfirm } from '@/context/ConfirmContext';
 import { Plus, Edit2, Trash2, Save, X, Shield } from 'lucide-react';
 
 type Perfil = {
@@ -29,6 +30,7 @@ const MENU_OPTIONS = [
 
 export default function PerfisPage() {
   const { user } = useAuth();
+  const { confirmDelete } = useConfirm();
   const [perfis, setPerfis] = useState<Perfil[]>([]);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
@@ -78,12 +80,15 @@ export default function PerfisPage() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (confirm('Tem certeza que deseja excluir este perfil?')) {
-      const { error } = await supabase.from('perfis').delete().eq('id', id);
-      if (error) alert('Erro ao excluir perfil. Verifique se existem usuários vinculados.');
-      else fetchPerfis();
-    }
+  const handleDelete = (id: string) => {
+    confirmDelete({
+      message: 'Tem certeza que deseja excluir este perfil? Esta ação não poderá ser desfeita e exigirá que nenhum usuário esteja vinculado a ele.',
+      onConfirm: async () => {
+        const { error } = await supabase.from('perfis').delete().eq('id', id);
+        if (error) alert('Erro ao excluir perfil. Verifique se existem usuários vinculados.');
+        else fetchPerfis();
+      }
+    });
   };
 
   const togglePermission = (menuId: string) => {

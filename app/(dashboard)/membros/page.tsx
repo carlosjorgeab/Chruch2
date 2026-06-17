@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useIgreja } from '@/context/IgrejaContext';
 import { useAuth } from '@/context/AuthContext';
+import { useConfirm } from '@/context/ConfirmContext';
 import { Plus, Edit2, Trash2, Save, X, Search, Check, RefreshCw, UserCheck, FileText, Calendar, Printer } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -25,6 +26,7 @@ type Membro = {
 export default function MembrosPage() {
   const { selectedIgreja } = useIgreja();
   const { user } = useAuth();
+  const { confirmDelete } = useConfirm();
   const [membros, setMembros] = useState<Membro[]>([]);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
@@ -113,18 +115,20 @@ export default function MembrosPage() {
     setSuccess('');
   };
 
-  const handleDelete = async (id: string, nome: string) => {
-    if (!confirm(`Deseja realmente excluir o membro "${nome}"?`)) {
-      return;
-    }
-    try {
-      const { error: err } = await supabase.from('membros').delete().eq('id', id);
-      if (err) throw err;
-      setSuccess('Membro excluído com sucesso!');
-      fetchMembros();
-    } catch (e: any) {
-      setError('Erro ao excluir membro: ' + (e.message || e));
-    }
+  const handleDelete = (id: string, nome: string) => {
+    confirmDelete({
+      message: `Deseja realmente excluir o membro "${nome}"? Esta ação não poderá ser desfeita.`,
+      onConfirm: async () => {
+        try {
+          const { error: err } = await supabase.from('membros').delete().eq('id', id);
+          if (err) throw err;
+          setSuccess('Membro excluído com sucesso!');
+          fetchMembros();
+        } catch (e: any) {
+          setError('Erro ao excluir membro: ' + (e.message || e));
+        }
+      }
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

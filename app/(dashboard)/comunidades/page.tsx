@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useIgreja } from '@/context/IgrejaContext';
+import { useConfirm } from '@/context/ConfirmContext';
 import { Plus, Edit2, Trash2, Save, X, Search, Users, Calendar, MapPin, RefreshCw } from 'lucide-react';
 
 type Comunidade = {
@@ -24,6 +25,7 @@ type Membro = {
 
 export default function ComunidadesPage() {
   const { selectedIgreja } = useIgreja();
+  const { confirmDelete } = useConfirm();
   const [comunidades, setComunidades] = useState<Comunidade[]>([]);
   const [membros, setMembros] = useState<Membro[]>([]);
   const [loading, setLoading] = useState(true);
@@ -119,18 +121,20 @@ export default function ComunidadesPage() {
     setSuccess('');
   };
 
-  const handleDelete = async (id: string, nome: string) => {
-    if (!confirm(`Deseja realmente excluir a comunidade/célula "${nome}"?`)) {
-      return;
-    }
-    try {
-      const { error: err } = await supabase.from('comunidades').delete().eq('id', id);
-      if (err) throw err;
-      setSuccess('Comunidade excluída com sucesso!');
-      fetchComunidades();
-    } catch (e: any) {
-      setError('Erro ao excluir comunidade: ' + (e.message || e));
-    }
+  const handleDelete = (id: string, nome: string) => {
+    confirmDelete({
+      message: `Deseja realmente excluir a comunidade/célula "${nome}"? Esta ação não poderá ser desfeita.`,
+      onConfirm: async () => {
+        try {
+          const { error: err } = await supabase.from('comunidades').delete().eq('id', id);
+          if (err) throw err;
+          setSuccess('Comunidade excluída com sucesso!');
+          fetchComunidades();
+        } catch (e: any) {
+          setError('Erro ao excluir comunidade: ' + (e.message || e));
+        }
+      }
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

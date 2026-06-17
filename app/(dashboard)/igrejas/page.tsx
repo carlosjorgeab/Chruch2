@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
+import { useConfirm } from '@/context/ConfirmContext';
 import { Plus, Edit2, Trash2, Save, X, Building, ShieldAlert, AlertTriangle } from 'lucide-react';
 
 type Igreja = {
@@ -25,6 +26,7 @@ type Igreja = {
 
 export default function IgrejasPage() {
   const { user } = useAuth();
+  const { confirmDelete } = useConfirm();
   const [igrejas, setIgrejas] = useState<Igreja[]>([]);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
@@ -117,23 +119,24 @@ export default function IgrejasPage() {
     }));
   };
 
-  const handleDelete = async (id: string, nome: string) => {
+  const handleDelete = (id: string, nome: string) => {
     if (igrejas.length <= 1) {
       setError('O sistema deve possuir pelo menos uma igreja cadastrada.');
       return;
     }
-    if (!confirm(`Deseja realmente excluir a igreja "${nome}"? Esta operação não pode ser desfeita.`)) {
-      return;
-    }
-
-    try {
-      const { error: err } = await supabase.from('igrejas').delete().eq('id', id);
-      if (err) throw err;
-      setSuccess('Igreja excluída com sucesso!');
-      fetchIgrejas();
-    } catch (e: any) {
-      setError('Erro ao excluir igreja: ' + (e.message || e));
-    }
+    confirmDelete({
+      message: `Deseja realmente excluir a igreja "${nome}"? Esta operação não pode ser desfeita.`,
+      onConfirm: async () => {
+        try {
+          const { error: err } = await supabase.from('igrejas').delete().eq('id', id);
+          if (err) throw err;
+          setSuccess('Igreja excluída com sucesso!');
+          fetchIgrejas();
+        } catch (e: any) {
+          setError('Erro ao excluir igreja: ' + (e.message || e));
+        }
+      }
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

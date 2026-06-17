@@ -2139,8 +2139,11 @@ export default function FinanceiroPage() {
                         if (!periodLabel && filterVencimentoOpt !== 'Personalizado') return null;
 
                         return (
-                          <div className="text-[10px] text-slate-500 font-semibold bg-slate-100/50 dark:bg-slate-800/40 px-2 py-0.5 rounded-md inline-block animate-in fade-in duration-200">
-                            Foco: <span className="text-amber-600 dark:text-amber-450 font-bold">{periodLabel || 'Filtro ativo'}</span>
+                          <div 
+                            className="text-[10.5px] text-amber-600 dark:text-amber-450 font-black tracking-wide border border-slate-200/80 dark:border-slate-800/80 px-2 py-1.5 rounded-xl block max-w-full text-center animate-in fade-in duration-200 shadow-sm"
+                            style={{ backgroundColor: 'var(--church-panel)' }}
+                          >
+                            <span>{periodLabel || 'Filtro ativo'}</span>
                           </div>
                         );
                       })()}
@@ -2461,7 +2464,10 @@ export default function FinanceiroPage() {
                                 </div>
                               </td>
 
-                              <td className="block md:table-cell px-6 py-2.5 md:py-2 text-right border-t md:border-t-0 border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/35 md:bg-transparent -mx-6 md:mx-0 px-6 mt-2 rounded-b-2xl">
+                              <td 
+                                className="block md:table-cell px-6 py-2.5 md:py-2 text-right border-t md:border-t-0 border-slate-100 dark:border-slate-800 md:bg-transparent -mx-6 md:mx-0 px-6 mt-2 rounded-b-2xl"
+                                style={{ backgroundColor: 'var(--church-panel)' }}
+                              >
                                 <div className="flex justify-between md:justify-end items-center gap-1.5">
                                   <span className="inline-block md:hidden text-[9px] text-slate-450 font-black uppercase tracking-wider font-bold">Ações:</span>
                                   <div className="flex gap-1.5">
