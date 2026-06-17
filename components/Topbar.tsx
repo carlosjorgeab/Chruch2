@@ -16,6 +16,14 @@ export function Topbar() {
   const [searchQuery, setSearchQuery] = useState('');
   const router = useRouter();
 
+  const getFirstNome = (emailStr?: string) => {
+    if (!emailStr) return 'Usuário';
+    const namePart = emailStr.split('@')[0];
+    const firstPart = namePart.split(/[\._-]/)[0];
+    const cleanPart = firstPart.replace(/[0-9]+$/, '');
+    return cleanPart ? cleanPart.charAt(0).toUpperCase() + cleanPart.slice(1).toLowerCase() : 'Usuário';
+  };
+
   // Notifications states
   const [notifications, setNotifications] = useState<any[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -279,7 +287,7 @@ export function Topbar() {
         <div className="relative group">
           <div className="flex items-center gap-3 pl-3 md:pl-5 border-l border-slate-200 dark:border-slate-800 cursor-pointer">
             <div className="text-right hidden sm:block">
-              <p className="text-sm font-semibold text-slate-900 dark:text-white leading-tight truncate max-w-[120px]">{user?.email || 'Usuário'}</p>
+              <p className="text-sm font-semibold text-slate-900 dark:text-white leading-tight truncate max-w-[120px]">{getFirstNome(user?.email)}</p>
               <p className="text-xs text-slate-500 group-hover:text-amber-500 transition-colors">{user?.perfil?.nome || 'Membro'}</p>
             </div>
             <div className="w-9 h-9 rounded-full overflow-hidden bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 border border-slate-200 dark:border-slate-700 shrink-0">
