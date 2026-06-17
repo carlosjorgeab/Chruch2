@@ -52,7 +52,7 @@ export default function MembrosPage() {
   const [isReportOpen, setIsReportOpen] = useState(false);
   const [reportType, setReportType] = useState<'alphabetical' | 'birthday'>('alphabetical');
   const [reportMonth, setReportMonth] = useState<number>(new Date().getMonth() + 1); // 1-12
-  const [reportYear, setReportYear] = useState<string>('todos'); // 'todos' or string year like '1990'
+  const [birthdaySortMode, setBirthdaySortMode] = useState<'alphabetical' | 'birthday'>('birthday');
   const [generatingReport, setGeneratingReport] = useState(false);
 
   useEffect(() => {
@@ -354,7 +354,7 @@ export default function MembrosPage() {
       const churchName = selectedIgreja?.nome || 'Minha Congregação';
       const docTitle = reportType === 'alphabetical'
         ? 'RELATÓRIO GERAL DE MEMBROS (ORDEM ALFABÉTICA)'
-        : `RELATÓRIO DE ANIVERSARIANTES - MÊS ${reportMonth.toString().padStart(2, '0')}${reportYear !== 'todos' ? ` / ANO ${reportYear}` : ''}`;
+        : `RELATÓRIO DE ANIVERSARIANTES - MÊS ${reportMonth.toString().padStart(2, '0')}`;
       
       const generationDate = new Date().toLocaleDateString('pt-BR', {
         day: '2-digit',
@@ -505,16 +505,19 @@ export default function MembrosPage() {
       if (parts.length !== 3) return false;
       
       const monthMatches = parseInt(parts[1], 10) === reportMonth;
-      const yearMatches = reportYear === 'todos' || parts[0] === reportYear;
-      return monthMatches && yearMatches;
+      return monthMatches;
     });
 
-    // Chronological order by birth day
-    return list.sort((a, b) => {
-      const dayA = parseInt(a.data_nascimento!.split('-')[2], 10);
-      const dayB = parseInt(b.data_nascimento!.split('-')[2], 10);
-      return dayA - dayB;
-    });
+    if (birthdaySortMode === 'alphabetical') {
+      return [...list].sort((a, b) => a.nome.localeCompare(b.nome));
+    } else {
+      // Chronological order by birth day
+      return [...list].sort((a, b) => {
+        const dayA = parseInt(a.data_nascimento!.split('-')[2], 10);
+        const dayB = parseInt(b.data_nascimento!.split('-')[2], 10);
+        return dayA - dayB;
+      });
+    }
   };
 
   const filteredMembros = membros.filter(m => {
@@ -976,25 +979,32 @@ export default function MembrosPage() {
 
                     <div>
                       <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">
-                        Filtrar por Ano
+                        Ordenação do Relatório *
                       </label>
-                      <select
-                        value={reportYear}
-                        onChange={(e) => setReportYear(e.target.value)}
-                        className="w-full px-3 py-2.5 rounded-xl border-2 border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-bold text-sm"
-                      >
-                        <option value="todos">Todos os Anos</option>
-                        {Array.from(new Set(
-                          membros
-                            .map(m => m.data_nascimento ? m.data_nascimento.split('-')[0] : null)
-                            .filter((y): y is string => !!y)
-                        ))
-                          .sort((a, b) => b.localeCompare(a))
-                          .map((year) => (
-                            <option key={year} value={year}>{year}</option>
-                          ))
-                        }
-                      </select>
+                      <div className="flex flex-col gap-2.5 mt-2">
+                        <label className="flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-300 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="birthday_sort_mode"
+                            value="birthday"
+                            checked={birthdaySortMode === 'birthday'}
+                            onChange={() => setBirthdaySortMode('birthday')}
+                            className="w-4 h-4 text-amber-600 border-slate-300 focus:ring-amber-500 cursor-pointer"
+                          />
+                          <span>Ordem de Aniversário</span>
+                        </label>
+                        <label className="flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-300 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="birthday_sort_mode"
+                            value="alphabetical"
+                            checked={birthdaySortMode === 'alphabetical'}
+                            onChange={() => setBirthdaySortMode('alphabetical')}
+                            className="w-4 h-4 text-amber-600 border-slate-300 focus:ring-amber-500 cursor-pointer"
+                          />
+                          <span>Ordem Alfabética</span>
+                        </label>
+                      </div>
                     </div>
                   </div>
                 </div>

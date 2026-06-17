@@ -176,6 +176,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { error: 'Credenciais inválidas' };
       }
 
+      if (data.id_igreja && !data.is_admin) {
+        const { data: igrejaData } = await supabase
+          .from('igrejas')
+          .select('id, nome, endereco, assinatura_vigencia')
+          .eq('id', data.id_igreja)
+          .single();
+
+        if (igrejaData) {
+          let vigDate = igrejaData.assinatura_vigencia || '';
+          if (!vigDate && igrejaData.endereco && igrejaData.endereco.includes('| VIGENCIA:')) {
+            const parts = igrejaData.endereco.split('| VIGENCIA:');
+            vigDate = parts[1].trim();
+          }
+
+          if (vigDate) {
+            const expirationDate = new Date(vigDate + 'T23:59:59');
+            if (expirationDate < new Date()) {
+              // Suspend all users of this church
+              await supabase
+                .from('usuarios')
+                .update({ ativo: false })
+                .eq('id_igreja', data.id_igreja);
+
+              setLoading(false);
+              return { error: 'O período de vigência de assinatura desta igreja venceu. Todos os usuários da igreja foram suspensos.' };
+            }
+          }
+        }
+      }
+
       if (data.ativo === false) {
         setLoading(false);
         return { error: 'Esta conta está desabilitada.' };

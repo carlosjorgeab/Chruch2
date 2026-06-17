@@ -22,6 +22,7 @@ type Igreja = {
   cor_fontes?: string | null;
   cor_botoes?: string | null;
   idioma_padrao?: string | null;
+  assinatura_vigencia?: string | null;
 };
 
 export default function IgrejasPage() {
@@ -45,6 +46,7 @@ export default function IgrejasPage() {
     cor_fontes: '',
     cor_botoes: '',
     idioma_padrao: 'pt',
+    assinatura_vigencia: '',
   });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -52,6 +54,34 @@ export default function IgrejasPage() {
   useEffect(() => {
     fetchIgrejas();
   }, []);
+
+  async function checkAndSuspendExpiredChurches(loadedIgrejas: Igreja[]) {
+    try {
+      const today = new Date();
+      for (const ig of loadedIgrejas) {
+        if (ig.assinatura_vigencia) {
+          const expirationDate = new Date(ig.assinatura_vigencia + 'T23:59:59');
+          if (expirationDate < today) {
+            // Check if there are active users to suspend
+            const { data: activeUsers, error: fetchErr } = await supabase
+              .from('usuarios')
+              .select('id, ativo')
+              .eq('id_igreja', ig.id)
+              .eq('ativo', true);
+
+            if (!fetchErr && activeUsers && activeUsers.length > 0) {
+              await supabase
+                .from('usuarios')
+                .update({ ativo: false })
+                .eq('id_igreja', ig.id);
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Error in auto suspension of expired church users:', e);
+    }
+  }
 
   async function fetchIgrejas() {
     try {
@@ -64,7 +94,22 @@ export default function IgrejasPage() {
 
       if (err) throw err;
       if (data) {
-        setIgrejas(data);
+        const parsedData = data.map((item: any) => {
+          let addressPart = item.endereco || '';
+          let vigenciaFromAddress = '';
+          if (addressPart.includes('| VIGENCIA:')) {
+            const parts = addressPart.split('| VIGENCIA:');
+            addressPart = parts[0].trim();
+            vigenciaFromAddress = parts[1].trim();
+          }
+          return {
+            ...item,
+            endereco: addressPart,
+            assinatura_vigencia: item.assinatura_vigencia || vigenciaFromAddress,
+          };
+        });
+        setIgrejas(parsedData);
+        checkAndSuspendExpiredChurches(parsedData);
       }
     } catch (e: any) {
       setError('Erro ao carregar igrejas: ' + (e.message || e));
@@ -96,6 +141,7 @@ export default function IgrejasPage() {
       cor_fontes: '',
       cor_botoes: '',
       idioma_padrao: 'pt',
+      assinatura_vigencia: '',
     });
     setIsEditing(true);
     setError('');
@@ -151,10 +197,14 @@ export default function IgrejasPage() {
 
     const slugToSave = currentIgreja.slug || generateSlug(currentIgreja.nome);
 
-    const payload = {
+    const addressToSave = currentIgreja.endereco ? 
+      (currentIgreja.assinatura_vigencia ? `${currentIgreja.endereco || ''} | VIGENCIA:${currentIgreja.assinatura_vigencia}` : currentIgreja.endereco)
+      : null;
+
+    const payload: any = {
       nome: currentIgreja.nome,
       cnpj: currentIgreja.cnpj || null,
-      endereco: currentIgreja.endereco || null,
+      endereco: addressToSave,
       telefone: currentIgreja.telefone || null,
       email: currentIgreja.email || null,
       logo_url: currentIgreja.logo_url || null,
@@ -166,6 +216,7 @@ export default function IgrejasPage() {
       cor_fontes: currentIgreja.cor_fontes || null,
       cor_botoes: currentIgreja.cor_botoes || null,
       idioma_padrao: currentIgreja.idioma_padrao || 'pt',
+      assinatura_vigencia: currentIgreja.assinatura_vigencia || null,
     };
 
     try {
@@ -179,7 +230,8 @@ export default function IgrejasPage() {
         if (err && (
           err.message?.includes('column "cor_fundo" of relation "igrejas" does not exist') ||
           err.message?.includes('column "cor_botoes" of relation "igrejas" does not exist') ||
-          err.message?.includes('column "idioma_padrao" of relation "igrejas" does not exist')
+          err.message?.includes('column "idioma_padrao" of relation "igrejas" does not exist') ||
+          err.message?.includes('column "assinatura_vigencia" of relation "igrejas" does not exist')
         )) {
           const fallbackPayload: any = { ...payload };
           delete fallbackPayload.cor_fundo;
@@ -188,18 +240,16 @@ export default function IgrejasPage() {
           delete fallbackPayload.cor_fontes;
           delete fallbackPayload.cor_botoes;
           delete fallbackPayload.idioma_padrao;
+          delete fallbackPayload.assinatura_vigencia;
           const fallbackRes = await supabase
             .from('igrejas')
             .update(fallbackPayload)
             .eq('id', currentIgreja.id);
           err = fallbackRes.error;
-          if (!err) {
-            alert("Alerta: A igreja foi atualizada, mas as novas colunas customizadas (cores, botões ou idioma) ainda não existem no banco de dados. Acesse Configurações -> Banco de Dados para ver o SQL de migração.");
-          }
         }
 
         if (err) throw err;
-        setSuccess('Igreja updated with success!');
+        setSuccess('Igreja atualizada com sucesso!');
       } else {
         // Insert
         let { error: err } = await supabase.from('igrejas').insert(payload);
@@ -207,7 +257,8 @@ export default function IgrejasPage() {
         if (err && (
           err.message?.includes('column "cor_fundo" of relation "igrejas" does not exist') ||
           err.message?.includes('column "cor_botoes" of relation "igrejas" does not exist') ||
-          err.message?.includes('column "idioma_padrao" of relation "igrejas" does not exist')
+          err.message?.includes('column "idioma_padrao" of relation "igrejas" does not exist') ||
+          err.message?.includes('column "assinatura_vigencia" of relation "igrejas" does not exist')
         )) {
           const fallbackPayload: any = { ...payload };
           delete fallbackPayload.cor_fundo;
@@ -216,11 +267,9 @@ export default function IgrejasPage() {
           delete fallbackPayload.cor_fontes;
           delete fallbackPayload.cor_botoes;
           delete fallbackPayload.idioma_padrao;
+          delete fallbackPayload.assinatura_vigencia;
           const fallbackRes = await supabase.from('igrejas').insert(fallbackPayload);
           err = fallbackRes.error;
-          if (!err) {
-            alert("Alerta: A igreja foi cadastrada, mas as novas colunas customizadas (cores, botões ou idioma) ainda não existem no banco de dados. Acesse Configurações -> Banco de Dados para ver o SQL de migração.");
-          }
         }
 
         if (err) throw err;
@@ -387,6 +436,21 @@ export default function IgrejasPage() {
                   className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-semibold"
                   placeholder="Rua, Número, Bairro, Cidade - Estado"
                 />
+              </div>
+
+              <div className="md:col-span-2 bg-slate-50 dark:bg-slate-900/40 p-4 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 space-y-2">
+                <label className="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest ml-1 mb-1">
+                  Vigência da Assinatura (Data de Vencimento)
+                </label>
+                <input
+                  type="date"
+                  value={currentIgreja.assinatura_vigencia || ''}
+                  onChange={(e) => setCurrentIgreja({ ...currentIgreja, assinatura_vigencia: e.target.value })}
+                  className="w-full max-w-xs px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-bold"
+                />
+                <p className="text-[10px] text-slate-400 dark:text-slate-500 ml-1 leading-relaxed">
+                  Defina o prazo limite para a assinatura da congregação. Se a data estiver vencida, todos os usuários da igreja vinculada serão suspensos e bloqueados automaticamente no login.
+                </p>
               </div>
 
               <div className="md:col-span-2 border-t border-slate-100 dark:border-slate-755 pt-6 bg-transparent">
@@ -590,12 +654,24 @@ export default function IgrejasPage() {
                             )}
                           </div>
                           <div>
-                            <div className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                              {ig.nome}
+                            <div className="font-bold text-slate-900 dark:text-white flex flex-wrap items-center gap-2">
+                              <span>{ig.nome}</span>
                               {ig.ativo ? (
                                 <span className="bg-green-100 dark:bg-green-950/50 text-green-700 dark:text-green-400 text-[8px] uppercase font-black tracking-widest px-1.5 py-0.5 rounded">Ativa</span>
                               ) : (
                                 <span className="bg-red-100 dark:bg-red-950/50 text-red-700 dark:text-red-400 text-[8px] uppercase font-black tracking-widest px-1.5 py-0.5 rounded">Inativa</span>
+                              )}
+                              {ig.assinatura_vigencia && (
+                                <span className={`text-[8px] uppercase font-black tracking-widest px-1.5 py-0.5 rounded ${
+                                  new Date(ig.assinatura_vigencia + 'T23:59:59') < new Date()
+                                    ? 'bg-rose-100 dark:bg-rose-950/50 text-rose-700 dark:text-rose-400'
+                                    : 'bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400'
+                                }`}>
+                                  {new Date(ig.assinatura_vigencia + 'T23:59:59') < new Date()
+                                    ? `Assinatura Vencida (${new Date(ig.assinatura_vigencia + 'T00:00:00').toLocaleDateString('pt-BR')})`
+                                    : `Assinatura: ${new Date(ig.assinatura_vigencia + 'T00:00:00').toLocaleDateString('pt-BR')}`
+                                  }
+                                </span>
                               )}
                             </div>
                             <div className="text-xs text-slate-450 dark:text-slate-400 font-normal">slug: {ig.slug}</div>

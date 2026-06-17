@@ -98,6 +98,9 @@ export async function GET(req: NextRequest) {
     -- 6. Add col to 'usuarios'
     ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS foto_url TEXT;
 
+    -- Add subscription expiration date to 'igrejas'
+    ALTER TABLE igrejas ADD COLUMN IF NOT EXISTS assinatura_vigencia DATE;
+
     -- 7. Create table 'arquivos_transacao'
     CREATE TABLE IF NOT EXISTS arquivos_transacao (
       id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
