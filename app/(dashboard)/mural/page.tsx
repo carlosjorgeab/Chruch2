@@ -24,7 +24,8 @@ import {
   Download,
   ExternalLink,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  GripVertical
 } from 'lucide-react';
 import { motion } from 'motion/react';
 
@@ -40,6 +41,7 @@ type MuralAviso = {
   status: 'Publicado' | 'Desativado';
   notificar_automatico?: boolean;
   tempo_transicao?: number;
+  ordem?: number;
   created_at?: string;
 };
 
@@ -121,6 +123,24 @@ export default function MuralPage() {
     return !!url.match(/\.(mp4|webm|ogg)$/i);
   };
 
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+
+  // Auto trigger migrate API on mount to guarantee 'ordem' column exists
+  useEffect(() => {
+    fetch('/api/migrate')
+      .then(res => res.json())
+      .then(data => {
+        if (!data.success) {
+          console.warn('Auto migration warning:', data.error);
+        } else {
+          console.log('Database auto-migrated successfully on mount.');
+        }
+      })
+      .catch(err => {
+        console.error('Migration endpoint fetch failed:', err);
+      });
+  }, []);
+
   useEffect(() => {
     if (selectedIgreja) {
       fetchMurais();
@@ -140,6 +160,7 @@ export default function MuralPage() {
         .from('mural_avisos')
         .select('*')
         .eq('id_igreja', selectedIgreja.id)
+        .order('ordem', { ascending: true })
         .order('created_at', { ascending: false });
 
       if (err) {
@@ -155,6 +176,59 @@ export default function MuralPage() {
       setLoading(false);
     }
   }
+
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', index.toString());
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = async (e: React.DragEvent, targetIndex: number) => {
+    e.preventDefault();
+    if (draggedIndex === null || draggedIndex === targetIndex) return;
+
+    const listCopy = [...murais];
+    const draggedItem = listCopy[draggedIndex];
+    
+    // Remove dragged item and insert at targetIndex
+    listCopy.splice(draggedIndex, 1);
+    listCopy.splice(targetIndex, 0, draggedItem);
+
+    // Update level state immediately
+    setMurais(listCopy);
+    setDraggedIndex(null);
+
+    // Update each item's order field in supabase database
+    try {
+      setLoading(true);
+      setError('');
+      setSuccess('');
+
+      const promises = listCopy.map((m, index) => 
+        supabase
+          .from('mural_avisos')
+          .update({ ordem: index })
+          .eq('id', m.id)
+      );
+
+      const results = await Promise.all(promises);
+      const errors = results.filter(r => r.error);
+
+      if (errors.length > 0) {
+        setError('Erro ao salvar nova ordenação no banco de dados.');
+      } else {
+        setSuccess('Sequência do mural reordenada com sucesso!');
+      }
+    } catch (err: any) {
+      setError('Erro de rede ao salvar ordenação: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleEdit = (mural: MuralAviso) => {
     setCurrentMural({
@@ -329,12 +403,6 @@ export default function MuralPage() {
           </button>
         )}
       </div>
-
-      {isLocalMode && (
-        <div className="p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-xl text-amber-750 dark:text-amber-400 text-xs font-semibold">
-          ⚠️ Modo Off-line Ativo: Salvando os dados localmente no navegador!
-        </div>
-      )}
 
       {error && (
         <div className="p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl text-red-600 dark:text-red-400 font-bold text-sm">
@@ -581,6 +649,13 @@ export default function MuralPage() {
             />
           </div>
 
+          {search === '' && murais.length > 1 && (
+            <div className="text-xs text-amber-700 dark:text-amber-400 font-bold bg-amber-50/50 dark:bg-amber-955/10 border border-amber-100 dark:border-amber-900/30 px-4 py-3 rounded-xl flex items-center gap-2 animate-pulse">
+              <span>👉</span>
+              <span><strong>Modo Reordenação:</strong> Arraste e solte qualquer aviso para definir a ordem exata de reprodução no carrossel da Visão Geral.</span>
+            </div>
+          )}
+
           {loading ? (
             <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-12 text-center text-slate-400 font-bold uppercase tracking-widest text-xs flex items-center justify-center gap-2">
               <RefreshCw size={16} className="animate-spin" />
@@ -594,12 +669,28 @@ export default function MuralPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredMurais.map((m) => {
                 const isActive = m.status === 'Publicado';
+                const originalIndex = murais.findIndex(item => item.id === m.id);
+
                 return (
-                  <div key={m.id} className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col justify-between hover:border-slate-350 dark:hover:border-slate-700 transition">
+                  <div 
+                    key={m.id}
+                    draggable={search === ''}
+                    onDragStart={(e) => handleDragStart(e, originalIndex)}
+                    onDragOver={(e) => handleDragOver(e, originalIndex)}
+                    onDrop={(e) => handleDrop(e, originalIndex)}
+                    className={`bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col justify-between hover:border-slate-350 dark:hover:border-slate-700 transition ${draggedIndex === originalIndex ? 'opacity-45 scale-95 border-amber-500 border-2 border-dashed' : ''} ${search === '' ? 'cursor-grab active:cursor-grabbing' : ''}`}
+                  >
                     <div className="p-6 space-y-4">
                       <div className="flex justify-between items-start">
-                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${isActive ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-600' : 'bg-slate-150 dark:bg-slate-800 text-slate-400'}`}>
-                          <Megaphone size={22} />
+                        <div className="flex items-center gap-2">
+                          {search === '' && (
+                            <div className="text-slate-400 dark:text-slate-500 hover:text-amber-500" title="Arraste para reordenar">
+                              <GripVertical size={20} className="shrink-0" />
+                            </div>
+                          )}
+                          <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${isActive ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-600' : 'bg-slate-150 dark:bg-slate-800 text-slate-400'}`}>
+                            <Megaphone size={22} />
+                          </div>
                         </div>
                         <div className="flex gap-1">
                           <button

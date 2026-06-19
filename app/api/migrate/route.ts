@@ -130,6 +130,7 @@ export async function GET(req: NextRequest) {
 
     ALTER TABLE mural_avisos ADD COLUMN IF NOT EXISTS notificar_automatico BOOLEAN DEFAULT TRUE;
     ALTER TABLE mural_avisos ADD COLUMN IF NOT EXISTS tempo_transicao INT DEFAULT 10;
+    ALTER TABLE mural_avisos ADD COLUMN IF NOT EXISTS ordem INT DEFAULT 0;
 
     INSERT INTO configuracoes_sistema (chave, valor, descricao)
     VALUES 

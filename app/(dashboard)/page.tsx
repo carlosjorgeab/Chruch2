@@ -204,6 +204,7 @@ export default function Home() {
           .select('*')
           .eq('id_igreja', id)
           .eq('status', 'Publicado')
+          .order('ordem', { ascending: true })
           .order('created_at', { ascending: false });
 
         if (errMural) {
