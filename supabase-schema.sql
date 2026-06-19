@@ -92,6 +92,7 @@ CREATE TABLE IF NOT EXISTS mural_avisos (
   data_fim DATE,
   status VARCHAR(20) DEFAULT 'Publicado' CHECK (status IN ('Publicado', 'Desativado')),
   notificar_automatico BOOLEAN DEFAULT TRUE,
+  tempo_transicao INT DEFAULT 10,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 

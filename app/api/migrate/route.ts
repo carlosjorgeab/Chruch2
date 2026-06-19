@@ -124,10 +124,12 @@ export async function GET(req: NextRequest) {
       data_fim DATE,
       status VARCHAR(20) DEFAULT 'Publicado' CHECK (status IN ('Publicado', 'Desativado')),
       notificar_automatico BOOLEAN DEFAULT TRUE,
+      tempo_transicao INT DEFAULT 10,
       created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
     );
 
     ALTER TABLE mural_avisos ADD COLUMN IF NOT EXISTS notificar_automatico BOOLEAN DEFAULT TRUE;
+    ALTER TABLE mural_avisos ADD COLUMN IF NOT EXISTS tempo_transicao INT DEFAULT 10;
 
     INSERT INTO configuracoes_sistema (chave, valor, descricao)
     VALUES 

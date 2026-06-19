@@ -22,7 +22,9 @@ import {
   Video, 
   FileCheck,
   Download,
-  ExternalLink 
+  ExternalLink,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { motion } from 'motion/react';
 
@@ -37,6 +39,7 @@ type MuralAviso = {
   data_fim: string | null;
   status: 'Publicado' | 'Desativado';
   notificar_automatico?: boolean;
+  tempo_transicao?: number;
   created_at?: string;
 };
 
@@ -58,7 +61,8 @@ export default function MuralPage() {
     data_inicio: '',
     data_fim: '',
     status: 'Publicado',
-    notificar_automatico: true
+    notificar_automatico: true,
+    tempo_transicao: 10
   });
 
   const [error, setError] = useState('');
@@ -66,20 +70,29 @@ export default function MuralPage() {
   const [isLocalMode, setIsLocalMode] = useState(false);
 
   // Embedded Media Helper Functions
-  const isYouTube = (url: string) => {
+  const isYouTube = (url: string | null | undefined) => {
+    if (!url) return false;
     return url.includes('youtube.com') || url.includes('youtu.be');
   };
 
-  const getYouTubeEmbedUrl = (url: string) => {
+  const getYouTubeEmbedUrl = (url: string | null | undefined) => {
+    if (!url) return null;
     let videoId = '';
     try {
-      if (url.includes('youtube.com/watch')) {
+      if (url.includes('youtube.com/shorts/')) {
+        videoId = url.split('youtube.com/shorts/')[1]?.split('?')[0] || '';
+      } else if (url.includes('youtube.com/live/')) {
+        videoId = url.split('youtube.com/live/')[1]?.split('?')[0] || '';
+      } else if (url.includes('youtube.com/watch')) {
         const urlParams = new URL(url).searchParams;
         videoId = urlParams.get('v') || '';
       } else if (url.includes('youtu.be/')) {
         videoId = url.split('youtu.be/')[1]?.split('?')[0] || '';
       } else if (url.includes('youtube.com/embed/')) {
         videoId = url.split('youtube.com/embed/')[1]?.split('?')[0] || '';
+      } else {
+        const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([^&?"\s]{11})/);
+        if (match) videoId = match[1];
       }
     } catch (err) {
       if (url.includes('v=')) {
@@ -89,16 +102,23 @@ export default function MuralPage() {
     return videoId ? `https://www.youtube.com/embed/${videoId}` : null;
   };
 
-  const isVimeo = (url: string) => {
+  const isVimeo = (url: string | null | undefined) => {
+    if (!url) return false;
     return url.includes('vimeo.com');
   };
 
-  const getVimeoEmbedUrl = (url: string) => {
-    const match = url.match(/vimeo\.com\/(\d+)/);
-    return match ? `https://player.vimeo.com/video/${match[1]}` : null;
+  const getVimeoEmbedUrl = (url: string | null | undefined) => {
+    if (!url) return null;
+    try {
+      const match = url.match(/vimeo\.com\/(\d+)/);
+      return match ? `https://player.vimeo.com/video/${match[1]}` : null;
+    } catch {
+      return null;
+    }
   };
 
-  const isDirectVideo = (url: string) => {
+  const isDirectVideo = (url: string | null | undefined) => {
+    if (!url) return false;
     return !!url.match(/\.(mp4|webm|ogg)$/i);
   };
 
@@ -155,7 +175,8 @@ export default function MuralPage() {
   const handleEdit = (mural: MuralAviso) => {
     setCurrentMural({
       ...mural,
-      notificar_automatico: mural.notificar_automatico !== false
+      notificar_automatico: mural.notificar_automatico !== false,
+      tempo_transicao: mural.tempo_transicao ?? 10
     });
     setIsEditing(true);
     setError('');
@@ -182,7 +203,8 @@ export default function MuralPage() {
       data_inicio: todayStr,
       data_fim: nextWeekStr,
       status: 'Publicado',
-      notificar_automatico: true
+      notificar_automatico: true,
+      tempo_transicao: 10
     });
     setIsEditing(true);
     setError('');
@@ -280,7 +302,8 @@ export default function MuralPage() {
       data_inicio: currentMural.data_inicio || null,
       data_fim: currentMural.data_fim || null,
       status: currentMural.status || 'Publicado',
-      notificar_automatico: currentMural.notificar_automatico !== false
+      notificar_automatico: currentMural.notificar_automatico !== false,
+      tempo_transicao: currentMural.tempo_transicao || 10
     };
 
     try {
@@ -502,11 +525,11 @@ export default function MuralPage() {
               </div>
             </div>
 
-            <div className="md:col-span-2">
+            <div>
               <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 ml-1">
                 Status de Publicação
               </label>
-              <div className="flex gap-4">
+              <div className="flex gap-4 pt-3">
                 <label className="flex items-center gap-2 cursor-pointer text-sm font-bold text-slate-700 dark:text-slate-300">
                   <input
                     type="radio"
@@ -527,8 +550,27 @@ export default function MuralPage() {
                     onChange={() => setCurrentMural({ ...currentMural, status: 'Desativado' })}
                     className="accent-amber-500 w-4 h-4"
                   />
-                  Desativado (arquivar / ocultar)
+                  Desativado
                 </label>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 ml-1">
+                Tempo de Transição (segundos)
+              </label>
+              <div className="relative">
+                <RefreshCw size={18} className="absolute left-3 top-3.5 text-slate-400 font-bold animate-spin-slow" />
+                <input
+                  type="number"
+                  min="2"
+                  max="300"
+                  required
+                  value={currentMural.tempo_transicao || 10}
+                  onChange={(e) => setCurrentMural({ ...currentMural, tempo_transicao: parseInt(e.target.value) || 10 })}
+                  className="w-full pl-10 pr-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-850 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-bold"
+                  placeholder="Ex: 10"
+                />
               </div>
             </div>
 
@@ -714,10 +756,10 @@ export default function MuralPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-stretch">
-                  {/* Media Column (Left - 7 cols) or full length if no media */}
+                <div className="flex flex-col gap-4">
+                  {/* Media Column (100% width, compact height) */}
                   {(currentMural.url_midia || currentMural.arquivo_base64) && (
-                    <div className="md:col-span-7 flex flex-col justify-center bg-slate-50 dark:bg-slate-950 rounded-2xl overflow-hidden min-h-[250px] border border-slate-150 dark:border-slate-850">
+                    <div className="w-full relative h-[250px] md:h-[300px] rounded-2xl overflow-hidden bg-slate-50 dark:bg-slate-950 border border-slate-150 dark:border-slate-850 shadow-inner flex flex-col justify-center items-center">
                       {/* 1. YouTube Video */}
                       {currentMural.url_midia && isYouTube(currentMural.url_midia) && getYouTubeEmbedUrl(currentMural.url_midia) && (
                         <div className="w-full h-0 pb-[56.25%] relative bg-black">
@@ -746,25 +788,51 @@ export default function MuralPage() {
 
                       {/* 3. Direct HTML5 Video */}
                       {currentMural.url_midia && isDirectVideo(currentMural.url_midia) && (
-                        <video controls className="w-full h-full max-h-[350px] bg-black">
+                        <video controls className="w-full h-full max-h-[300px] bg-black">
                           <source src={currentMural.url_midia} />
                           Seu navegador não suporta a tag de vídeo HTML5.
                         </video>
                       )}
 
-                      {/* 4. Image base64 Uploaded file */}
+                      {/* 4. Image base64 Uploaded file (with link overlay if present) */}
                       {!(currentMural.url_midia && (isYouTube(currentMural.url_midia) || isVimeo(currentMural.url_midia) || isDirectVideo(currentMural.url_midia))) && currentMural.arquivo_base64 && currentMural.arquivo_base64.startsWith('data:image/') && (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={currentMural.arquivo_base64}
-                          alt={currentMural.titulo}
-                          className="w-full h-full min-h-[250px] max-h-[350px] object-cover"
-                        />
+                        currentMural.url_midia ? (
+                          <a
+                            href={currentMural.url_midia}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="w-full h-full block relative group overflow-hidden cursor-pointer"
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={currentMural.arquivo_base64}
+                              alt={currentMural.titulo}
+                              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                            />
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-270 flex items-center justify-center">
+                              <div className="bg-amber-600 text-white font-extrabold text-xs px-4 py-2.5 rounded-xl flex items-center gap-2 shadow-lg uppercase tracking-wider">
+                                <ExternalLink size={14} />
+                                Acessar Link Anexo
+                              </div>
+                            </div>
+                            <div className="absolute bottom-3 right-3 bg-slate-900/85 backdrop-blur-sm text-amber-405 border border-amber-500/20 text-[9px] font-black uppercase tracking-widest px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 z-10">
+                              <ExternalLink size={10} />
+                              Clique para abrir o link
+                            </div>
+                          </a>
+                        ) : (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={currentMural.arquivo_base64}
+                            alt={currentMural.titulo}
+                            className="w-full h-full object-cover"
+                          />
+                        )
                       )}
 
                       {/* 5. PDF Uploaded file */}
                       {!(currentMural.url_midia && (isYouTube(currentMural.url_midia) || isVimeo(currentMural.url_midia) || isDirectVideo(currentMural.url_midia))) && currentMural.arquivo_base64 && currentMural.arquivo_base64.startsWith('data:application/pdf') && (
-                        <div className="p-8 text-center space-y-4 flex flex-col justify-center items-center h-full">
+                        <div className="p-8 text-center space-y-4 flex flex-col justify-center items-center h-full w-full">
                           <div className="p-4 bg-amber-50 dark:bg-amber-955/20 text-amber-600 rounded-2xl">
                             <FileText size={36} />
                           </div>
@@ -784,7 +852,7 @@ export default function MuralPage() {
 
                       {/* 6. Generic Link / External file */}
                       {!(currentMural.url_midia && (isYouTube(currentMural.url_midia) || isVimeo(currentMural.url_midia) || isDirectVideo(currentMural.url_midia))) && currentMural.url_midia && !currentMural.arquivo_base64 && (
-                        <div className="p-8 text-center space-y-4 flex flex-col justify-center items-center h-full">
+                        <div className="p-8 text-center space-y-4 flex flex-col justify-center items-center h-full w-full">
                           <div className="p-4 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-550 rounded-2xl">
                             <ExternalLink size={36} />
                           </div>
@@ -803,32 +871,27 @@ export default function MuralPage() {
                     </div>
                   )}
 
-                  {/* Text Column (Right - 5 cols, or entire 12 cols if no media) */}
-                  <div className={`flex flex-col justify-between py-2 ${currentMural.url_midia || currentMural.arquivo_base64 ? 'md:col-span-5' : 'md:col-span-12'}`}>
-                    <div className="space-y-4">
-                      <div className="flex flex-wrap gap-2 items-center">
-                        <span className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest bg-amber-500 text-white px-2.5 py-1 rounded-lg">
-                          💡 Aviso Ativo
-                        </span>
-                        <span className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest bg-slate-50 dark:bg-slate-950 border border-slate-150 dark:border-slate-850 text-slate-450 dark:text-slate-500 px-2 py-1 rounded-lg">
-                          <Calendar size={12} /> Até {currentMural.data_fim ? new Date(currentMural.data_fim + 'T00:00:00').toLocaleDateString('pt-BR') : '-'}
-                        </span>
-                      </div>
+                  {/* Under media elements: Title and Navigation Controls */}
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pt-2">
+                    <h4 className="text-xl sm:text-2xl font-black font-headline text-slate-900 dark:text-white uppercase tracking-tight leading-tight flex-1 line-clamp-1">
+                      {currentMural.titulo || 'Mural de Avisos & Anúncios'}
+                    </h4>
 
-                      <h4 className="text-2xl font-black font-headline text-slate-900 dark:text-white uppercase tracking-tight leading-tight">
-                        {currentMural.titulo || 'Mural de Avisos & Anúncios'}
-                      </h4>
-                      
-                      <p className="text-xs text-slate-500 font-medium leading-relaxed pt-1">
-                        Este aviso está fixado na Visão Geral durante o período de {currentMural.data_inicio ? new Date(currentMural.data_inicio + 'T00:00:00').toLocaleDateString('pt-BR') : '-'} até {currentMural.data_fim ? new Date(currentMural.data_fim + 'T00:00:00').toLocaleDateString('pt-BR') : '-'}.
-                      </p>
-                    </div>
-
-                    <div className="pt-6 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                      <span className="text-[10px] text-slate-440 font-bold uppercase">Congregação Ativa</span>
-                      <span className="text-xs font-black text-amber-600 uppercase tracking-widest">
-                        {selectedIgreja?.nome || 'Pentecostés'}
+                    <div className="flex items-center gap-3 shrink-0">
+                      <span className="text-[10px] uppercase font-black tracking-widest text-slate-400 bg-slate-50 dark:bg-slate-950 border border-slate-150 dark:border-slate-850 px-2.5 py-1.5 rounded-lg flex items-center gap-1">
+                        ⏱️ {currentMural.tempo_transicao || 10}s
                       </span>
+                      <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-950 border border-slate-150 dark:border-slate-850 p-1.5 rounded-xl">
+                        <button type="button" className="p-1 px-2 rounded-lg text-slate-350 cursor-not-allowed" disabled>
+                          <ChevronLeft size={16} />
+                        </button>
+                        <span className="text-xs font-bold text-slate-400 px-1">
+                          1 / 1
+                        </span>
+                        <button type="button" className="p-1 px-2 rounded-lg text-slate-350 cursor-not-allowed" disabled>
+                          <ChevronRight size={16} />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>

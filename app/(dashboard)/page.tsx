@@ -34,6 +34,32 @@ export default function Home() {
   const [currentMuralIndex, setCurrentMuralIndex] = useState(0);
   const [loading, setLoading] = useState(true);
 
+  // Automated transition of murais based on tempo_transicao (defaults to 10s if not set or invalid)
+  useEffect(() => {
+    const active = muralAvisos.filter((aviso: any) => {
+      if (aviso.status !== 'Publicado') return false;
+      const today = new Date().toISOString().split('T')[0];
+      if (aviso.data_inicio && today < aviso.data_inicio) return false;
+      if (aviso.data_fim && today > aviso.data_fim) return false;
+      return true;
+    });
+    
+    if (active.length <= 1) return;
+    
+    const currentAviso = active[currentMuralIndex];
+    const seconds = currentAviso?.tempo_transicao && currentAviso.tempo_transicao > 0 
+      ? currentAviso.tempo_transicao 
+      : 10;
+      
+    const timer = setTimeout(() => {
+      setCurrentMuralIndex((prevIndex) => 
+        prevIndex === active.length - 1 ? 0 : prevIndex + 1
+      );
+    }, seconds * 1000);
+    
+    return () => clearTimeout(timer);
+  }, [currentMuralIndex, muralAvisos]);
+
   // Tooltip custom styling
   const [hoveredBar, setHoveredBar] = useState<string | null>(null);
 
@@ -269,20 +295,29 @@ export default function Home() {
 
   const activeAvisos = getActiveAvisos();
 
-  const isYouTube = (url: string) => {
+  const isYouTube = (url: string | null | undefined) => {
+    if (!url) return false;
     return url.includes('youtube.com') || url.includes('youtu.be');
   };
 
-  const getYouTubeEmbedUrl = (url: string) => {
+  const getYouTubeEmbedUrl = (url: string | null | undefined) => {
+    if (!url) return null;
     let videoId = '';
     try {
-      if (url.includes('youtube.com/watch')) {
+      if (url.includes('youtube.com/shorts/')) {
+        videoId = url.split('youtube.com/shorts/')[1]?.split('?')[0] || '';
+      } else if (url.includes('youtube.com/live/')) {
+        videoId = url.split('youtube.com/live/')[1]?.split('?')[0] || '';
+      } else if (url.includes('youtube.com/watch')) {
         const urlParams = new URL(url).searchParams;
         videoId = urlParams.get('v') || '';
       } else if (url.includes('youtu.be/')) {
         videoId = url.split('youtu.be/')[1]?.split('?')[0] || '';
       } else if (url.includes('youtube.com/embed/')) {
         videoId = url.split('youtube.com/embed/')[1]?.split('?')[0] || '';
+      } else {
+        const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([^&?"\s]{11})/);
+        if (match) videoId = match[1];
       }
     } catch (err) {
       // Fallback manual parse
@@ -293,16 +328,23 @@ export default function Home() {
     return videoId ? `https://www.youtube.com/embed/${videoId}` : null;
   };
 
-  const isVimeo = (url: string) => {
+  const isVimeo = (url: string | null | undefined) => {
+    if (!url) return false;
     return url.includes('vimeo.com');
   };
 
-  const getVimeoEmbedUrl = (url: string) => {
-    const match = url.match(/vimeo\.com\/(\d+)/);
-    return match ? `https://player.vimeo.com/video/${match[1]}` : null;
+  const getVimeoEmbedUrl = (url: string | null | undefined) => {
+    if (!url) return null;
+    try {
+      const match = url.match(/vimeo\.com\/(\d+)/);
+      return match ? `https://player.vimeo.com/video/${match[1]}` : null;
+    } catch {
+      return null;
+    }
   };
 
-  const isDirectVideo = (url: string) => {
+  const isDirectVideo = (url: string | null | undefined) => {
+    if (!url) return false;
     return !!url.match(/\.(mp4|webm|ogg)$/i);
   };
 
@@ -407,7 +449,7 @@ export default function Home() {
       {/* MURAL DE AVISOS MULTIMÍDIA */}
       <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden" id="dashboard-mural-avisos">
         <div className="p-6 sm:p-8 space-y-6">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-100 dark:border-slate-800 pb-5">
+          <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-5">
             <div>
               <div className="flex items-center gap-2 text-slate-800 dark:text-white">
                 <Megaphone className="text-amber-500 shrink-0" size={18} />
@@ -415,34 +457,6 @@ export default function Home() {
               </div>
               <p className="text-slate-500 text-[11px] mt-1 font-medium">Fique por dentro das últimas novidades, vídeos e eventos da nossa congregação</p>
             </div>
-            
-            {activeAvisos.length > 1 && (
-              <div className="flex items-center gap-2">
-                <button 
-                  onClick={() => {
-                    const nextIndex = currentMuralIndex === 0 ? activeAvisos.length - 1 : currentMuralIndex - 1;
-                    setCurrentMuralIndex(nextIndex);
-                  }}
-                  className="p-1 px-2.5 rounded-lg border border-slate-205 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-950 text-slate-650 dark:text-slate-400 transition cursor-pointer"
-                  title="Aviso Anterior"
-                >
-                  <ChevronLeft size={16} />
-                </button>
-                <span className="text-xs font-bold text-slate-400 bg-slate-50 dark:bg-slate-950 px-2 py-1 rounded-md">
-                  {currentMuralIndex + 1} / {activeAvisos.length}
-                </span>
-                <button 
-                  onClick={() => {
-                    const nextIndex = currentMuralIndex === activeAvisos.length - 1 ? 0 : currentMuralIndex + 1;
-                    setCurrentMuralIndex(nextIndex);
-                  }}
-                  className="p-1 px-2.5 rounded-lg border border-slate-205 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-950 text-slate-650 dark:text-slate-400 transition cursor-pointer"
-                  title="Próximo Aviso"
-                >
-                  <ChevronRight size={16} />
-                </button>
-              </div>
-            )}
           </div>
 
           {activeAvisos.length === 0 ? (
@@ -466,10 +480,10 @@ export default function Home() {
               const hasVideoLink = item.url_midia && (isYouTube(item.url_midia) || isVimeo(item.url_midia) || isDirectVideo(item.url_midia));
 
               return (
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-stretch">
-                  {/* Media Column (Left - 7 cols) or full length if no media */}
+                <div className="flex flex-col gap-4">
+                  {/* Media Column (100% width, compact height to halve the layout footprint) */}
                   {(item.url_midia || item.arquivo_base64) && (
-                    <div className="md:col-span-7 flex flex-col justify-center bg-slate-50 dark:bg-slate-950 rounded-2xl overflow-hidden min-h-[250px] border border-slate-150 dark:border-slate-850">
+                    <div className="w-full relative h-[250px] md:h-[300px] rounded-2xl overflow-hidden bg-slate-50 dark:bg-slate-955/50 border border-slate-150 dark:border-slate-850 shadow-inner flex flex-col justify-center items-center">
                       {/* 1. YouTube Video */}
                       {item.url_midia && isYouTube(item.url_midia) && getYouTubeEmbedUrl(item.url_midia) && (
                         <div className="w-full h-0 pb-[56.25%] relative bg-black">
@@ -498,26 +512,52 @@ export default function Home() {
 
                       {/* 3. Direct HTML5 Video */}
                       {item.url_midia && isDirectVideo(item.url_midia) && (
-                        <video controls className="w-full h-full max-h-[350px] bg-black">
+                        <video controls className="w-full h-full max-h-[300px] bg-black">
                           <source src={item.url_midia} />
                           Seu navegador não suporta a tag de vídeo HTML5.
                         </video>
                       )}
 
-                      {/* 4. Image base64 Uploaded file */}
+                      {/* 4. Image base64 Uploaded file (with link overlay if present) */}
                       {!hasVideoLink && item.arquivo_base64 && item.arquivo_base64.startsWith('data:image/') && (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={item.arquivo_base64}
-                          alt={item.titulo}
-                          className="w-full h-full min-h-[250px] max-h-[350px] object-cover"
-                        />
+                        item.url_midia ? (
+                          <a
+                            href={item.url_midia}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="w-full h-full block relative group overflow-hidden cursor-pointer"
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={item.arquivo_base64}
+                              alt={item.titulo}
+                              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                            />
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-270 flex items-center justify-center">
+                              <div className="bg-amber-600 text-white font-extrabold text-xs px-4 py-2.5 rounded-xl flex items-center gap-2 shadow-lg uppercase tracking-wider">
+                                <ExternalLink size={14} />
+                                Acessar Link Anexo
+                              </div>
+                            </div>
+                            <div className="absolute bottom-3 right-3 bg-slate-955/90 backdrop-blur-sm text-amber-400 border border-amber-500/20 text-[9px] font-black uppercase tracking-widest px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 z-10">
+                              <ExternalLink size={10} />
+                              Clique para abrir o link
+                            </div>
+                          </a>
+                        ) : (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={item.arquivo_base64}
+                            alt={item.titulo}
+                            className="w-full h-full object-cover"
+                          />
+                        )
                       )}
 
                       {/* 5. PDF Uploaded file */}
                       {!hasVideoLink && item.arquivo_base64 && item.arquivo_base64.startsWith('data:application/pdf') && (
-                        <div className="p-8 text-center space-y-4 flex flex-col justify-center items-center h-full">
-                          <div className="p-4 bg-amber-50 dark:bg-amber-950/40 text-amber-600 rounded-2xl">
+                        <div className="p-8 text-center space-y-4 flex flex-col justify-center items-center h-full w-full">
+                          <div className="p-4 bg-amber-50 dark:bg-amber-955/20 text-amber-600 rounded-2xl">
                             <FileText size={36} />
                           </div>
                           <p className="text-sm font-bold text-slate-850 dark:text-white truncate max-w-md">
@@ -527,6 +567,7 @@ export default function Home() {
                             href={item.arquivo_base64}
                             download={item.arquivo_nome || 'anuncio.pdf'}
                             className="flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white font-bold py-2.5 px-6 rounded-xl shadow transition duration-200 uppercase text-xs tracking-wider cursor-pointer font-sans"
+                            onClick={(e) => e.stopPropagation()}
                           >
                             <Download size={14} /> Download PDF Anexo
                           </a>
@@ -535,16 +576,16 @@ export default function Home() {
 
                       {/* 6. Generic Link / External file */}
                       {!hasVideoLink && item.url_midia && !item.arquivo_base64 && (
-                        <div className="p-8 text-center space-y-4 flex flex-col justify-center items-center h-full">
-                          <div className="p-4 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-550 rounded-2xl">
+                        <div className="p-8 text-center space-y-4 flex flex-col justify-center items-center h-full w-full">
+                          <div className="p-4 bg-slate-100 dark:bg-slate-900 border border-slate-205 dark:border-slate-800 text-slate-550 rounded-2xl">
                             <ExternalLink size={36} />
                           </div>
-                          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Link anexado para visualização:</p>
+                          <p className="text-xs text-slate-550 font-medium">Link anexado para visualização:</p>
                           <a
                             href={item.url_midia}
                             target="_blank"
                             rel="noreferrer"
-                            className="text-amber-650 hover:underline text-sm font-extrabold max-w-md truncate"
+                            className="text-amber-653 hover:underline text-sm font-black max-w-md truncate"
                           >
                             {item.url_midia}
                           </a>
@@ -553,33 +594,48 @@ export default function Home() {
                     </div>
                   )}
 
-                  {/* Text Column (Right - 5 cols, or entire 12 cols if no media) */}
-                  <div className={`flex flex-col justify-between py-2 ${item.url_midia || item.arquivo_base64 ? 'md:col-span-5' : 'md:col-span-12'}`}>
-                    <div className="space-y-4">
-                      <div className="flex flex-wrap gap-2 items-center">
-                        <span className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest bg-amber-500 text-white px-2.5 py-1 rounded-lg">
-                          💡 Aviso Ativo
+                  {/* Below-media elements: Only the title and the transition buttons below the Mural */}
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pt-2">
+                    <h4 className="text-xl sm:text-2xl font-black font-headline text-slate-900 dark:text-white uppercase tracking-tight leading-tight flex-1 line-clamp-1">
+                      {item.titulo}
+                    </h4>
+
+                    {activeAvisos.length > 1 && (
+                      <div className="flex items-center gap-3 shrink-0">
+                        {/* Transition duration count */}
+                        <span className="text-[10px] uppercase font-black tracking-widest text-slate-400 bg-slate-50 dark:bg-slate-950 border border-slate-150 dark:border-slate-850 px-2.5 py-1.5 rounded-lg flex items-center gap-1" title="Tempo de exibição deste aviso">
+                          ⏱️ {item.tempo_transicao || 10}s
                         </span>
-                        <span className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest bg-slate-50 dark:bg-slate-950 border border-slate-150 dark:border-slate-850 text-slate-450 dark:text-slate-500 px-2 py-1 rounded-lg">
-                          <Calendar size={12} /> Até {item.data_fim ? new Date(item.data_fim + 'T00:00:00').toLocaleDateString('pt-BR') : '-'}
-                        </span>
+
+                        <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-955 border border-slate-150 dark:border-slate-850 p-1.5 rounded-xl">
+                          <button 
+                            type="button"
+                            onClick={() => {
+                              const nextIndex = currentMuralIndex === 0 ? activeAvisos.length - 1 : currentMuralIndex - 1;
+                              setCurrentMuralIndex(nextIndex);
+                            }}
+                            className="p-1 px-2.5 rounded-lg hover:bg-slate-150 dark:hover:bg-slate-850 text-slate-650 dark:text-slate-400 transition cursor-pointer"
+                            title="Aviso Anterior"
+                          >
+                            <ChevronLeft size={16} />
+                          </button>
+                          <span className="text-xs font-bold text-slate-400 px-1 select-none">
+                            {currentMuralIndex + 1} / {activeAvisos.length}
+                          </span>
+                          <button 
+                            type="button"
+                            onClick={() => {
+                              const nextIndex = currentMuralIndex === activeAvisos.length - 1 ? 0 : currentMuralIndex + 1;
+                              setCurrentMuralIndex(nextIndex);
+                            }}
+                            className="p-1 px-2.5 rounded-lg hover:bg-slate-150 dark:hover:bg-slate-850 text-slate-650 dark:text-slate-400 transition cursor-pointer"
+                            title="Próximo Aviso"
+                          >
+                            <ChevronRight size={16} />
+                          </button>
+                        </div>
                       </div>
-
-                      <h4 className="text-2xl font-black font-headline text-slate-900 dark:text-white uppercase tracking-tight leading-tight">
-                        {item.titulo}
-                      </h4>
-                      
-                      <p className="text-xs text-slate-500 font-medium leading-relaxed pt-1">
-                        Este aviso está fixado na Visão Geral durante o período de {item.data_inicio ? new Date(item.data_inicio + 'T00:00:00').toLocaleDateString('pt-BR') : '-'} até {item.data_fim ? new Date(item.data_fim + 'T00:00:00').toLocaleDateString('pt-BR') : '-'}.
-                      </p>
-                    </div>
-
-                    <div className="pt-6 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                      <span className="text-[10px] text-slate-400 font-bold uppercase">Congregação Ativa</span>
-                      <span className="text-xs font-black text-amber-600 uppercase tracking-widest">
-                        {selectedIgreja?.nome || 'Pentecostés'}
-                      </span>
-                    </div>
+                    )}
                   </div>
                 </div>
               );
