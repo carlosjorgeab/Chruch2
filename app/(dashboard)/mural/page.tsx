@@ -67,7 +67,6 @@ export default function MuralPage() {
 
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [isLocalMode, setIsLocalMode] = useState(false);
 
   // Embedded Media Helper Functions
   const isYouTube = (url: string | null | undefined) => {
@@ -136,7 +135,6 @@ export default function MuralPage() {
     try {
       setLoading(true);
       setError('');
-      setIsLocalMode(false);
 
       const { data, error: err } = await supabase
         .from('mural_avisos')
@@ -145,28 +143,14 @@ export default function MuralPage() {
         .order('created_at', { ascending: false });
 
       if (err) {
-        console.warn('Tabela mural_avisos não encontrada ou erro RPC:', err.message);
-        // Fallback to local storage
-        setIsLocalMode(true);
-        const localData = typeof window !== 'undefined' ? localStorage.getItem(`mural_avisos_${selectedIgreja.id}`) : null;
-        if (localData) {
-          setMurais(JSON.parse(localData));
-        } else {
-          setMurais([]);
-        }
+        setError('Não foi possível carregar os avisos do banco de dados: ' + err.message);
+        setMurais([]);
       } else if (data) {
         setMurais(data as MuralAviso[]);
-        if (typeof window !== 'undefined') {
-          localStorage.setItem(`mural_avisos_${selectedIgreja.id}`, JSON.stringify(data));
-        }
       }
     } catch (e: any) {
-      console.error('Erro de rede carregando avisos:', e);
-      setIsLocalMode(true);
-      const localData = typeof window !== 'undefined' ? localStorage.getItem(`mural_avisos_${selectedIgreja.id}`) : null;
-      if (localData) {
-        setMurais(JSON.parse(localData));
-      }
+      setError('Erro de rede ao conectar ao banco de dados.');
+      setMurais([]);
     } finally {
       setLoading(false);
     }
@@ -216,27 +200,13 @@ export default function MuralPage() {
       message: `Deseja realmente excluir o aviso "${titulo}" do mural? Esta ação não poderá ser desfeita.`,
       onConfirm: async () => {
         try {
-          let hasSucceeded = false;
-          if (!isLocalMode) {
-            const { error: err } = await supabase.from('mural_avisos').delete().eq('id', id);
-            if (!err) {
-              hasSucceeded = true;
-            } else {
-              console.warn('Erro ao deletar no Supabase, tentando localmente:', err.message);
-            }
+          const { error: err } = await supabase.from('mural_avisos').delete().eq('id', id);
+          if (err) {
+            setError('Não foi possível excluir o aviso do banco de dados: ' + err.message);
+          } else {
+            setSuccess('Aviso excluído com sucesso!');
+            fetchMurais();
           }
-
-          if (isLocalMode || !hasSucceeded) {
-            // Local state delete
-            const filtered = murais.filter(m => m.id !== id);
-            setMurais(filtered);
-            if (selectedIgreja && typeof window !== 'undefined') {
-              localStorage.setItem(`mural_avisos_${selectedIgreja.id}`, JSON.stringify(filtered));
-            }
-          }
-
-          setSuccess('Aviso excluído com sucesso!');
-          fetchMurais();
         } catch (e: any) {
           setError('Erro ao excluir aviso: ' + (e.message || e));
         }
@@ -307,45 +277,24 @@ export default function MuralPage() {
     };
 
     try {
-      let isSupabaseSuccess = false;
-
-      if (!isLocalMode) {
-        if (currentMural.id) {
-          const { error: err } = await supabase
-            .from('mural_avisos')
-            .update(payload)
-            .eq('id', currentMural.id);
-          if (!err) isSupabaseSuccess = true;
-          else console.warn('Supabase update failed, saving locally:', err.message);
-        } else {
-          const { error: err } = await supabase.from('mural_avisos').insert(payload);
-          if (!err) isSupabaseSuccess = true;
-          else console.warn('Supabase insert failed, saving locally:', err.message);
+      if (currentMural.id) {
+        const { error: err } = await supabase
+          .from('mural_avisos')
+          .update(payload)
+          .eq('id', currentMural.id);
+        if (err) {
+          setError('Erro ao salvar no banco de dados: ' + err.message);
+          return;
         }
-      }
-
-      if (isLocalMode || !isSupabaseSuccess) {
-        // Save to LocalState fallback
-        let updatedList: MuralAviso[] = [];
-        if (currentMural.id) {
-          updatedList = murais.map(m => m.id === currentMural.id ? { ...m, ...payload } : m);
-        } else {
-          const newLocalMural: MuralAviso = {
-            id: 'local-' + Date.now().toString(),
-            created_at: new Date().toISOString(),
-            ...payload
-          };
-          updatedList = [newLocalMural, ...murais];
-        }
-        setMurais(updatedList);
-        if (typeof window !== 'undefined') {
-          localStorage.setItem(`mural_avisos_${selectedIgreja.id}`, JSON.stringify(updatedList));
-        }
-        setSuccess('Aviso salvo com sucesso no armazenamento local do navegador!');
       } else {
-        setSuccess('Aviso salvo e publicado com sucesso!');
+        const { error: err } = await supabase.from('mural_avisos').insert(payload);
+        if (err) {
+          setError('Erro ao inserir no banco de dados: ' + err.message);
+          return;
+        }
       }
 
+      setSuccess('Aviso salvo e publicado com sucesso!');
       setIsEditing(false);
       fetchMurais();
     } catch (e: any) {

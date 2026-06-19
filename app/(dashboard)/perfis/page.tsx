@@ -15,6 +15,7 @@ type Perfil = {
 const MENU_OPTIONS = [
   { id: '/membros', label: 'Gestão de Membros' },
   { id: '/comunidades', label: 'Gestão de Comunidades' },
+  { id: '/mural', label: 'Mural de Avisos' },
   { id: '/licoes', label: 'Gestão de Lições' },
   { id: '/presencas', label: 'Controle de Presenças / Assistências' },
   { id: '/financeiro', label: 'Gestão Financeira' },

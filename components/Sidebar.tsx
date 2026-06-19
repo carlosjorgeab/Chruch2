@@ -17,7 +17,7 @@ export function Sidebar({ isOpen = false, setIsOpen }: { isOpen?: boolean, setIs
     { href: '/', icon: LayoutDashboard, label: t('menu_dashboard'), disabled: false, id: '/' },
     { href: '/membros', icon: Users, label: t('menu_membros'), disabled: false, id: '/membros' },
     { href: '/comunidades', icon: UsersRound, label: t('menu_comunidades'), disabled: false, id: '/comunidades' },
-    { href: '/mural', icon: Megaphone, label: 'Mural de Avisos', disabled: false, id: '/mural' },
+    { href: '/mural', icon: Megaphone, label: t('menu_mural'), disabled: false, id: '/mural' },
     { href: '/licoes', icon: BookOpen, label: t('menu_licoes'), disabled: false, id: '/licoes' },
     { href: '/presencas', icon: ClipboardCheck, label: t('menu_presencas'), disabled: false, id: '/presencas' },
     { href: '/financeiro', icon: Wallet, label: t('menu_financeiro'), disabled: false, id: '/financeiro' },
