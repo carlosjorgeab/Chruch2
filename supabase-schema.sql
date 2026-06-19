@@ -80,6 +80,21 @@ CREATE TABLE IF NOT EXISTS comunidades (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
+-- Tabela de Mural de Avisos
+CREATE TABLE IF NOT EXISTS mural_avisos (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id_igreja UUID REFERENCES igrejas(id) ON DELETE CASCADE,
+  titulo VARCHAR(255) NOT NULL,
+  url_midia TEXT,
+  arquivo_nome VARCHAR(255),
+  arquivo_base64 TEXT,
+  data_inicio DATE,
+  data_fim DATE,
+  status VARCHAR(20) DEFAULT 'Publicado' CHECK (status IN ('Publicado', 'Desativado')),
+  notificar_automatico BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
 -- 6. Tabela de Lições (Aulas / Escola Dominical)
 CREATE TABLE IF NOT EXISTS lecoes (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

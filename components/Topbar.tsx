@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { Search, Bell, UserCircle, ChevronDown, Building2, Settings, Users, LogOut, CheckCircle2, AlertTriangle, Calendar, Award } from 'lucide-react';
+import { Search, Bell, UserCircle, ChevronDown, Building2, Settings, Users, LogOut, CheckCircle2, AlertTriangle, Calendar, Award, Megaphone } from 'lucide-react';
 import { useIgreja } from '@/context/IgrejaContext';
 import { useAuth } from '@/context/AuthContext';
 import { Logo } from '@/components/Logo';
@@ -160,6 +160,64 @@ export function Topbar() {
           }
         }
 
+        // 5. Fetch Active Mural de Avisos
+        if (selectedIgreja?.id) {
+          try {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            const { data: notices, error: errNotices } = await supabase
+              .from('mural_avisos')
+              .select('*')
+              .eq('id_igreja', selectedIgreja.id)
+              .eq('status', 'Publicado');
+
+            if (!errNotices && notices) {
+              notices.forEach((n: any) => {
+                if (n.notificar_automatico === false) return;
+                const start = n.data_inicio ? new Date(n.data_inicio + 'T00:00:00') : null;
+                const end = n.data_fim ? new Date(n.data_fim + 'T00:00:00') : null;
+
+                if (start && start > today) return;
+                if (end && end < today) return;
+
+                list.push({
+                  id: `mural-${n.id}`,
+                  title: 'Alerta de Mural Ativo',
+                  message: `Novo comunicado publicado: "${n.titulo}"`,
+                  time: n.data_inicio ? new Date(n.data_inicio + 'T00:00:00').toLocaleDateString('pt-BR') : 'Mural',
+                  type: 'mural',
+                });
+              });
+            } else {
+              // Fallback to localStorage
+              const localData = typeof window !== 'undefined' ? localStorage.getItem(`mural_avisos_${selectedIgreja.id}`) : null;
+              if (localData) {
+                const parsed = JSON.parse(localData);
+                parsed.forEach((n: any) => {
+                  if (n.status !== 'Publicado') return;
+                  if (n.notificar_automatico === false) return;
+                  const start = n.data_inicio ? new Date(n.data_inicio + 'T00:00:00') : null;
+                  const end = n.data_fim ? new Date(n.data_fim + 'T00:00:00') : null;
+
+                  if (start && start > today) return;
+                  if (end && end < today) return;
+
+                  list.push({
+                    id: `mural-${n.id}`,
+                    title: 'Alerta de Mural Ativo',
+                    message: `Novo comunicado publicado: "${n.titulo}"`,
+                    time: n.data_inicio ? new Date(n.data_inicio + 'T00:00:00').toLocaleDateString('pt-BR') : 'Mural',
+                    type: 'mural',
+                  });
+                });
+              }
+            }
+          } catch (muralErr) {
+            console.warn('Mural notices fetch error:', muralErr);
+          }
+        }
+
         setNotifications(list);
       } catch (err) {
         console.error('Error compiling alerts:', err);
@@ -263,6 +321,7 @@ export function Topbar() {
                     if (n.type === 'birthday') { Icon = Calendar; color = 'text-pink-500 bg-pink-50 dark:bg-pink-900/20'; }
                     if (n.type === 'lesson') { Icon = Award; color = 'text-purple-500 bg-purple-50 dark:bg-purple-900/20'; }
                     if (n.type === 'balance') { Icon = AlertTriangle; color = 'text-amber-500 bg-amber-50 dark:bg-amber-900/20'; }
+                    if (n.type === 'mural') { Icon = Megaphone; color = 'text-amber-600 bg-amber-55 dark:bg-amber-950/20'; }
 
                     return (
                       <div key={n.id} className="p-3.5 hover:bg-slate-50 dark:hover:bg-slate-850/50 transition-colors flex gap-3">

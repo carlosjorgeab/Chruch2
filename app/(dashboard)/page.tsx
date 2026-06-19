@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Users, UsersRound, Wallet, BookOpen, RefreshCw, BarChart2, PieChart, TrendingUp, TrendingDown, DollarSign, Calendar } from 'lucide-react';
+import { Users, UsersRound, Wallet, BookOpen, RefreshCw, BarChart2, PieChart, TrendingUp, TrendingDown, DollarSign, Calendar, Megaphone, FileText, Video, ChevronLeft, ChevronRight, ExternalLink, Download } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useIgreja } from '@/context/IgrejaContext';
 
@@ -30,6 +30,8 @@ export default function Home() {
   const [lecoesCount, setLecoesCount] = useState<number | null>(null);
   const [entradasMesVal, setEntradasMesVal] = useState<number | null>(null);
   const [transacoes, setTransacoes] = useState<any[]>([]);
+  const [muralAvisos, setMuralAvisos] = useState<any[]>([]);
+  const [currentMuralIndex, setCurrentMuralIndex] = useState(0);
   const [loading, setLoading] = useState(true);
 
   // Tooltip custom styling
@@ -107,6 +109,26 @@ export default function Home() {
             }
           });
           setEntradasMesVal(monthEntriesSum);
+        }
+
+        // Get mural de avisos
+        const { data: muralData, error: errMural } = await supabase
+          .from('mural_avisos')
+          .select('*')
+          .eq('id_igreja', id)
+          .eq('status', 'Publicado')
+          .order('created_at', { ascending: false });
+
+        if (errMural) {
+          console.warn('Mural avisos pull skipped on dashboard:', errMural);
+          const localData = typeof window !== 'undefined' ? localStorage.getItem(`mural_avisos_${id}`) : null;
+          if (localData) {
+            setMuralAvisos(JSON.parse(localData).filter((m: any) => m.status === 'Publicado'));
+          } else {
+            setMuralAvisos([]);
+          }
+        } else if (muralData) {
+          setMuralAvisos(muralData);
         }
       } catch (err) {
         console.error('Error compiling dashboard:', err);
@@ -228,6 +250,62 @@ export default function Home() {
       .sort((a, b) => b.value - a.value);
   };
 
+  const getActiveAvisos = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    return muralAvisos.filter((m) => {
+      if (m.status !== 'Publicado') return false;
+
+      // Handle date checks
+      const start = m.data_inicio ? new Date(m.data_inicio + 'T00:00:00') : null;
+      const end = m.data_fim ? new Date(m.data_fim + 'T00:00:00') : null;
+
+      if (start && start > today) return false;
+      if (end && end < today) return false;
+      return true;
+    });
+  };
+
+  const activeAvisos = getActiveAvisos();
+
+  const isYouTube = (url: string) => {
+    return url.includes('youtube.com') || url.includes('youtu.be');
+  };
+
+  const getYouTubeEmbedUrl = (url: string) => {
+    let videoId = '';
+    try {
+      if (url.includes('youtube.com/watch')) {
+        const urlParams = new URL(url).searchParams;
+        videoId = urlParams.get('v') || '';
+      } else if (url.includes('youtu.be/')) {
+        videoId = url.split('youtu.be/')[1]?.split('?')[0] || '';
+      } else if (url.includes('youtube.com/embed/')) {
+        videoId = url.split('youtube.com/embed/')[1]?.split('?')[0] || '';
+      }
+    } catch (err) {
+      // Fallback manual parse
+      if (url.includes('v=')) {
+        videoId = url.split('v=')[1]?.split('&')[0] || '';
+      }
+    }
+    return videoId ? `https://www.youtube.com/embed/${videoId}` : null;
+  };
+
+  const isVimeo = (url: string) => {
+    return url.includes('vimeo.com');
+  };
+
+  const getVimeoEmbedUrl = (url: string) => {
+    const match = url.match(/vimeo\.com\/(\d+)/);
+    return match ? `https://player.vimeo.com/video/${match[1]}` : null;
+  };
+
+  const isDirectVideo = (url: string) => {
+    return !!url.match(/\.(mp4|webm|ogg)$/i);
+  };
+
   const cashFlowData = getCashFlowData();
   const categoryData = getCategoryData();
 
@@ -323,6 +401,190 @@ export default function Home() {
               </p>
             )}
           </div>
+        </div>
+      </div>
+
+      {/* MURAL DE AVISOS MULTIMÍDIA */}
+      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden" id="dashboard-mural-avisos">
+        <div className="p-6 sm:p-8 space-y-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-100 dark:border-slate-800 pb-5">
+            <div>
+              <div className="flex items-center gap-2 text-slate-800 dark:text-white">
+                <Megaphone className="text-amber-500 shrink-0" size={18} />
+                <h3 className="text-sm font-black uppercase tracking-wider">Mural de Avisos & Anúncios</h3>
+              </div>
+              <p className="text-slate-500 text-[11px] mt-1 font-medium">Fique por dentro das últimas novidades, vídeos e eventos da nossa congregação</p>
+            </div>
+            
+            {activeAvisos.length > 1 && (
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => {
+                    const nextIndex = currentMuralIndex === 0 ? activeAvisos.length - 1 : currentMuralIndex - 1;
+                    setCurrentMuralIndex(nextIndex);
+                  }}
+                  className="p-1 px-2.5 rounded-lg border border-slate-205 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-950 text-slate-650 dark:text-slate-400 transition cursor-pointer"
+                  title="Aviso Anterior"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+                <span className="text-xs font-bold text-slate-400 bg-slate-50 dark:bg-slate-950 px-2 py-1 rounded-md">
+                  {currentMuralIndex + 1} / {activeAvisos.length}
+                </span>
+                <button 
+                  onClick={() => {
+                    const nextIndex = currentMuralIndex === activeAvisos.length - 1 ? 0 : currentMuralIndex + 1;
+                    setCurrentMuralIndex(nextIndex);
+                  }}
+                  className="p-1 px-2.5 rounded-lg border border-slate-205 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-950 text-slate-650 dark:text-slate-400 transition cursor-pointer"
+                  title="Próximo Aviso"
+                >
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            )}
+          </div>
+
+          {activeAvisos.length === 0 ? (
+            <div className="flex flex-col md:flex-row items-center justify-between gap-6 bg-slate-50 dark:bg-slate-955/20 p-6 rounded-2xl border border-slate-100 dark:border-slate-850">
+              <div className="space-y-2 max-w-xl">
+                <span className="inline-block px-2.5 py-1 text-[9px] font-black uppercase tracking-widest bg-amber-50 dark:bg-amber-955/40 text-amber-600 rounded-lg">Bem-vindo</span>
+                <h4 className="text-lg font-bold text-slate-850 dark:text-white uppercase tracking-tight">Estamos felizes em ter você aqui!</h4>
+                <p className="text-xs text-slate-500 font-medium leading-relaxed">
+                  Não há avisos de eventos ou campanhas vinculados para o dia de hoje. Acompanhe a nossa agenda de reuniões de oração, lições da EBD e programações especiais na barra de menu ao lado. Tenha uma semana abençoada!
+                </p>
+              </div>
+              <div className="w-16 h-16 rounded-2xl bg-amber-100 dark:bg-amber-950/20 text-amber-600 flex items-center justify-center shrink-0">
+                <Megaphone size={32} />
+              </div>
+            </div>
+          ) : (
+            (() => {
+              const item = activeAvisos[currentMuralIndex] ?? activeAvisos[0];
+              if (!item) return null;
+
+              const hasVideoLink = item.url_midia && (isYouTube(item.url_midia) || isVimeo(item.url_midia) || isDirectVideo(item.url_midia));
+
+              return (
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-stretch">
+                  {/* Media Column (Left - 7 cols) or full length if no media */}
+                  {(item.url_midia || item.arquivo_base64) && (
+                    <div className="md:col-span-7 flex flex-col justify-center bg-slate-50 dark:bg-slate-950 rounded-2xl overflow-hidden min-h-[250px] border border-slate-150 dark:border-slate-850">
+                      {/* 1. YouTube Video */}
+                      {item.url_midia && isYouTube(item.url_midia) && getYouTubeEmbedUrl(item.url_midia) && (
+                        <div className="w-full h-0 pb-[56.25%] relative bg-black">
+                          <iframe
+                            src={getYouTubeEmbedUrl(item.url_midia)!}
+                            title="Player de Vídeo"
+                            className="absolute top-0 left-0 w-full h-full border-0"
+                            allowFullScreen
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          />
+                        </div>
+                      )}
+
+                      {/* 2. Vimeo Video */}
+                      {item.url_midia && isVimeo(item.url_midia) && getVimeoEmbedUrl(item.url_midia) && (
+                        <div className="w-full h-0 pb-[56.25%] relative bg-black">
+                          <iframe
+                            src={getVimeoEmbedUrl(item.url_midia)!}
+                            title="Player Vimeo"
+                            className="absolute top-0 left-0 w-full h-full border-0"
+                            allowFullScreen
+                            allow="autoplay; fullscreen; picture-in-picture"
+                          />
+                        </div>
+                      )}
+
+                      {/* 3. Direct HTML5 Video */}
+                      {item.url_midia && isDirectVideo(item.url_midia) && (
+                        <video controls className="w-full h-full max-h-[350px] bg-black">
+                          <source src={item.url_midia} />
+                          Seu navegador não suporta a tag de vídeo HTML5.
+                        </video>
+                      )}
+
+                      {/* 4. Image base64 Uploaded file */}
+                      {!hasVideoLink && item.arquivo_base64 && item.arquivo_base64.startsWith('data:image/') && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={item.arquivo_base64}
+                          alt={item.titulo}
+                          className="w-full h-full min-h-[250px] max-h-[350px] object-cover"
+                        />
+                      )}
+
+                      {/* 5. PDF Uploaded file */}
+                      {!hasVideoLink && item.arquivo_base64 && item.arquivo_base64.startsWith('data:application/pdf') && (
+                        <div className="p-8 text-center space-y-4 flex flex-col justify-center items-center h-full">
+                          <div className="p-4 bg-amber-50 dark:bg-amber-950/40 text-amber-600 rounded-2xl">
+                            <FileText size={36} />
+                          </div>
+                          <p className="text-sm font-bold text-slate-850 dark:text-white truncate max-w-md">
+                            {item.arquivo_nome || 'documento_anexo.pdf'}
+                          </p>
+                          <a
+                            href={item.arquivo_base64}
+                            download={item.arquivo_nome || 'anuncio.pdf'}
+                            className="flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white font-bold py-2.5 px-6 rounded-xl shadow transition duration-200 uppercase text-xs tracking-wider cursor-pointer font-sans"
+                          >
+                            <Download size={14} /> Download PDF Anexo
+                          </a>
+                        </div>
+                      )}
+
+                      {/* 6. Generic Link / External file */}
+                      {!hasVideoLink && item.url_midia && !item.arquivo_base64 && (
+                        <div className="p-8 text-center space-y-4 flex flex-col justify-center items-center h-full">
+                          <div className="p-4 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-550 rounded-2xl">
+                            <ExternalLink size={36} />
+                          </div>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Link anexado para visualização:</p>
+                          <a
+                            href={item.url_midia}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-amber-650 hover:underline text-sm font-extrabold max-w-md truncate"
+                          >
+                            {item.url_midia}
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Text Column (Right - 5 cols, or entire 12 cols if no media) */}
+                  <div className={`flex flex-col justify-between py-2 ${item.url_midia || item.arquivo_base64 ? 'md:col-span-5' : 'md:col-span-12'}`}>
+                    <div className="space-y-4">
+                      <div className="flex flex-wrap gap-2 items-center">
+                        <span className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest bg-amber-500 text-white px-2.5 py-1 rounded-lg">
+                          💡 Aviso Ativo
+                        </span>
+                        <span className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest bg-slate-50 dark:bg-slate-950 border border-slate-150 dark:border-slate-850 text-slate-450 dark:text-slate-500 px-2 py-1 rounded-lg">
+                          <Calendar size={12} /> Até {item.data_fim ? new Date(item.data_fim + 'T00:00:00').toLocaleDateString('pt-BR') : '-'}
+                        </span>
+                      </div>
+
+                      <h4 className="text-2xl font-black font-headline text-slate-900 dark:text-white uppercase tracking-tight leading-tight">
+                        {item.titulo}
+                      </h4>
+                      
+                      <p className="text-xs text-slate-500 font-medium leading-relaxed pt-1">
+                        Este aviso está fixado na Visão Geral durante o período de {item.data_inicio ? new Date(item.data_inicio + 'T00:00:00').toLocaleDateString('pt-BR') : '-'} até {item.data_fim ? new Date(item.data_fim + 'T00:00:00').toLocaleDateString('pt-BR') : '-'}.
+                      </p>
+                    </div>
+
+                    <div className="pt-6 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                      <span className="text-[10px] text-slate-400 font-bold uppercase">Congregação Ativa</span>
+                      <span className="text-xs font-black text-amber-600 uppercase tracking-widest">
+                        {selectedIgreja?.nome || 'Pentecostés'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()
+          )}
         </div>
       </div>
 

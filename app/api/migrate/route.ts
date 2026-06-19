@@ -112,6 +112,23 @@ export async function GET(req: NextRequest) {
       created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
     );
 
+    -- 8. Create table 'mural_avisos'
+    CREATE TABLE IF NOT EXISTS mural_avisos (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      id_igreja UUID REFERENCES igrejas(id) ON DELETE CASCADE,
+      titulo VARCHAR(255) NOT NULL,
+      url_midia TEXT,
+      arquivo_nome VARCHAR(255),
+      arquivo_base64 TEXT,
+      data_inicio DATE,
+      data_fim DATE,
+      status VARCHAR(20) DEFAULT 'Publicado' CHECK (status IN ('Publicado', 'Desativado')),
+      notificar_automatico BOOLEAN DEFAULT TRUE,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+    );
+
+    ALTER TABLE mural_avisos ADD COLUMN IF NOT EXISTS notificar_automatico BOOLEAN DEFAULT TRUE;
+
     INSERT INTO configuracoes_sistema (chave, valor, descricao)
     VALUES 
       ('translation_overrides_pt', '{}', 'Ajustes de traducción en portugués'),
