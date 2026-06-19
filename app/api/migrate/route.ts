@@ -138,6 +138,9 @@ export async function GET(req: NextRequest) {
       ('translation_overrides_es', '{}', 'Ajustes de traducción en español'),
       ('translation_overrides_en', '{}', 'Ajustes de traducción en inglés')
     ON CONFLICT (chave) DO NOTHING;
+
+    -- Force reload schema cache for PostgREST
+    NOTIFY pgrst, 'reload schema';
     `;
 
     const { data, error } = await supabase.rpc('execute_sql', {

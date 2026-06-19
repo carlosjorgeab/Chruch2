@@ -70,6 +70,35 @@ export default function MuralPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
+  const [isMigrating, setIsMigrating] = useState(false);
+  const [migrationError, setMigrationError] = useState('');
+  const [migrationSuccess, setMigrationSuccess] = useState('');
+
+  const handleRunMigration = async () => {
+    try {
+      setIsMigrating(true);
+      setMigrationError('');
+      setMigrationSuccess('');
+      
+      const res = await fetch('/api/migrate');
+      const data = await res.json();
+      
+      if (data.success) {
+        setMigrationSuccess('Migração concluída com sucesso! Tabela mural_avisos criada e schema cache recarregado. Buscando mural...');
+        setError(''); // Clear the main query error
+        setTimeout(() => {
+          fetchMurais();
+        }, 1500);
+      } else {
+        setMigrationError(data.error || 'Erro desconhecido ao tentar migrar.');
+      }
+    } catch (err: any) {
+      setMigrationError('Erro de rede: ' + err.message);
+    } finally {
+      setIsMigrating(false);
+    }
+  };
+
   // Embedded Media Helper Functions
   const isYouTube = (url: string | null | undefined) => {
     if (!url) return false;
@@ -405,8 +434,121 @@ export default function MuralPage() {
       </div>
 
       {error && (
-        <div className="p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl text-red-600 dark:text-red-400 font-bold text-sm">
-          {error}
+        <div className="space-y-4">
+          <div className="p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl text-red-600 dark:text-red-400 font-bold text-sm">
+            {error}
+          </div>
+          
+          {(error.toLowerCase().includes('mural_avisos') || error.toLowerCase().includes('schema cache')) && (
+            <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 mt-4 space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-600 flex items-center justify-center shrink-0">
+                  <Megaphone size={20} />
+                </div>
+                <div>
+                  <h4 className="text-base font-bold text-slate-900 dark:text-white">A tabela 'mural_avisos' está faltando ou o schema está desatualizado!</h4>
+                  <p className="text-slate-500 text-xs mt-1">
+                    Essa tela necessita que a tabela <code className="bg-slate-200 dark:bg-slate-900 px-1 py-0.5 rounded text-amber-700">mural_avisos</code> exista em seu Supabase. Como você possui uma base de dados já configurada anteriormente, precisamos rodar uma migração rápida de banco de dados ou realizá-la manualmente.
+                  </p>
+                </div>
+              </div>
+
+              {/* Botão para migração automática */}
+              <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-850 rounded-xl p-4 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h5 className="text-sm font-bold text-slate-800 dark:text-slate-200">🛠️ Solução Rápida: Atualizar Automaticamente</h5>
+                    <p className="text-xs text-slate-500">Tenta criar a tabela e reinicializar o cache de schemas de forma automática.</p>
+                  </div>
+                  <button
+                    onClick={handleRunMigration}
+                    disabled={isMigrating}
+                    className="flex items-center gap-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white font-bold py-2 px-4 rounded-lg shadow-sm transition text-xs uppercase tracking-wider cursor-pointer"
+                  >
+                    {isMigrating ? (
+                      <>
+                        <RefreshCw size={14} className="animate-spin" />
+                        Migrando...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw size={14} />
+                        Executar Migração
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {migrationError && (
+                  <div className="p-3 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/30 rounded-lg text-red-600 dark:text-red-400 text-xs">
+                    <strong>Erro na migração automática:</strong> {migrationError}
+                    <p className="mt-1 text-[10px] text-slate-500">Sua conta do Supabase pode não ter a função RPC <code className="bg-red-100 dark:bg-red-950 px-1 py-0.2 rounded">execute_sql</code> ativa. Por favor, utilize a solução manual abaixo.</p>
+                  </div>
+                )}
+
+                {migrationSuccess && (
+                  <div className="p-3 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900/30 rounded-lg text-green-600 dark:text-green-400 text-xs">
+                    {migrationSuccess}
+                  </div>
+                )}
+              </div>
+
+              {/* Solução manual com instruções e SQL pronto */}
+              <div className="space-y-2">
+                <h5 className="text-xs font-black text-slate-400 uppercase tracking-widest">📋 Solução Manual (Se a automática falhar)</h5>
+                
+                <div className="text-xs text-slate-600 dark:text-slate-400 space-y-1 bg-white dark:bg-slate-900 p-4 border border-slate-150 dark:border-slate-850 rounded-xl">
+                  <p>1. Acesse o painel do seu Supabase em <a href="https://supabase.com/dashboard" target="_blank" rel="noopener noreferrer" className="text-amber-600 font-bold hover:underline font-mono">supabase.com/dashboard</a></p>
+                  <p>2. Clique em <strong>SQL Editor</strong> no menu lateral esquerdo (ícone <code className="bg-slate-150 dark:bg-slate-800 px-1 rounded font-bold">SQL</code>).</p>
+                  <p>3. Clique em <strong>"New query"</strong> para abrir uma aba de comandos.</p>
+                  <p>4. Copie o comando SQL abaixo, cole no editor e clique em <strong>Run</strong> (Executar) no canto inferior direito.</p>
+                </div>
+
+                <div className="relative">
+                  <textarea
+                    readOnly
+                    value={`-- 1. Criar a tabela 'mural_avisos'
+CREATE TABLE IF NOT EXISTS public.mural_avisos (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id_igreja UUID REFERENCES public.igrejas(id) ON DELETE CASCADE,
+  titulo VARCHAR(255) NOT NULL,
+  url_midia TEXT,
+  arquivo_nome VARCHAR(255),
+  arquivo_base64 TEXT,
+  data_inicio DATE,
+  data_fim DATE,
+  status VARCHAR(20) DEFAULT 'Publicado' CHECK (status IN ('Publicado', 'Desativado')),
+  notificar_automatico BOOLEAN DEFAULT TRUE,
+  tempo_transicao INT DEFAULT 10,
+  ordem INT DEFAULT 0,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 2. Habilitar colunas necessárias caso a tabela já exista mas esteja desatualizada
+ALTER TABLE public.mural_avisos ADD COLUMN IF NOT EXISTS notificar_automatico BOOLEAN DEFAULT TRUE;
+ALTER TABLE public.mural_avisos ADD COLUMN IF NOT EXISTS tempo_transicao INT DEFAULT 10;
+ALTER TABLE public.mural_avisos ADD COLUMN IF NOT EXISTS ordem INT DEFAULT 0;
+
+-- 3. Forçar o Supabase a atualizar o cache de esquemas (MUITO IMPORTANTE!)
+NOTIFY pgrst, 'reload schema';`}
+                    rows={12}
+                    className="w-full font-mono text-[11px] bg-slate-900 border border-slate-800 text-slate-300 p-4 rounded-xl focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      const txt = (e.currentTarget.previousSibling as HTMLTextAreaElement).value;
+                      navigator.clipboard.writeText(txt);
+                      alert('Código SQL copiado para a área de transferência!');
+                    }}
+                    className="absolute top-3 right-3 bg-slate-800 hover:bg-slate-750 text-white font-bold py-1 px-2.5 rounded text-[10px] uppercase cursor-pointer"
+                  >
+                    Copiar SQL
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
