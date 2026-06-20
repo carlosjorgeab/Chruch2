@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { useConfirm } from '@/context/ConfirmContext';
 import { Plus, Edit2, Trash2, Save, X, Building, ShieldAlert, AlertTriangle } from 'lucide-react';
+import { formatCNPJ, formatTelefone, validateCNPJ } from '@/lib/masks';
 
 type Igreja = {
   id: string;
@@ -231,6 +232,13 @@ export default function IgrejasPage() {
       return;
     }
 
+    if (currentIgreja.cnpj && currentIgreja.cnpj.trim() !== '') {
+      if (!validateCNPJ(currentIgreja.cnpj)) {
+        setError('O CNPJ informado é inválido. Por favor, verifique os dígitos.');
+        return;
+      }
+    }
+
     const slugToSave = (currentIgreja.slug || generateUniqueSlug(currentIgreja.nome, currentIgreja.id))
       .toLowerCase()
       .trim()
@@ -430,7 +438,7 @@ export default function IgrejasPage() {
                 <input
                   type="text"
                   value={currentIgreja.cnpj || ''}
-                  onChange={(e) => setCurrentIgreja({ ...currentIgreja, cnpj: e.target.value })}
+                  onChange={(e) => setCurrentIgreja({ ...currentIgreja, cnpj: formatCNPJ(e.target.value) })}
                   className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-semibold"
                   placeholder="00.000.000/0001-00"
                 />
@@ -443,8 +451,8 @@ export default function IgrejasPage() {
                 <input
                   type="text"
                   value={currentIgreja.telefone || ''}
-                  onChange={(e) => setCurrentIgreja({ ...currentIgreja, telefone: e.target.value })}
-                  className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-semibold"
+                  onChange={(e) => setCurrentIgreja({ ...currentIgreja, telefone: formatTelefone(e.target.value) })}
+                  className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-100 dark:text-white focus:border-amber-500 transition-all outline-none font-semibold"
                   placeholder="(00) 00000-0000"
                 />
               </div>

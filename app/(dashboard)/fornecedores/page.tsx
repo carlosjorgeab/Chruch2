@@ -6,6 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useIgreja } from '@/context/IgrejaContext';
 import { useConfirm } from '@/context/ConfirmContext';
 import { Plus, Edit2, Trash2, Save, Search, Users, ExternalLink, Briefcase, AlertCircle } from 'lucide-react';
+import { formatCPF_CNPJ, formatTelefone, validateCPF_CNPJ } from '@/lib/masks';
 
 type Fornecedor = {
   id: string;
@@ -73,6 +74,13 @@ export default function FornecedoresPage() {
     if (!selectedIgreja) {
       setError('Selecione uma igreja no menu superior para salvar.');
       return;
+    }
+
+    if (currentFornecedor.cpf_cnpj && currentFornecedor.cpf_cnpj.trim() !== '') {
+      if (!validateCPF_CNPJ(currentFornecedor.cpf_cnpj)) {
+        setError('O CPF ou CNPJ informado é inválido. Por favor, verifique os dígitos.');
+        return;
+      }
     }
 
     try {
@@ -234,7 +242,7 @@ export default function FornecedoresPage() {
                 <input 
                   type="text" 
                   value={currentFornecedor.cpf_cnpj || ''} 
-                  onChange={(e) => setCurrentFornecedor({...currentFornecedor, cpf_cnpj: e.target.value})}
+                  onChange={(e) => setCurrentFornecedor({...currentFornecedor, cpf_cnpj: formatCPF_CNPJ(e.target.value)})}
                   className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500 outline-none"
                   placeholder="00.000.000/0001-00 ou 000.000.000-00"
                 />
@@ -245,7 +253,7 @@ export default function FornecedoresPage() {
                 <input 
                   type="text" 
                   value={currentFornecedor.telefone || ''} 
-                  onChange={(e) => setCurrentFornecedor({...currentFornecedor, telefone: e.target.value})}
+                  onChange={(e) => setCurrentFornecedor({...currentFornecedor, telefone: formatTelefone(e.target.value)})}
                   className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500 outline-none"
                   placeholder="(00) 00000-0000"
                 />

@@ -8,6 +8,7 @@ import { useConfirm } from '@/context/ConfirmContext';
 import { Plus, Edit2, Trash2, Save, X, Search, Check, RefreshCw, UserCheck, FileText, Calendar, Printer } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { formatCPF, formatTelefone, formatCEP, validateCPF } from '@/lib/masks';
 
 type Membro = {
   id: string;
@@ -72,7 +73,6 @@ export default function MembrosPage() {
     endereco: '',
     bairro: '',
     cidade: '',
-    estado: '',
     id_uf: '',
     cep: '',
     pais: 'Brasil',
@@ -168,7 +168,7 @@ export default function MembrosPage() {
       endereco: '',
       bairro: '',
       cidade: '',
-      estado: '',
+      id_uf: '',
       cep: '',
       pais: 'Brasil',
       recepcao: 'Batismo',
@@ -209,6 +209,13 @@ export default function MembrosPage() {
       return;
     }
 
+    if (currentMembro.cpf && currentMembro.cpf.trim() !== '') {
+      if (!validateCPF(currentMembro.cpf)) {
+        setError('O CPF informado é inválido. Por favor, verifique os dígitos.');
+        return;
+      }
+    }
+
     const payload = {
       id_igreja: selectedIgreja.id,
       nome: currentMembro.nome,
@@ -227,7 +234,6 @@ export default function MembrosPage() {
       endereco: currentMembro.endereco || null,
       bairro: currentMembro.bairro || null,
       cidade: currentMembro.cidade || null,
-      estado: currentMembro.estado || null,
       id_uf: currentMembro.id_uf || null,
       cep: currentMembro.cep || null,
       pais: currentMembro.pais || null,
@@ -598,6 +604,10 @@ export default function MembrosPage() {
   const filteredMembros = membros.filter(m => {
     // a) Descrição: Pesquisa em todos os campos
     const searchLower = search.toLowerCase();
+    const ufInfoObj = ufs.find(u => u.id === m.id_uf);
+    const ufNome = ufInfoObj ? ufInfoObj.nome : '';
+    const ufSigla = ufInfoObj ? ufInfoObj.sigla : '';
+
     const matchesSearch = 
       m.nome.toLowerCase().includes(searchLower) || 
       (m.email && m.email.toLowerCase().includes(searchLower)) ||
@@ -607,7 +617,8 @@ export default function MembrosPage() {
       (m.endereco && m.endereco.toLowerCase().includes(searchLower)) ||
       (m.bairro && m.bairro.toLowerCase().includes(searchLower)) ||
       (m.cidade && m.cidade.toLowerCase().includes(searchLower)) ||
-      (m.estado && m.estado.toLowerCase().includes(searchLower)) ||
+      (ufNome && ufNome.toLowerCase().includes(searchLower)) ||
+      (ufSigla && ufSigla.toLowerCase().includes(searchLower)) ||
       (m.recepcao && m.recepcao.toLowerCase().includes(searchLower));
 
     // Filter status
@@ -724,7 +735,7 @@ export default function MembrosPage() {
               <input
                 type="text"
                 value={currentMembro.cpf || ''}
-                onChange={(e) => setCurrentMembro({ ...currentMembro, cpf: e.target.value })}
+                onChange={(e) => setCurrentMembro({ ...currentMembro, cpf: formatCPF(e.target.value) })}
                 className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-semibold"
                 placeholder="000.000.000-00"
               />
@@ -833,7 +844,7 @@ export default function MembrosPage() {
               <input
                 type="text"
                 value={currentMembro.telefone || ''}
-                onChange={(e) => setCurrentMembro({ ...currentMembro, telefone: e.target.value })}
+                onChange={(e) => setCurrentMembro({ ...currentMembro, telefone: formatTelefone(e.target.value) })}
                 className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-semibold"
                 placeholder="(00) 90000-0000"
               />
@@ -846,7 +857,7 @@ export default function MembrosPage() {
               <input
                 type="text"
                 value={currentMembro.cep || ''}
-                onChange={(e) => setCurrentMembro({ ...currentMembro, cep: e.target.value })}
+                onChange={(e) => setCurrentMembro({ ...currentMembro, cep: formatCEP(e.target.value) })}
                 className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-semibold"
                 placeholder="00000-000"
               />
@@ -899,11 +910,9 @@ export default function MembrosPage() {
                 value={currentMembro.id_uf || ''}
                 onChange={(e) => {
                   const selectedId_uf = e.target.value;
-                  const foundUf = ufs.find(u => u.id === selectedId_uf);
                   setCurrentMembro({
                     ...currentMembro,
-                    id_uf: selectedId_uf,
-                    estado: foundUf ? foundUf.sigla : ''
+                    id_uf: selectedId_uf
                   });
                 }}
                 className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-bold"

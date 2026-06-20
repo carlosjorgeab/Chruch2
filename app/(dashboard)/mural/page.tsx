@@ -64,7 +64,8 @@ export default function MuralPage() {
     data_fim: '',
     status: 'Publicado',
     notificar_automatico: true,
-    tempo_transicao: 10
+    tempo_transicao: 10,
+    ordem: 0
   });
 
   const [error, setError] = useState('');
@@ -263,7 +264,8 @@ export default function MuralPage() {
     setCurrentMural({
       ...mural,
       notificar_automatico: mural.notificar_automatico !== false,
-      tempo_transicao: mural.tempo_transicao ?? 10
+      tempo_transicao: mural.tempo_transicao ?? 10,
+      ordem: mural.ordem ?? 0
     });
     setIsEditing(true);
     setError('');
@@ -291,7 +293,8 @@ export default function MuralPage() {
       data_fim: nextWeekStr,
       status: 'Publicado',
       notificar_automatico: true,
-      tempo_transicao: 10
+      tempo_transicao: 10,
+      ordem: 0
     });
     setIsEditing(true);
     setError('');
@@ -413,7 +416,8 @@ export default function MuralPage() {
       data_fim: currentMural.data_fim || null,
       status: currentMural.status || 'Publicado',
       notificar_automatico: currentMural.notificar_automatico !== false,
-      tempo_transicao: currentMural.tempo_transicao || 10
+      tempo_transicao: currentMural.tempo_transicao || 10,
+      ordem: currentMural.ordem ?? 0
     };
 
     try {
@@ -761,22 +765,42 @@ NOTIFY pgrst, 'reload schema';`}
               </div>
             </div>
 
-            <div>
-              <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 ml-1">
-                Tempo de Transição (segundos)
-              </label>
-              <div className="relative">
-                <RefreshCw size={18} className="absolute left-3 top-3.5 text-slate-400 font-bold animate-spin-slow" />
-                <input
-                  type="number"
-                  min="2"
-                  max="300"
-                  required
-                  value={currentMural.tempo_transicao || 10}
-                  onChange={(e) => setCurrentMural({ ...currentMural, tempo_transicao: parseInt(e.target.value) || 10 })}
-                  className="w-full pl-10 pr-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-850 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-bold"
-                  placeholder="Ex: 10"
-                />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 ml-1">
+                  Tempo de Transição (segundos)
+                </label>
+                <div className="relative">
+                  <RefreshCw size={18} className="absolute left-3 top-3.5 text-slate-400 font-bold animate-spin-slow" />
+                  <input
+                    type="number"
+                    min="2"
+                    max="300"
+                    required
+                    value={currentMural.tempo_transicao || 10}
+                    onChange={(e) => setCurrentMural({ ...currentMural, tempo_transicao: parseInt(e.target.value) || 10 })}
+                    className="w-full pl-10 pr-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-850 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-bold"
+                    placeholder="Ex: 10"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 ml-1">
+                  Ordem de Exibição / Sequência
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min="0"
+                    max="1000"
+                    required
+                    value={currentMural.ordem ?? 0}
+                    onChange={(e) => setCurrentMural({ ...currentMural, ordem: parseInt(e.target.value) || 0 })}
+                    className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-850 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-bold"
+                    placeholder="Ex: 0"
+                  />
+                </div>
               </div>
             </div>
 
