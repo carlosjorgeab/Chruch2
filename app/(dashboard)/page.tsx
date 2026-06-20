@@ -579,7 +579,7 @@ export default function Home() {
                               <img
                                 src={item.arquivo_base64}
                                 alt={item.titulo}
-                                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                                className="w-full h-full object-contain transition-transform duration-300 group-hover:scale-[1.01]"
                               />
                               <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-270 flex items-center justify-center">
                                 <div className="bg-amber-600 text-white font-extrabold text-[10px] px-3 py-2 rounded-xl flex items-center gap-1.5 shadow-lg uppercase tracking-wider">
@@ -597,28 +597,35 @@ export default function Home() {
                             <img
                               src={item.arquivo_base64}
                               alt={item.titulo}
-                              className="w-full h-full object-cover"
+                              className="w-full h-full object-contain"
                             />
                           )
                         )}
 
-                        {/* 5. PDF Uploaded file */}
+                        {/* 5. PDF Uploaded file - Shows full 1st page inline */}
                         {!hasVideoLink && item.arquivo_base64 && item.arquivo_base64.startsWith('data:application/pdf') && (
-                          <div className="p-4 text-center space-y-2 flex flex-col justify-center items-center h-full w-full">
-                            <div className="p-2.5 bg-amber-50 dark:bg-amber-955/20 text-amber-600 rounded-xl">
-                              <FileText size={24} />
-                            </div>
-                            <p className="text-[11px] font-bold text-slate-850 dark:text-white truncate max-w-[200px]">
-                              {item.arquivo_nome || 'documento_anexo.pdf'}
-                            </p>
-                            <a
-                              href={item.arquivo_base64}
-                              download={item.arquivo_nome || 'anuncio.pdf'}
-                              className="flex items-center gap-1 bg-amber-600 hover:bg-amber-700 text-white font-bold py-1.5 px-4 rounded-lg shadow transition duration-200 uppercase text-[9px] tracking-wider cursor-pointer font-sans"
-                              onClick={(e) => e.stopPropagation()}
+                          <div className="w-full h-full relative overflow-hidden bg-slate-100 dark:bg-slate-950 flex justify-center items-center">
+                            <object
+                              data={`${item.arquivo_base64}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
+                              type="application/pdf"
+                              className="w-full h-full border-0 absolute inset-0"
                             >
-                              <Download size={10} /> Download PDF
-                            </a>
+                              <iframe
+                                src={`${item.arquivo_base64}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
+                                title={item.arquivo_nome || 'PDF'}
+                                className="w-full h-full border-0 absolute inset-0"
+                              />
+                            </object>
+                            <div className="absolute bottom-2 right-2 flex items-center gap-1 z-20">
+                              <a
+                                href={item.arquivo_base64}
+                                download={item.arquivo_nome || 'anuncio.pdf'}
+                                className="flex items-center gap-1 bg-amber-600 hover:bg-amber-700 text-white font-black py-1 px-2.5 rounded-lg shadow-md transition duration-200 uppercase text-[8px] tracking-wider cursor-pointer font-sans"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <Download size={8} /> Baixar PDF
+                              </a>
+                            </div>
                           </div>
                         )}
 

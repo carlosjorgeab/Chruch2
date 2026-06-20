@@ -21,6 +21,17 @@ type Membro = {
   batizado_espirito: boolean;
   cargo: string | null;
   foto_url: string | null;
+  cpf: string | null;
+  sexo: string | null;
+  estado_civil: string | null;
+  escolaridade: string | null;
+  endereco: string | null;
+  bairro: string | null;
+  cidade: string | null;
+  estado: string | null;
+  cep: string | null;
+  pais: string | null;
+  recepcao: string | null;
 };
 
 export default function MembrosPage() {
@@ -32,6 +43,8 @@ export default function MembrosPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('todos');
+  const [sexoFilter, setSexoFilter] = useState<string>('todos');
+  const [estadoCivilFilter, setEstadoCivilFilter] = useState<string>('todos');
 
   const [currentMembro, setCurrentMembro] = useState<Partial<Membro>>({
     nome: '',
@@ -43,6 +56,17 @@ export default function MembrosPage() {
     batizado_espirito: false,
     cargo: 'Membro',
     foto_url: '',
+    cpf: '',
+    sexo: 'Masculino',
+    estado_civil: 'Solteiro(a)',
+    escolaridade: 'Ensino Médio Completo',
+    endereco: '',
+    bairro: '',
+    cidade: '',
+    estado: '',
+    cep: '',
+    pais: 'Brasil',
+    recepcao: 'Batismo',
   });
 
   const [error, setError] = useState('');
@@ -109,6 +133,17 @@ export default function MembrosPage() {
       batizado_espirito: false,
       cargo: 'Membro',
       foto_url: '',
+      cpf: '',
+      sexo: 'Masculino',
+      estado_civil: 'Solteiro(a)',
+      escolaridade: 'Ensino Médio Completo',
+      endereco: '',
+      bairro: '',
+      cidade: '',
+      estado: '',
+      cep: '',
+      pais: 'Brasil',
+      recepcao: 'Batismo',
     });
     setIsEditing(true);
     setError('');
@@ -157,6 +192,17 @@ export default function MembrosPage() {
       batizado_espirito: !!currentMembro.batizado_espirito,
       cargo: currentMembro.cargo || 'Membro',
       foto_url: currentMembro.foto_url || null,
+      cpf: currentMembro.cpf || null,
+      sexo: currentMembro.sexo || null,
+      estado_civil: currentMembro.estado_civil || null,
+      escolaridade: currentMembro.escolaridade || null,
+      endereco: currentMembro.endereco || null,
+      bairro: currentMembro.bairro || null,
+      cidade: currentMembro.cidade || null,
+      estado: currentMembro.estado || null,
+      cep: currentMembro.cep || null,
+      pais: currentMembro.pais || null,
+      recepcao: currentMembro.recepcao || null,
     };
 
     try {
@@ -521,12 +567,30 @@ export default function MembrosPage() {
   };
 
   const filteredMembros = membros.filter(m => {
-    const matchesSearch = m.nome.toLowerCase().includes(search.toLowerCase()) || 
-      (m.email && m.email.toLowerCase().includes(search.toLowerCase())) ||
-      (m.cargo && m.cargo.toLowerCase().includes(search.toLowerCase()));
-    
-    if (statusFilter === 'todos') return matchesSearch;
-    return matchesSearch && m.status === statusFilter;
+    // a) Descrição: Pesquisa em todos os campos
+    const searchLower = search.toLowerCase();
+    const matchesSearch = 
+      m.nome.toLowerCase().includes(searchLower) || 
+      (m.email && m.email.toLowerCase().includes(searchLower)) ||
+      (m.cargo && m.cargo.toLowerCase().includes(searchLower)) ||
+      (m.cpf && m.cpf.toLowerCase().includes(searchLower)) ||
+      (m.telefone && m.telefone.toLowerCase().includes(searchLower)) ||
+      (m.endereco && m.endereco.toLowerCase().includes(searchLower)) ||
+      (m.bairro && m.bairro.toLowerCase().includes(searchLower)) ||
+      (m.cidade && m.cidade.toLowerCase().includes(searchLower)) ||
+      (m.estado && m.estado.toLowerCase().includes(searchLower)) ||
+      (m.recepcao && m.recepcao.toLowerCase().includes(searchLower));
+
+    // Filter status
+    const matchesStatus = statusFilter === 'todos' || m.status === statusFilter;
+
+    // Filter Sexo
+    const matchesSexo = sexoFilter === 'todos' || m.sexo === sexoFilter;
+
+    // Filter Estado Civil
+    const matchesEstadoCivil = estadoCivilFilter === 'todos' || m.estado_civil === estadoCivilFilter;
+
+    return matchesSearch && matchesStatus && matchesSexo && matchesEstadoCivil;
   });
 
   return (
@@ -589,6 +653,11 @@ export default function MembrosPage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Secção I: Identificação */}
+            <div className="md:col-span-2 border-b border-slate-100 dark:border-slate-700/80 pb-2">
+              <h4 className="text-xs font-black uppercase tracking-widest text-[#E4A232]">I. Identificação Básica</h4>
+            </div>
+
             <div>
               <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
                 Nome Completo *
@@ -599,8 +668,104 @@ export default function MembrosPage() {
                 value={currentMembro.nome || ''}
                 onChange={(e) => setCurrentMembro({ ...currentMembro, nome: e.target.value })}
                 className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-bold"
-                placeholder="Ex Nome do Membro"
+                placeholder="Ex. Nome do Membro"
               />
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
+                CPF (Opcional)
+              </label>
+              <input
+                type="text"
+                value={currentMembro.cpf || ''}
+                onChange={(e) => setCurrentMembro({ ...currentMembro, cpf: e.target.value })}
+                className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-semibold"
+                placeholder="000.000.000-00"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
+                Sexo *
+              </label>
+              <select
+                value={currentMembro.sexo || 'Masculino'}
+                onChange={(e) => setCurrentMembro({ ...currentMembro, sexo: e.target.value })}
+                className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-bold"
+              >
+                <option value="Masculino">Masculino</option>
+                <option value="Feminino">Feminino</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
+                Estado Civil *
+              </label>
+              <select
+                value={currentMembro.estado_civil || 'Solteiro(a)'}
+                onChange={(e) => setCurrentMembro({ ...currentMembro, estado_civil: e.target.value })}
+                className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-bold"
+              >
+                <option value="Solteiro(a)">Solteiro(a)</option>
+                <option value="Casado(a)">Casado(a)</option>
+                <option value="Divorciado(a)">Divorciado(a)</option>
+                <option value="Viúvo(a)">Viúvo(a)</option>
+                <option value="Separado(a)">Separado(a)</option>
+                <option value="União Estável">União Estável</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
+                Escolaridade *
+              </label>
+              <select
+                value={currentMembro.escolaridade || 'Ensino Médio Completo'}
+                onChange={(e) => setCurrentMembro({ ...currentMembro, escolaridade: e.target.value })}
+                className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-bold"
+              >
+                <option value="Analfabeto">Analfabeto</option>
+                <option value="Ensino Fundamental Incompleto">Ensino Fundamental Incompleto</option>
+                <option value="Ensino Fundamental Completo">Ensino Fundamental Completo</option>
+                <option value="Ensino Médio Incompleto">Ensino Médio Incompleto</option>
+                <option value="Ensino Médio Completo">Ensino Médio Completo</option>
+                <option value="Ensino Técnico">Ensino Técnico</option>
+                <option value="Ensino Superior Incompleto">Ensino Superior Incompleto</option>
+                <option value="Ensino Superior Completo">Ensino Superior Completo</option>
+                <option value="Pós-Graduação">Pós-Graduação (Especialização / Mestrado / Doutorado)</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
+                Data de Nascimento
+              </label>
+              <input
+                type="date"
+                value={currentMembro.data_nascimento || ''}
+                onChange={(e) => setCurrentMembro({ ...currentMembro, data_nascimento: e.target.value })}
+                className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-semibold"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
+                Foto de Perfil (URL Opcional)
+              </label>
+              <input
+                type="text"
+                value={currentMembro.foto_url || ''}
+                onChange={(e) => setCurrentMembro({ ...currentMembro, foto_url: e.target.value })}
+                className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-semibold"
+                placeholder="Link da imagem para foto"
+              />
+            </div>
+
+            {/* Secção II: Contato e Endereço */}
+            <div className="md:col-span-2 border-b border-slate-100 dark:border-slate-700/80 pt-4 pb-2">
+              <h4 className="text-xs font-black uppercase tracking-widest text-[#E4A232]">II. Contato e Endereço</h4>
             </div>
 
             <div>
@@ -631,14 +796,85 @@ export default function MembrosPage() {
 
             <div>
               <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
-                Data de Nascimento
+                CEP (Opcional)
               </label>
               <input
-                type="date"
-                value={currentMembro.data_nascimento || ''}
-                onChange={(e) => setCurrentMembro({ ...currentMembro, data_nascimento: e.target.value })}
+                type="text"
+                value={currentMembro.cep || ''}
+                onChange={(e) => setCurrentMembro({ ...currentMembro, cep: e.target.value })}
                 className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-semibold"
+                placeholder="00000-000"
               />
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
+                Endereço Residencial (Opcional)
+              </label>
+              <input
+                type="text"
+                value={currentMembro.endereco || ''}
+                onChange={(e) => setCurrentMembro({ ...currentMembro, endereco: e.target.value })}
+                className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-semibold"
+                placeholder="Rua, Número, Complemento"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
+                Bairro
+              </label>
+              <input
+                type="text"
+                value={currentMembro.bairro || ''}
+                onChange={(e) => setCurrentMembro({ ...currentMembro, bairro: e.target.value })}
+                className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-semibold"
+                placeholder="Ex. Bairro"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
+                Cidade
+              </label>
+              <input
+                type="text"
+                value={currentMembro.cidade || ''}
+                onChange={(e) => setCurrentMembro({ ...currentMembro, cidade: e.target.value })}
+                className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-semibold"
+                placeholder="Ex. Cidade"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
+                Estado
+              </label>
+              <input
+                type="text"
+                value={currentMembro.estado || ''}
+                onChange={(e) => setCurrentMembro({ ...currentMembro, estado: e.target.value })}
+                className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-semibold"
+                placeholder="Ex. SP"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
+                País
+              </label>
+              <input
+                type="text"
+                value={currentMembro.pais || 'Brasil'}
+                onChange={(e) => setCurrentMembro({ ...currentMembro, pais: e.target.value })}
+                className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-semibold"
+                placeholder="Ex. Brasil"
+              />
+            </div>
+
+            {/* Secção III: Recepção e Eclesiástico */}
+            <div className="md:col-span-2 border-b border-slate-100 dark:border-slate-700/80 pt-4 pb-2">
+              <h4 className="text-xs font-black uppercase tracking-widest text-[#E4A232]">III. Recepção e Batismo</h4>
             </div>
 
             <div>
@@ -678,20 +914,37 @@ export default function MembrosPage() {
               </select>
             </div>
 
-            <div>
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
-                Foto de Perfil (URL Opcional)
+            {/* Quadro Recepção com as 3 opções da igreja */}
+            <div className="p-4 border-2 border-slate-100 dark:border-slate-700 rounded-2xl bg-slate-50/50 dark:bg-slate-900/30 space-y-3">
+              <label className="block text-[10px] font-black text-[#E4A232] uppercase tracking-widest ml-1 font-bold">
+                Quadro para Recepção
               </label>
-              <input
-                type="text"
-                value={currentMembro.foto_url || ''}
-                onChange={(e) => setCurrentMembro({ ...currentMembro, foto_url: e.target.value })}
-                className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-semibold"
-                placeholder="Link da imagem para foto"
-              />
+              <div className="flex flex-col gap-2">
+                {[
+                  { key: 'Jurisdição', value: '1) Jurisdição' },
+                  { key: 'Batismo', value: '2) Batismo' },
+                  { key: 'Transferência', value: '3) Transferência' }
+                ].map((item) => (
+                  <label key={item.key} className="flex items-center gap-2 cursor-pointer text-sm font-semibold text-slate-700 dark:text-slate-300">
+                    <input
+                      type="radio"
+                      name="recepcao"
+                      value={item.key}
+                      checked={(currentMembro.recepcao || 'Batismo') === item.key}
+                      onChange={() => setCurrentMembro({ ...currentMembro, recepcao: item.key })}
+                      className="w-4 h-4 text-amber-600 border-slate-300 focus:ring-amber-500 cursor-pointer"
+                    />
+                    <span>{item.value}</span>
+                  </label>
+                ))}
+              </div>
             </div>
 
-            <div className="flex flex-col justify-center space-y-4 md:col-span-1 border border-slate-100 dark:border-slate-700/50 p-4 rounded-2xl">
+            {/* Batizado nas Águas e Espírito Santo */}
+            <div className="flex flex-col justify-center space-y-4 border border-slate-100 dark:border-slate-700/50 p-4 rounded-2xl bg-slate-50/20">
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                Casas de Sacramento / Histórico
+              </label>
               <div className="flex items-center gap-3">
                 <input
                   type="checkbox"
@@ -740,27 +993,73 @@ export default function MembrosPage() {
       ) : (
         <div className="space-y-4">
           {/* Filters shelf */}
-          <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-            <div className="relative w-full md:w-80">
-              <Search className="absolute left-3.5 top-3.5 text-slate-400" size={18} />
-              <input
-                type="text"
-                placeholder="Buscar membro, e-mail ou cargo..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-750 bg-white dark:bg-slate-900 text-slate-900 dark:text-white outline-none focus:border-amber-500 transition-all"
-              />
+          <div className="bg-slate-50 dark:bg-slate-900/40 p-5 rounded-2xl border border-slate-150 dark:border-slate-800 space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+              {/* Pesquisa Descrição (all fields) */}
+              <div className="md:col-span-2 space-y-1.5">
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                  🔍 Descrição (Busca em todos os campos)
+                </label>
+                <div className="relative w-full">
+                  <Search className="absolute left-3.5 top-3.5 text-slate-400" size={18} />
+                  <input
+                    type="text"
+                    placeholder="Busca por CPF, nome, contato, bairro, cidade, recepção..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 dark:border-slate-750 bg-white dark:bg-slate-900 text-slate-900 dark:text-white outline-none focus:border-amber-500 transition-all font-medium text-xs text-ellipsis cursor-pointer"
+                  />
+                </div>
+              </div>
+
+              {/* Sexo Filter */}
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                  👫 Filtrar por Sexo
+                </label>
+                <select
+                  value={sexoFilter}
+                  onChange={(e) => setSexoFilter(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-750 bg-white dark:bg-slate-900 text-slate-850 dark:text-slate-200 outline-none focus:border-amber-500 transition-all font-bold text-xs"
+                >
+                  <option value="todos">Todos os Sexos</option>
+                  <option value="Masculino">Masculino</option>
+                  <option value="Feminino">Feminino</option>
+                </select>
+              </div>
+
+              {/* Estado Civil Filter */}
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                  💍 Estado Civil
+                </label>
+                <select
+                  value={estadoCivilFilter}
+                  onChange={(e) => setEstadoCivilFilter(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-755 bg-white dark:bg-slate-900 text-slate-850 dark:text-slate-200 outline-none focus:border-amber-500 transition-all font-bold text-xs"
+                >
+                  <option value="todos">Todos Estados Civis</option>
+                  <option value="Solteiro(a)">Solteiro(a)</option>
+                  <option value="Casado(a)">Casado(a)</option>
+                  <option value="Divorciado(a)">Divorciado(a)</option>
+                  <option value="Viúvo(a)">Viúvo(a)</option>
+                  <option value="Separado(a)">Separado(a)</option>
+                  <option value="União Estável">União Estável</option>
+                </select>
+              </div>
             </div>
 
-            <div className="flex gap-2 w-full md:w-auto">
+            {/* Status Tabs */}
+            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-2 ml-1">Status de Membro:</span>
               {['todos', 'Ativo', 'Inativo', 'Visitante'].map((status) => (
                 <button
                   key={status}
                   onClick={() => setStatusFilter(status)}
-                  className={`px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wider transition ${
+                  className={`px-4 py-1.5 rounded-xl font-bold text-xs uppercase tracking-wider transition cursor-pointer ${
                     statusFilter === status
-                      ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400 border border-amber-300'
-                      : 'bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-450 border border-slate-200 dark:border-slate-800'
+                      ? 'bg-amber-150 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400 border border-amber-300'
+                      : 'bg-white dark:bg-slate-950 text-slate-500 dark:text-slate-450 border border-slate-200 dark:border-slate-850 hover:bg-slate-50'
                   }`}
                 >
                   {status === 'todos' ? 'Todos' : status}

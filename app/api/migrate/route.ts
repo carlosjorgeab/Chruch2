@@ -132,6 +132,19 @@ export async function GET(req: NextRequest) {
     ALTER TABLE mural_avisos ADD COLUMN IF NOT EXISTS tempo_transicao INT DEFAULT 10;
     ALTER TABLE mural_avisos ADD COLUMN IF NOT EXISTS ordem INT DEFAULT 0;
 
+    -- Add columns to membros
+    ALTER TABLE membros ADD COLUMN IF NOT EXISTS cpf VARCHAR(25);
+    ALTER TABLE membros ADD COLUMN IF NOT EXISTS sexo VARCHAR(15);
+    ALTER TABLE membros ADD COLUMN IF NOT EXISTS estado_civil VARCHAR(30);
+    ALTER TABLE membros ADD COLUMN IF NOT EXISTS escolaridade VARCHAR(50);
+    ALTER TABLE membros ADD COLUMN IF NOT EXISTS endereco TEXT;
+    ALTER TABLE membros ADD COLUMN IF NOT EXISTS bairro VARCHAR(150);
+    ALTER TABLE membros ADD COLUMN IF NOT EXISTS cidade VARCHAR(150);
+    ALTER TABLE membros ADD COLUMN IF NOT EXISTS estado VARCHAR(150);
+    ALTER TABLE membros ADD COLUMN IF NOT EXISTS cep VARCHAR(20);
+    ALTER TABLE membros ADD COLUMN IF NOT EXISTS pais VARCHAR(100) DEFAULT 'Brasil';
+    ALTER TABLE membros ADD COLUMN IF NOT EXISTS recepcao VARCHAR(50) DEFAULT 'Batismo';
+
     INSERT INTO configuracoes_sistema (chave, valor, descricao)
     VALUES 
       ('translation_overrides_pt', '{}', 'Ajustes de traducción en portugués'),

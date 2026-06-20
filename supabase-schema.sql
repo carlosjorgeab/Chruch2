@@ -64,6 +64,17 @@ CREATE TABLE IF NOT EXISTS membros (
   batizado_espirito BOOLEAN DEFAULT false,
   cargo VARCHAR(50) DEFAULT 'Membro',
   foto_url TEXT,
+  cpf VARCHAR(25),
+  sexo VARCHAR(15),
+  estado_civil VARCHAR(30),
+  escolaridade VARCHAR(50),
+  endereco TEXT,
+  bairro VARCHAR(150),
+  cidade VARCHAR(150),
+  estado VARCHAR(150),
+  cep VARCHAR(20),
+  pais VARCHAR(100) DEFAULT 'Brasil',
+  recepcao VARCHAR(50) DEFAULT 'Batismo',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
