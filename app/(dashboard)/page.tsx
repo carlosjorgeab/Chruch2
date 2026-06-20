@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { Users, UsersRound, Wallet, BookOpen, RefreshCw, BarChart2, PieChart, TrendingUp, TrendingDown, DollarSign, Calendar, Megaphone, FileText, Video, ChevronLeft, ChevronRight, ExternalLink, Download } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useIgreja } from '@/context/IgrejaContext';
@@ -42,6 +43,7 @@ export default function Home() {
   const [muralAvisos, setMuralAvisos] = useState<any[]>([]);
   const [currentMuralIndex, setCurrentMuralIndex] = useState(0);
   const [aniversariantes, setAniversariantes] = useState<any[]>([]);
+  const [agendas, setAgendas] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   const isYouTube = (url: string | null | undefined) => {
@@ -241,6 +243,9 @@ export default function Home() {
 
         if (!errBirthdays && membBirthdays) {
           const today = new Date();
+          const currentMonthVal = today.getMonth() + 1; // 1-12
+          const nextMonthVal = currentMonthVal === 12 ? 1 : currentMonthVal + 1;
+
           const processed = membBirthdays.map((m: any) => {
             const birth = m.data_nascimento; // e.g., "1994-06-25"
             const parts = birth.split('-');
@@ -264,13 +269,26 @@ export default function Home() {
               daysLeft,
               nextBirthDate
             };
-          }).filter(Boolean) as any[];
+          }).filter((m: any) => m !== null && (m.bMonth === currentMonthVal || m.bMonth === nextMonthVal)) as any[];
 
           // Sort by daysLeft ascending (soonest first)
           processed.sort((a, b) => a.daysLeft - b.daysLeft);
           setAniversariantes(processed);
         } else {
           setAniversariantes([]);
+        }
+
+        // Fetch agendas
+        const { data: agendaData, error: errAgenda } = await supabase
+          .from('agendas')
+          .select('*')
+          .eq('id_igreja', id)
+          .order('data_hora', { ascending: true });
+
+        if (!errAgenda && agendaData) {
+          setAgendas(agendaData);
+        } else {
+          setAgendas([]);
         }
       } catch (err) {
         console.error('Error compiling dashboard:', err);
@@ -687,9 +705,13 @@ export default function Home() {
                                   e.stopPropagation();
                                   const win = window.open();
                                   if (win) {
+                                    const basePdf = item.arquivo_base64 || '';
+                                    const pdfWithPageLimit = basePdf.includes('#') 
+                                      ? basePdf.split('#')[0] + '#page=1&toolbar=0&navpanes=0'
+                                      : basePdf + '#page=1&toolbar=0&navpanes=0';
                                     win.document.write(
                                       `<title>Visualização de PDF - ${item.arquivo_nome || 'Mural'}</title>` +
-                                      `<iframe src="${item.arquivo_base64}" frameborder="0" style="border:0; position:fixed; top:0; left:0; bottom:0; right:0; width:100%; height:100%;" allowfullscreen></iframe>`
+                                      `<iframe src="${pdfWithPageLimit}" frameborder="0" style="border:0; position:fixed; top:0; left:0; bottom:0; right:0; width:100%; height:100%;" allowfullscreen></iframe>`
                                     );
                                   }
                                 }}
@@ -859,6 +881,93 @@ export default function Home() {
                             Faltam {membro.daysLeft} dias
                           </span>
                         )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* PAINEL DE AGENDAS CADASTRADAS */}
+        <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col lg:col-span-2" id="dashboard-agendas">
+          <div className="p-6 sm:p-8 space-y-6 flex-1 flex flex-col justify-between">
+            <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-5">
+              <div>
+                <div className="flex items-center gap-2 text-slate-800 dark:text-white font-sans">
+                  <Calendar className="text-amber-500 shrink-0" size={18} />
+                  <h3 className="text-sm font-black uppercase tracking-wider">📅 Agenda da Igreja</h3>
+                </div>
+                <p className="text-slate-500 text-[11px] mt-1 font-medium">Acompanhe as programações, reuniões, cultos e compromissos</p>
+              </div>
+              <Link 
+                href="/agenda"
+                className="text-xs font-black text-[#E4A232] hover:underline flex items-center gap-1 uppercase tracking-wider"
+              >
+                Gerenciar Agenda →
+              </Link>
+            </div>
+
+            {loading ? (
+              <div className="flex flex-col items-center justify-center text-center p-6 min-h-[140px] flex-1">
+                <RefreshCw className="animate-spin text-amber-500" size={24} />
+                <p className="text-[11px] text-slate-400 font-bold uppercase tracking-widest mt-3">Carregando eventos...</p>
+              </div>
+            ) : agendas.length === 0 ? (
+              <div className="flex flex-col items-center justify-center text-center p-6 bg-slate-50 dark:bg-slate-955/20 rounded-2xl border border-slate-100 dark:border-slate-850 min-h-[140px] flex-1">
+                <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mb-2">
+                  <Calendar size={18} />
+                </div>
+                <h4 className="text-xs font-bold text-slate-800 dark:text-white uppercase tracking-tight">Nenhum evento agendado</h4>
+                <p className="text-[11px] text-slate-500 font-medium max-w-xs mt-1">
+                  Não há programações agendadas. Clique em "Gerenciar Agenda" para cadastrar eventos.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {agendas.slice(0, 6).map((item) => {
+                  const eventDate = new Date(item.data_hora);
+                  const isUpcoming = eventDate >= new Date();
+                  
+                  let badgeColor = "bg-blue-50 text-blue-700 dark:bg-blue-950/20 dark:text-blue-400 border-blue-200/50";
+                  let borderStyle = "border-slate-100 dark:border-slate-800";
+                  if (item.status === 'Importante') {
+                    badgeColor = "bg-red-50 text-red-700 dark:bg-red-950/20 dark:text-red-400 border-red-200/50";
+                    borderStyle = "border-red-100 dark:border-red-950/20";
+                  } else if (item.status === 'Alerta') {
+                    badgeColor = "bg-amber-50 text-amber-700 dark:bg-amber-955/20 dark:text-amber-400 border-amber-200/50";
+                    borderStyle = "border-amber-100 dark:border-amber-950/20";
+                  }
+
+                  return (
+                    <div 
+                      key={item.id}
+                      className={`p-4 rounded-2xl border bg-slate-50/50 dark:bg-slate-955/20 flex flex-col justify-between gap-3 hover:scale-[1.01] transition duration-200 ${borderStyle}`}
+                    >
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-start gap-2">
+                          <span className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-wider border ${badgeColor}`}>
+                            {item.status}
+                          </span>
+                          {!isUpcoming && (
+                            <span className="text-[8px] text-slate-450 dark:text-slate-500 uppercase font-black tracking-widest bg-slate-100 dark:bg-slate-900 px-1.5 py-0.5 rounded">
+                              Encerrado
+                            </span>
+                          )}
+                        </div>
+                        <h4 className="text-xs font-black uppercase text-slate-800 dark:text-white tracking-tight line-clamp-2 leading-snug">
+                          {item.titulo}
+                        </h4>
+                      </div>
+                      
+                      <div className="space-y-1 pt-2 border-t border-slate-100 dark:border-slate-850">
+                        <div className="text-[10px] text-slate-500 dark:text-slate-400 font-bold flex items-center gap-1.5">
+                          📅 {eventDate.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
+                        </div>
+                        <div className="text-[10px] text-slate-500 dark:text-slate-400 font-bold flex items-center gap-1.5">
+                          ⏰ {eventDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} Horas
+                        </div>
                       </div>
                     </div>
                   );

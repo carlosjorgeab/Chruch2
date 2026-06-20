@@ -132,6 +132,16 @@ export async function GET(req: NextRequest) {
     ALTER TABLE mural_avisos ADD COLUMN IF NOT EXISTS tempo_transicao INT DEFAULT 10;
     ALTER TABLE mural_avisos ADD COLUMN IF NOT EXISTS ordem INT DEFAULT 0;
 
+    -- 9. Create table 'agendas'
+    CREATE TABLE IF NOT EXISTS agendas (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      id_igreja UUID REFERENCES igrejas(id) ON DELETE CASCADE,
+      titulo VARCHAR(255) NOT NULL,
+      data_hora TIMESTAMP WITH TIME ZONE NOT NULL,
+      status VARCHAR(20) DEFAULT 'Normal' CHECK (status IN ('Importante', 'Normal', 'Alerta')),
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+    );
+
     -- Add columns to membros
     ALTER TABLE membros ADD COLUMN IF NOT EXISTS cpf VARCHAR(25);
     ALTER TABLE membros ADD COLUMN IF NOT EXISTS sexo VARCHAR(15);

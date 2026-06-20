@@ -218,6 +218,34 @@ export function Topbar() {
           }
         }
 
+        // 6. Fetch Upcoming Agendas with Status 'Alerta'
+        if (selectedIgreja?.id) {
+          try {
+            const { data: agendaAlerts, error: errAgenda } = await supabase
+              .from('agendas')
+              .select('*')
+              .eq('id_igreja', selectedIgreja.id)
+              .eq('status', 'Alerta');
+
+            if (!errAgenda && agendaAlerts) {
+              const now = new Date();
+              agendaAlerts.forEach((a: any) => {
+                const eventDate = new Date(a.data_hora);
+                // Highlight upcoming alert events, or current alerts
+                list.push({
+                  id: `agenda-alerta-${a.id}`,
+                  title: 'Alerta da Agenda',
+                  message: `Evento "${a.titulo}" tem status 'Alerta' agendado para ${eventDate.toLocaleDateString('pt-BR')} às ${eventDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}.`,
+                  time: 'Alerta',
+                  type: 'agenda_alerta',
+                });
+              });
+            }
+          } catch (agendaErr) {
+            console.warn('Agenda alerts fetch error:', agendaErr);
+          }
+        }
+
         setNotifications(list);
       } catch (err) {
         console.error('Error compiling alerts:', err);
@@ -322,6 +350,7 @@ export function Topbar() {
                     if (n.type === 'lesson') { Icon = Award; color = 'text-purple-500 bg-purple-50 dark:bg-purple-900/20'; }
                     if (n.type === 'balance') { Icon = AlertTriangle; color = 'text-amber-500 bg-amber-50 dark:bg-amber-900/20'; }
                     if (n.type === 'mural') { Icon = Megaphone; color = 'text-amber-600 bg-amber-55 dark:bg-amber-950/20'; }
+                    if (n.type === 'agenda_alerta') { Icon = AlertTriangle; color = 'text-red-500 bg-red-50 dark:bg-red-955/20 animate-pulse'; }
 
                     return (
                       <div key={n.id} className="p-3.5 hover:bg-slate-50 dark:hover:bg-slate-850/50 transition-colors flex gap-3">
