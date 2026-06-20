@@ -49,14 +49,26 @@ export default function Home() {
     return !!url.match(/\.(mp4|webm|ogg)$/i);
   };
 
-  const transitionToNext = () => {
-    const active = muralAvisos.filter((aviso: any) => {
-      if (aviso.status !== 'Publicado') return false;
-      const today = new Date().toISOString().split('T')[0];
-      if (aviso.data_inicio && today < aviso.data_inicio) return false;
-      if (aviso.data_fim && today > aviso.data_fim) return false;
+  const getActiveAvisos = () => {
+    if (!muralAvisos) return [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    return muralAvisos.filter((m) => {
+      if (m.status !== 'Publicado') return false;
+
+      // Handle date checks
+      const start = m.data_inicio ? new Date(m.data_inicio + 'T00:00:00') : null;
+      const end = m.data_fim ? new Date(m.data_fim + 'T00:00:00') : null;
+
+      if (start && start > today) return false;
+      if (end && end < today) return false;
       return true;
     });
+  };
+
+  const transitionToNext = () => {
+    const active = getActiveAvisos();
     if (active.length <= 1) return;
     setCurrentMuralIndex((prevIndex) => 
       prevIndex === active.length - 1 ? 0 : prevIndex + 1
@@ -65,26 +77,21 @@ export default function Home() {
 
   // Automated transition of murais based on tempo_transicao (defaults to 10s if not set or invalid)
   useEffect(() => {
-    const active = muralAvisos.filter((aviso: any) => {
-      if (aviso.status !== 'Publicado') return false;
-      const today = new Date().toISOString().split('T')[0];
-      if (aviso.data_inicio && today < aviso.data_inicio) return false;
-      if (aviso.data_fim && today > aviso.data_fim) return false;
-      return true;
-    });
-    
+    const active = getActiveAvisos();
     if (active.length <= 1) return;
     
     const currentAviso = active[currentMuralIndex];
 
-    // If current notice has a video, pause/skip automated timer transition - let video finish & handles transition itself!
-    const hasVideo = currentAviso?.url_midia && (isYouTube(currentAviso.url_midia) || isVimeo(currentAviso.url_midia) || isDirectVideo(currentAviso.url_midia));
-    if (hasVideo) return;
-
-    const seconds = currentAviso?.tempo_transicao && currentAviso.tempo_transicao > 0 
+    let seconds = currentAviso?.tempo_transicao && currentAviso.tempo_transicao > 0 
       ? currentAviso.tempo_transicao 
       : 10;
       
+    // Se for vídeo e o tempo_transicao for menor que 10 ou padrão, damos 25s de carrossel para não picar a reprodução e ao mesmo tempo garantir a rotação cíclica
+    const hasVideo = currentAviso?.url_midia && (isYouTube(currentAviso.url_midia) || isVimeo(currentAviso.url_midia) || isDirectVideo(currentAviso.url_midia));
+    if (hasVideo && (!currentAviso?.tempo_transicao || currentAviso.tempo_transicao <= 10)) {
+      seconds = 25;
+    }
+       
     const timer = setTimeout(() => {
       transitionToNext();
     }, seconds * 1000);
@@ -333,23 +340,6 @@ export default function Home() {
       .sort((a, b) => b.value - a.value);
   };
 
-  const getActiveAvisos = () => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    return muralAvisos.filter((m) => {
-      if (m.status !== 'Publicado') return false;
-
-      // Handle date checks
-      const start = m.data_inicio ? new Date(m.data_inicio + 'T00:00:00') : null;
-      const end = m.data_fim ? new Date(m.data_fim + 'T00:00:00') : null;
-
-      if (start && start > today) return false;
-      if (end && end < today) return false;
-      return true;
-    });
-  };
-
   const activeAvisos = getActiveAvisos();
 
   const cashFlowData = getCashFlowData();
@@ -520,11 +510,23 @@ export default function Home() {
                   }
                 };
 
+                const isPdf = !hasVideoLink && item.arquivo_base64 && item.arquivo_base64.startsWith('data:application/pdf');
+                const isImage = !hasVideoLink && item.arquivo_base64 && item.arquivo_base64.startsWith('data:image/');
+
+                let frameHeightClass = "h-[180px] md:h-[220px]";
+                if (isPdf) {
+                  frameHeightClass = "h-[340px] md:h-[485px]";
+                } else if (hasVideoLink) {
+                  frameHeightClass = "aspect-video w-full h-auto max-h-[350px]";
+                } else if (isImage) {
+                  frameHeightClass = "h-[240px] md:h-[365px]";
+                }
+
                 return (
                   <div className="flex flex-col gap-4 flex-1 justify-between mt-4">
-                    {/* Media Column (180-220px compact viewport) */}
+                    {/* Media Column (Dynamic Viewport size according to media type) */}
                     {(item.url_midia || item.arquivo_base64) && (
-                      <div className="w-full relative h-[180px] md:h-[220px] rounded-2xl overflow-hidden bg-slate-50 dark:bg-slate-955/50 border border-slate-150 dark:border-slate-850 shadow-inner flex flex-col justify-center items-center">
+                      <div className={`w-full relative ${frameHeightClass} rounded-2xl overflow-hidden bg-slate-50 dark:bg-slate-955/50 border border-slate-150 dark:border-slate-850 shadow-inner flex flex-col justify-center items-center`}>
                         {/* 1. YouTube Video */}
                         {item.url_midia && isYouTube(item.url_midia) && getYouTubeEmbedUrl(item.url_midia) && (
                           <div className="w-full h-full relative bg-black">

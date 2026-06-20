@@ -53,6 +53,7 @@ export default function MembrosPage() {
   const [statusFilter, setStatusFilter] = useState<string>('todos');
   const [sexoFilter, setSexoFilter] = useState<string>('todos');
   const [estadoCivilFilter, setEstadoCivilFilter] = useState<string>('todos');
+  const [mesNascimentoFilter, setMesNascimentoFilter] = useState<string>('todos');
 
   const [currentMembro, setCurrentMembro] = useState<Partial<Membro>>({
     nome: '',
@@ -227,6 +228,7 @@ export default function MembrosPage() {
       bairro: currentMembro.bairro || null,
       cidade: currentMembro.cidade || null,
       estado: currentMembro.estado || null,
+      id_uf: currentMembro.id_uf || null,
       cep: currentMembro.cep || null,
       pais: currentMembro.pais || null,
       recepcao: currentMembro.recepcao || null,
@@ -617,7 +619,23 @@ export default function MembrosPage() {
     // Filter Estado Civil
     const matchesEstadoCivil = estadoCivilFilter === 'todos' || m.estado_civil === estadoCivilFilter;
 
-    return matchesSearch && matchesStatus && matchesSexo && matchesEstadoCivil;
+    // Filter Mês de Nascimento
+    let matchesMesNascimento = true;
+    if (mesNascimentoFilter !== 'todos') {
+      if (m.data_nascimento) {
+        const parts = m.data_nascimento.split('-');
+        if (parts.length >= 2) {
+          const month = parseInt(parts[1], 10);
+          matchesMesNascimento = month === parseInt(mesNascimentoFilter, 10);
+        } else {
+          matchesMesNascimento = false;
+        }
+      } else {
+        matchesMesNascimento = false;
+      }
+    }
+
+    return matchesSearch && matchesStatus && matchesSexo && matchesEstadoCivil && matchesMesNascimento;
   });
 
   return (
@@ -1002,7 +1020,7 @@ export default function MembrosPage() {
         <div className="space-y-4">
           {/* Filters shelf */}
           <div className="bg-slate-50 dark:bg-slate-900/40 p-5 rounded-2xl border border-slate-150 dark:border-slate-800 space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
               {/* Pesquisa Descrição (all fields) */}
               <div className="md:col-span-2 space-y-1.5">
                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
@@ -1053,6 +1071,32 @@ export default function MembrosPage() {
                   <option value="Viúvo(a)">Viúvo(a)</option>
                   <option value="Separado(a)">Separado(a)</option>
                   <option value="União Estável">União Estável</option>
+                </select>
+              </div>
+
+              {/* Mês de Nascimento Filter */}
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                  📅 Mês de Nascimento
+                </label>
+                <select
+                  value={mesNascimentoFilter}
+                  onChange={(e) => setMesNascimentoFilter(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-755 bg-white dark:bg-slate-900 text-slate-850 dark:text-slate-200 outline-none focus:border-amber-500 transition-all font-bold text-xs"
+                >
+                  <option value="todos">Todos os Meses</option>
+                  <option value="1">Janeiro</option>
+                  <option value="2">Fevereiro</option>
+                  <option value="3">Março</option>
+                  <option value="4">Abril</option>
+                  <option value="5">Maio</option>
+                  <option value="6">Junho</option>
+                  <option value="7">Julho</option>
+                  <option value="8">Agosto</option>
+                  <option value="9">Setembro</option>
+                  <option value="10">Outubro</option>
+                  <option value="11">Novembro</option>
+                  <option value="12">Dezembro</option>
                 </select>
               </div>
             </div>

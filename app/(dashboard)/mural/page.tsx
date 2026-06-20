@@ -317,26 +317,63 @@ export default function MuralPage() {
     });
   };
 
+  const [isDragActive, setIsDragActive] = useState(false);
+
+  const processFile = (file: File) => {
+    if (file.size > 5 * 1024 * 1024) {
+      setError('O arquivo é muito grande. O tamanho máximo permitido é 5MB.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setCurrentMural((prev) => ({
+        ...prev,
+        arquivo_nome: file.name,
+        arquivo_base64: reader.result as string
+      }));
+      setSuccess('Arquivo anexado com sucesso!');
+    };
+    reader.onerror = () => {
+      setError('Erro ao processar o arquivo.');
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        setError('O arquivo é muito grande. O tamanho máximo permitido é 5MB.');
-        return;
-      }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setCurrentMural({
-          ...currentMural,
-          arquivo_nome: file.name,
-          arquivo_base64: reader.result as string
-        });
-        setSuccess('Arquivo anexado com sucesso!');
-      };
-      reader.onerror = () => {
-        setError('Erro ao processar o arquivo.');
-      };
-      reader.readAsDataURL(file);
+      processFile(file);
+    }
+  };
+
+  const handleDragEnterFile = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragActive(true);
+  };
+
+  const handleDragLeaveFile = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragActive(false);
+  };
+
+  const handleDragOverFile = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isDragActive) {
+      setIsDragActive(true);
+    }
+  };
+
+  const handleDropFile = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragActive(false);
+
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      processFile(file);
     }
   };
 
@@ -608,7 +645,17 @@ NOTIFY pgrst, 'reload schema';`}
               <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 ml-1">
                 Upload de Arquivo (Banner, Imagem ou PDF)
               </label>
-              <div className="border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl p-6 bg-slate-50 dark:bg-slate-950 text-center space-y-3 relative">
+              <div
+                onDragEnter={handleDragEnterFile}
+                onDragOver={handleDragOverFile}
+                onDragLeave={handleDragLeaveFile}
+                onDrop={handleDropFile}
+                className={`border-2 border-dashed rounded-2xl p-6 text-center space-y-3 relative transition-all ${
+                  isDragActive
+                    ? 'border-amber-500 bg-amber-55/30 dark:bg-amber-950/20 shadow-md scale-[1.01]'
+                    : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950'
+                }`}
+              >
                 <input
                   type="file"
                   id="announcement-file"
