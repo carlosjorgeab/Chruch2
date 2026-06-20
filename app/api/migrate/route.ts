@@ -145,6 +145,47 @@ export async function GET(req: NextRequest) {
     ALTER TABLE membros ADD COLUMN IF NOT EXISTS pais VARCHAR(100) DEFAULT 'Brasil';
     ALTER TABLE membros ADD COLUMN IF NOT EXISTS recepcao VARCHAR(50) DEFAULT 'Batismo';
 
+    -- Create ufs table
+    CREATE TABLE IF NOT EXISTS ufs (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      nome VARCHAR(100) NOT NULL UNIQUE,
+      sigla VARCHAR(2) UNIQUE NOT NULL
+    );
+
+    -- Seed Brazilian UFs
+    INSERT INTO ufs (nome, sigla) VALUES
+      ('Acre', 'AC'),
+      ('Alagoas', 'AL'),
+      ('Amapá', 'AP'),
+      ('Amazonas', 'AM'),
+      ('Bahia', 'BA'),
+      ('Ceará', 'CE'),
+      ('Distrito Federal', 'DF'),
+      ('Espírito Santo', 'ES'),
+      ('Goiás', 'GO'),
+      ('Maranhão', 'MA'),
+      ('Mato Grosso', 'MT'),
+      ('Mato Grosso do Sul', 'MS'),
+      ('Minas Gerais', 'MG'),
+      ('Pará', 'PA'),
+      ('Paraíba', 'PB'),
+      ('Paraná', 'PR'),
+      ('Pernambuco', 'PE'),
+      ('Piauí', 'PI'),
+      ('Rio de Janeiro', 'RJ'),
+      ('Rio Grande do Norte', 'RN'),
+      ('Rio Grande do Sul', 'RS'),
+      ('Rondônia', 'RO'),
+      ('Roraima', 'RR'),
+      ('Santa Catarina', 'SC'),
+      ('São Paulo', 'SP'),
+      ('Sergipe', 'SE'),
+      ('Tocantins', 'TO')
+    ON CONFLICT (sigla) DO NOTHING;
+
+    -- Set up id_uf inside membros
+    ALTER TABLE membros ADD COLUMN IF NOT EXISTS id_uf UUID REFERENCES ufs(id) ON DELETE SET NULL;
+
     INSERT INTO configuracoes_sistema (chave, valor, descricao)
     VALUES 
       ('translation_overrides_pt', '{}', 'Ajustes de traducción en portugués'),

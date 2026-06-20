@@ -51,6 +51,13 @@ CREATE TABLE IF NOT EXISTS usuarios (
 
 COMMENT ON COLUMN usuarios.current_session_id IS 'Stored session ID to prevent multiple simultaneous logins se configured';
 
+-- 3.5 Tabela de UFs (Estados)
+CREATE TABLE IF NOT EXISTS ufs (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  nome VARCHAR(100) NOT NULL UNIQUE,
+  sigla VARCHAR(2) UNIQUE NOT NULL
+);
+
 -- 4. Tabela de Membros
 CREATE TABLE IF NOT EXISTS membros (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -72,6 +79,7 @@ CREATE TABLE IF NOT EXISTS membros (
   bairro VARCHAR(150),
   cidade VARCHAR(150),
   estado VARCHAR(150),
+  id_uf UUID REFERENCES ufs(id) ON DELETE SET NULL,
   cep VARCHAR(20),
   pais VARCHAR(100) DEFAULT 'Brasil',
   recepcao VARCHAR(50) DEFAULT 'Batismo',
@@ -167,6 +175,37 @@ VALUES
   ('theme_default', 'light', 'Tema padrão do sistema (light/dark)'),
   ('language_default', 'es', 'Idioma padrão do sistema')
 ON CONFLICT (chave) DO UPDATE SET valor = EXCLUDED.valor;
+
+-- Inserir UFs Padrão (Brasil)
+INSERT INTO ufs (nome, sigla) VALUES
+  ('Acre', 'AC'),
+  ('Alagoas', 'AL'),
+  ('Amapá', 'AP'),
+  ('Amazonas', 'AM'),
+  ('Bahia', 'BA'),
+  ('Ceará', 'CE'),
+  ('Distrito Federal', 'DF'),
+  ('Espírito Santo', 'ES'),
+  ('Goiás', 'GO'),
+  ('Maranhão', 'MA'),
+  ('Mato Grosso', 'MT'),
+  ('Mato Grosso do Sul', 'MS'),
+  ('Minas Gerais', 'MG'),
+  ('Pará', 'PA'),
+  ('Paraíba', 'PB'),
+  ('Paraná', 'PR'),
+  ('Pernambuco', 'PE'),
+  ('Piauí', 'PI'),
+  ('Rio de Janeiro', 'RJ'),
+  ('Rio Grande do Norte', 'RN'),
+  ('Rio Grande do Sul', 'RS'),
+  ('Rondônia', 'RO'),
+  ('Roraima', 'RR'),
+  ('Santa Catarina', 'SC'),
+  ('São Paulo', 'SP'),
+  ('Sergipe', 'SE'),
+  ('Tocantins', 'TO')
+ON CONFLICT (sigla) DO NOTHING;
 
 -- Inserir Igreja Padrão
 INSERT INTO igrejas (nome, slug, ativo)

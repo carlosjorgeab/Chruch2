@@ -29,9 +29,16 @@ type Membro = {
   bairro: string | null;
   cidade: string | null;
   estado: string | null;
+  id_uf: string | null;
   cep: string | null;
   pais: string | null;
   recepcao: string | null;
+};
+
+type UfInfo = {
+  id: string;
+  nome: string;
+  sigla: string;
 };
 
 export default function MembrosPage() {
@@ -39,6 +46,7 @@ export default function MembrosPage() {
   const { user } = useAuth();
   const { confirmDelete } = useConfirm();
   const [membros, setMembros] = useState<Membro[]>([]);
+  const [ufs, setUfs] = useState<UfInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [search, setSearch] = useState('');
@@ -64,6 +72,7 @@ export default function MembrosPage() {
     bairro: '',
     cidade: '',
     estado: '',
+    id_uf: '',
     cep: '',
     pais: 'Brasil',
     recepcao: 'Batismo',
@@ -78,6 +87,24 @@ export default function MembrosPage() {
   const [reportMonth, setReportMonth] = useState<number>(new Date().getMonth() + 1); // 1-12
   const [birthdaySortMode, setBirthdaySortMode] = useState<'alphabetical' | 'birthday'>('birthday');
   const [generatingReport, setGeneratingReport] = useState(false);
+
+  async function fetchUfs() {
+    try {
+      const { data, error } = await supabase
+        .from('ufs')
+        .select('*')
+        .order('nome', { ascending: true });
+      if (!error && data) {
+        setUfs(data);
+      }
+    } catch (e) {
+      console.error('Error loading UFs:', e);
+    }
+  }
+
+  useEffect(() => {
+    fetchUfs();
+  }, []);
 
   useEffect(() => {
     if (selectedIgreja) {
@@ -848,15 +875,28 @@ export default function MembrosPage() {
 
             <div>
               <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
-                Estado
+                Estado (UF) *
               </label>
-              <input
-                type="text"
-                value={currentMembro.estado || ''}
-                onChange={(e) => setCurrentMembro({ ...currentMembro, estado: e.target.value })}
-                className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-semibold"
-                placeholder="Ex. SP"
-              />
+              <select
+                value={currentMembro.id_uf || ''}
+                onChange={(e) => {
+                  const selectedId_uf = e.target.value;
+                  const foundUf = ufs.find(u => u.id === selectedId_uf);
+                  setCurrentMembro({
+                    ...currentMembro,
+                    id_uf: selectedId_uf,
+                    estado: foundUf ? foundUf.sigla : ''
+                  });
+                }}
+                className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-bold"
+              >
+                <option value="">Selecione o Estado</option>
+                {ufs.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.nome} ({u.sigla})
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div>
@@ -937,38 +977,6 @@ export default function MembrosPage() {
                     <span>{item.value}</span>
                   </label>
                 ))}
-              </div>
-            </div>
-
-            {/* Batizado nas Águas e Espírito Santo */}
-            <div className="flex flex-col justify-center space-y-4 border border-slate-100 dark:border-slate-700/50 p-4 rounded-2xl bg-slate-50/20">
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                Casas de Sacramento / Histórico
-              </label>
-              <div className="flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  id="batizado_aguas"
-                  checked={currentMembro.batizado_aguas || false}
-                  onChange={(e) => setCurrentMembro({ ...currentMembro, batizado_aguas: e.target.checked })}
-                  className="w-5 h-5 text-amber-600 border-slate-300 rounded focus:ring-amber-500"
-                />
-                <label htmlFor="batizado_aguas" className="text-sm font-bold text-slate-700 dark:text-slate-350 cursor-pointer">
-                  Batizado nas Águas
-                </label>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  id="batizado_espirito"
-                  checked={currentMembro.batizado_espirito || false}
-                  onChange={(e) => setCurrentMembro({ ...currentMembro, batizado_espirito: e.target.checked })}
-                  className="w-5 h-5 text-amber-600 border-slate-300 rounded focus:ring-amber-500"
-                />
-                <label htmlFor="batizado_espirito" className="text-sm font-bold text-slate-700 dark:text-slate-350 cursor-pointer">
-                  Batizado no Espírito Santo
-                </label>
               </div>
             </div>
           </div>
@@ -1086,7 +1094,7 @@ export default function MembrosPage() {
                       <th className="px-6 py-4">Membro</th>
                       <th className="px-6 py-4">Contato</th>
                       <th className="px-6 py-4">Cargo / Função</th>
-                      <th className="px-6 py-4">Batismo (Água / Espírito)</th>
+                      <th className="px-6 py-4">Quadro de Recepção</th>
                       <th className="px-6 py-4 text-right">Ações</th>
                     </tr>
                   </thead>
@@ -1134,19 +1142,15 @@ export default function MembrosPage() {
                           </span>
                         </td>
                         <td className="px-6 py-4">
-                          <div className="flex gap-2">
-                            {m.batizado_aguas ? (
-                              <span className="flex items-center gap-1 bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 text-[9px] uppercase font-black tracking-wider px-2 py-0.5 rounded-full border border-amber-200 dark:border-amber-900/40">
-                                <Check size={10} /> Água
-                              </span>
-                            ) : null}
-                            {m.batizado_espirito ? (
-                              <span className="flex items-center gap-1 bg-purple-50 dark:bg-purple-950/30 text-purple-600 dark:text-purple-400 text-[9px] uppercase font-black tracking-wider px-2 py-0.5 rounded-full border border-purple-200 dark:border-purple-900/40">
-                                <Check size={10} /> Espírito
-                              </span>
-                            ) : null}
-                            {!m.batizado_aguas && !m.batizado_espirito ? '-' : null}
-                          </div>
+                          <span className={`inline-flex items-center px-3 py-1 rounded-xl text-xs font-black uppercase tracking-wider border ${
+                            m.recepcao === 'Jurisdição'
+                              ? 'bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-900/40'
+                              : m.recepcao === 'Transferência'
+                              ? 'bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-900/40'
+                              : 'bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-900/40'
+                          }`}>
+                            {m.recepcao || 'Batismo'}
+                          </span>
                         </td>
                         <td className="px-6 py-4 text-right">
                           <div className="flex justify-end gap-2">
