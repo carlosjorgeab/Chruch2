@@ -5,15 +5,15 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { useIgreja } from '@/context/IgrejaContext';
 import { useConfirm } from '@/context/ConfirmContext';
-import { Plus, Edit2, Trash2, Save, X, Search, Users, Calendar, MapPin, RefreshCw, ClipboardCheck } from 'lucide-react';
+import { Plus, Edit2, Trash2, Save, X, Search, Users, Calendar, MapPin, RefreshCw, ClipboardCheck, Globe, Lock } from 'lucide-react';
 
 type Comunidade = {
   id: string;
   id_igreja: string;
   nome: string;
   descricao: string | null;
-  dia_reuniao: string | null;
-  horario: string | null;
+  dia_reuniao?: string | null;
+  horario?: string | null;
   local: string | null;
   id_lider: string | null;
   id_segundo_lider: string | null;
@@ -52,8 +52,6 @@ export default function ComunidadesPage() {
   const [currentComunidade, setCurrentComunidade] = useState<Partial<Comunidade>>({
     nome: '',
     descricao: '',
-    dia_reuniao: 'Quarta-feira',
-    horario: '19:30',
     local: '',
     id_lider: '',
     id_segundo_lider: '',
@@ -77,6 +75,21 @@ export default function ComunidadesPage() {
   const [newMeetingLocal, setNewMeetingLocal] = useState('');
   const [schedulingMeeting, setSchedulingMeeting] = useState(false);
   const [meetingError, setMeetingError] = useState('');
+
+  // Agenda popup states inside Comunidades Page
+  const [showAgendaPopup, setShowAgendaPopup] = useState(false);
+  const [agendaTitulo, setAgendaTitulo] = useState('');
+  const [agendaStatus, setAgendaStatus] = useState<'Normal' | 'Importante' | 'Alerta'>('Normal');
+  const [agendaPrivado, setAgendaPrivado] = useState(false);
+  const [agendaDiaInteiro, setAgendaDiaInteiro] = useState(false);
+  const [agendaLocal, setAgendaLocal] = useState('');
+  const [agendaEvtDate, setAgendaEvtDate] = useState('');
+  const [agendaEvtTime, setAgendaEvtTime] = useState('19:30');
+  const [agendaEvtDateEnd, setAgendaEvtDateEnd] = useState('');
+  const [agendaEvtTimeEnd, setAgendaEvtTimeEnd] = useState('21:30');
+  const [agendaRecorrencia, setAgendaRecorrencia] = useState<'Único' | 'Diário' | 'Semanal' | 'Mensal' | 'Anual'>('Único');
+  const [agendaSubmitting, setAgendaSubmitting] = useState(false);
+  const [agendaError, setAgendaError] = useState('');
 
   const [meetingPresenceList, setMeetingPresenceList] = useState<any[]>([]);
   const [currentPresMeetingId, setCurrentPresMeetingId] = useState<string | null>(null);
@@ -115,50 +128,155 @@ export default function ComunidadesPage() {
     setMeetingsComunidade([]);
     setShowMeetingsModal(true);
     fetchMeetings(com.id);
-    
-    // Default form fields
-    setNewMeetingTitle(`Reunião ${com.nome}`);
-    const todayStr = new Date().toISOString().split('T')[0];
-    setNewMeetingDate(todayStr);
-    setNewMeetingTime(com.horario || '19:30');
-    setNewMeetingLocal(com.local || '');
     setMeetingError('');
   };
 
-  const handleCreateMeeting = async (e: React.FormEvent) => {
+  const openNewMeetingAgendaPopup = () => {
+    if (!selectedComunidadeForMeetings) return;
+    setAgendaTitulo(`Reunião ${selectedComunidadeForMeetings.nome}`);
+    setAgendaStatus('Normal');
+    setAgendaPrivado(false);
+    setAgendaDiaInteiro(false);
+    setAgendaLocal(selectedComunidadeForMeetings.local || '');
+    
+    const today = new Date();
+    const todayString = today.toISOString().split('T')[0];
+    setAgendaEvtDate(todayString);
+    setAgendaEvtTime('19:30');
+    setAgendaEvtDateEnd(todayString);
+    setAgendaEvtTimeEnd('21:30');
+    
+    setAgendaRecorrencia('Único');
+    setAgendaSubmitting(false);
+    setAgendaError('');
+    
+    setShowAgendaPopup(true);
+  };
+
+  const handleSaveAgendaPopup = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedComunidadeForMeetings || !selectedIgreja) return;
-    setSchedulingMeeting(true);
-    setMeetingError('');
+    if (!selectedIgreja?.id || !selectedComunidadeForMeetings) return;
+
+    if (!agendaTitulo.trim()) {
+      setAgendaError('O nome da reunião é obrigatório.');
+      return;
+    }
+
+    if (!agendaEvtDate || !agendaEvtTime) {
+      setAgendaError('A data e o horário inicial são obrigatórios.');
+      return;
+    }
+
+    if (!agendaDiaInteiro && (!agendaEvtDateEnd || !agendaEvtTimeEnd)) {
+      setAgendaError('A data e o horário final são obrigatórios quando não for Dia Inteiro.');
+      return;
+    }
+
     try {
-      const dtString = `${newMeetingDate}T${newMeetingTime}:00`;
-      const dateIso = new Date(dtString).toISOString();
-      const payload = {
-        id_igreja: selectedIgreja.id,
-        id_comunidade: selectedComunidadeForMeetings.id,
-        titulo: newMeetingTitle.trim(),
-        data_hora: dateIso,
-        local: newMeetingLocal.trim() || null,
-        privado: false,
-        status: 'Normal'
-      };
+      setAgendaSubmitting(true);
+      setAgendaError('');
 
-      const { error: insErr } = await supabase
+      const startDateTimeString = `${agendaEvtDate}T${agendaEvtTime}:00`;
+      const finalIsoStart = new Date(startDateTimeString).toISOString();
+
+      let finalIsoEnd = null;
+      if (agendaDiaInteiro) {
+        const endDateTimeString = `${agendaEvtDate}T23:59:59`;
+        finalIsoEnd = new Date(endDateTimeString).toISOString();
+      } else {
+        const endDateTimeString = `${agendaEvtDateEnd}T${agendaEvtTimeEnd}:00`;
+        finalIsoEnd = new Date(endDateTimeString).toISOString();
+
+        if (new Date(finalIsoStart) > new Date(finalIsoEnd)) {
+          setAgendaError('A data e hora inicial não podem ser posteriores à data e hora final.');
+          setAgendaSubmitting(false);
+          return;
+        }
+      }
+
+      const payloadsToInsert = [];
+      let currentStartDate = new Date(finalIsoStart);
+      let durationMs = 0;
+      if (finalIsoEnd) {
+        durationMs = new Date(finalIsoEnd).getTime() - new Date(finalIsoStart).getTime();
+      }
+
+      const limitDate = new Date(`${agendaEvtDateEnd}T23:59:59`);
+
+      if (agendaRecorrencia === 'Único') {
+        payloadsToInsert.push({
+          id_igreja: selectedIgreja.id,
+          titulo: agendaTitulo.trim(),
+          data_hora: finalIsoStart,
+          data_hora_fim: finalIsoEnd,
+          dia_inteiro: agendaDiaInteiro,
+          local: agendaLocal.trim() || null,
+          privado: agendaPrivado,
+          status: agendaStatus,
+          id_comunidade: selectedComunidadeForMeetings.id
+        });
+      } else {
+        while (currentStartDate <= limitDate) {
+          const currentEndDate = finalIsoEnd ? new Date(currentStartDate.getTime() + durationMs) : null;
+
+          payloadsToInsert.push({
+            id_igreja: selectedIgreja.id,
+            titulo: agendaTitulo.trim(),
+            data_hora: currentStartDate.toISOString(),
+            data_hora_fim: currentEndDate ? currentEndDate.toISOString() : null,
+            dia_inteiro: agendaDiaInteiro,
+            local: agendaLocal.trim() || null,
+            privado: agendaPrivado,
+            status: agendaStatus,
+            id_comunidade: selectedComunidadeForMeetings.id
+          });
+
+          if (agendaRecorrencia === 'Diário') {
+            currentStartDate.setDate(currentStartDate.getDate() + 1);
+          } else if (agendaRecorrencia === 'Semanal') {
+            currentStartDate.setDate(currentStartDate.getDate() + 7);
+          } else if (agendaRecorrencia === 'Mensal') {
+            currentStartDate.setMonth(currentStartDate.getMonth() + 1);
+          } else if (agendaRecorrencia === 'Anual') {
+            currentStartDate.setFullYear(currentStartDate.getFullYear() + 1);
+          }
+        }
+      }
+
+      // 1. Insert into agendas
+      const { data: insertedData, error: postErr } = await supabase
         .from('agendas')
-        .insert(payload);
+        .insert(payloadsToInsert)
+        .select('id');
 
-      if (insErr) throw insErr;
-      
-      // Refresh list
+      if (postErr) throw postErr;
+
+      // 2. Export automatically to the reunioes table
+      if (insertedData && insertedData.length > 0) {
+        const reunioesPayload = insertedData.map((item: any) => ({
+          id_agenda: item.id,
+          id_comunidade: selectedComunidadeForMeetings.id
+        }));
+
+        const { error: reunioesErr } = await supabase
+          .from('reunioes')
+          .upsert(reunioesPayload, { onConflict: 'id_agenda' });
+
+        if (reunioesErr) {
+          console.error('Error inserting into reunioes table:', reunioesErr);
+        }
+      }
+
+      // 3. Refresh list of meetings
       fetchMeetings(selectedComunidadeForMeetings.id);
-      
-      // Reset title
-      setNewMeetingTitle(`Reunião ${selectedComunidadeForMeetings.nome}`);
-    } catch (err: any) {
-      console.error('Error scheduling meeting:', err);
-      setMeetingError('Erro ao agendar reunião: ' + err.message);
+
+      // 4. Close the agenda scheduling popup
+      setShowAgendaPopup(false);
+    } catch (e: any) {
+      console.error('Error saving agenda from community schedule:', e);
+      setAgendaError('Erro ao salvar reunião: ' + e.message);
     } finally {
-      setSchedulingMeeting(false);
+      setAgendaSubmitting(false);
     }
   };
 
@@ -609,38 +727,6 @@ export default function ComunidadesPage() {
                 </fieldset>
               </div>
 
-              <div>
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
-                  Dia de Reunião
-                </label>
-                <select
-                  value={currentComunidade.dia_reuniao || 'Quarta-feira'}
-                  onChange={(e) => setCurrentComunidade({ ...currentComunidade, dia_reuniao: e.target.value })}
-                  className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-bold text-sm cursor-pointer"
-                >
-                  <option value="Segunda-feira">Segunda-feira</option>
-                  <option value="Terça-feira">Terça-feira</option>
-                  <option value="Quarta-feira">Quarta-feira</option>
-                  <option value="Quinta-feira">Quinta-feira</option>
-                  <option value="Sexta-feira">Sexta-feira</option>
-                  <option value="Sábado">Sábado</option>
-                  <option value="Domingo">Domingo</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
-                  Horário da Reunião
-                </label>
-                <input
-                  type="text"
-                  value={currentComunidade.horario || '19:30'}
-                  onChange={(e) => setCurrentComunidade({ ...currentComunidade, horario: e.target.value })}
-                  className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-bold text-sm"
-                  placeholder="Ex. 19:30 ou 20:00"
-                />
-              </div>
-
               <div className="md:col-span-2">
                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
                   Local de Encontro
@@ -912,10 +998,6 @@ export default function ComunidadesPage() {
                     </div>
 
                     <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-2">
-                      <div className="flex items-center gap-2 text-xs font-semibold text-slate-650 dark:text-slate-350">
-                        <Calendar size={13} className="text-amber-600" />
-                        <span>{c.dia_reuniao} às {c.horario}</span>
-                      </div>
                       {c.local && (
                         <div className="flex items-center gap-2 text-xs font-semibold text-slate-650 dark:text-slate-350">
                           <MapPin size={13} className="text-slate-400" />
@@ -986,28 +1068,29 @@ export default function ComunidadesPage() {
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
               
-              {/* 1. Schedule a new meeting centralized guidance info */}
+              {/* 1. Schedule a new meeting through integrated Agenda Popup */}
               <div className="lg:col-span-12 xl:col-span-5 bg-gradient-to-br from-amber-500/5 to-amber-500/10 dark:from-amber-500/5 dark:to-amber-500/15 p-6 rounded-3xl border border-amber-500/20 shadow-sm h-fit space-y-4">
                 <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-200 border-b border-amber-500/20 pb-2.5 flex items-center gap-2">
                   <Calendar size={14} className="text-[#E4A232]" />
-                  Agendamento de Reuniões
+                  Agendar com Agenda Oficial
                 </h3>
 
                 <p className="text-xs text-slate-600 dark:text-slate-300 font-semibold leading-relaxed">
-                  Para manter a organização conceitual e a exibição integrada das atividades da igreja, <strong>o agendamento de reuniões e cultos domésticos deve ser realizado diretamente no Módulo de Agendas</strong>.
+                  Para máxima integração, o agendamento desta reunião celular criará automaticamente o evento na Agenda da igreja e gerará a lista de chamada para o grupo celular correspondente.
                 </p>
 
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-normal font-medium">
-                  Qualquer evento agendado para este grupo celular através da Agenda carregará automaticamente a lista de presença e histórico dos participantes aqui.
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-normal font-medium">
+                  Use o botão abaixo para abrir o painel de criação de agendas integrado a esta comunidade celular.
                 </p>
 
-                <Link
-                  href="/agenda"
+                <button
+                  type="button"
+                  onClick={openNewMeetingAgendaPopup}
                   className="w-full py-3 bg-[#E4A232] hover:bg-[#E4A232]/90 text-white font-black text-xs uppercase tracking-widest rounded-xl transition duration-150 hover:scale-[1.01] flex items-center justify-center gap-2 shadow-lg shadow-amber-500/10 cursor-pointer text-center"
                 >
-                  <Calendar size={14} />
-                  Ir para Módulo de Agendas
-                </Link>
+                  <Plus size={14} />
+                  Agendar Nova Reunião
+                </button>
               </div>
 
               {/* 2. List of scheduled meetings */}
@@ -1105,14 +1188,36 @@ export default function ComunidadesPage() {
                 <p className="text-[9px] text-slate-400 mt-1">Feche e use a opção de adicionar membros no botão editar do card principal.</p>
               </div>
             ) : (
-                <div className="space-y-4 mb-6 max-h-[45vh] overflow-y-auto pr-1">
-                  <div className="flex justify-between items-center px-1 text-[10px] uppercase font-black tracking-wider text-slate-400">
-                    <span>Membro da Célula</span>
-                    <span>Presença</span>
-                  </div>
+                <>
+                  {/* Barra de progresso de presença visual */}
+                  {(() => {
+                    const totalMembros = meetingPresenceList.length;
+                    const presentes = meetingPresenceList.filter(m => m.presente).length;
+                    const percentualPresente = totalMembros > 0 ? Math.round((presentes / totalMembros) * 100) : 0;
+                    return (
+                      <div className="mb-6 p-4 rounded-2xl bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/10 space-y-2">
+                        <div className="flex justify-between items-center text-xs font-bold text-slate-700 dark:text-slate-300">
+                          <span className="uppercase tracking-wider text-[10px] text-slate-550 dark:text-slate-400">Percentual de Presença</span>
+                          <span className="text-[#E4A232]">{percentualPresente}% ({presentes}/{totalMembros})</span>
+                        </div>
+                        <div className="w-full h-2.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-gradient-to-r from-amber-400 to-amber-600 rounded-full transition-all duration-500 ease-out"
+                            style={{ width: `${percentualPresente}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })()}
 
-                  <div className="divide-y divide-slate-100 dark:divide-slate-800/60">
-                    {meetingPresenceList.map((m, idx) => (
+                  <div className="presence-list-table space-y-4 mb-6 max-h-[45vh] overflow-y-auto pr-1">
+                    <div className="flex justify-between items-center px-1 text-[10px] uppercase font-black tracking-wider text-slate-400">
+                      <span>Membro da Célula</span>
+                      <span>Presença</span>
+                    </div>
+
+                    <div className="divide-y divide-slate-100 dark:divide-slate-800/60">
+                      {meetingPresenceList.map((m, idx) => (
                       <div key={m.id_membro} className="flex items-center justify-between py-3.5 first:pt-0 last:pb-0">
                         <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
                           {m.nome}
@@ -1154,6 +1259,7 @@ export default function ComunidadesPage() {
                     ))}
                   </div>
                 </div>
+              </>
             )}
 
             <div className="flex gap-3 justify-end pt-4 border-t border-slate-100 dark:border-slate-800">
@@ -1176,6 +1282,253 @@ export default function ComunidadesPage() {
                 </button>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Popup de Agendamento da Agenda integrado ao Cadastro de Reunião da Comunidade */}
+      {showAgendaPopup && selectedComunidadeForMeetings && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 shadow-2xl p-6 sm:p-10 w-full max-w-lg my-8 relative animate-in zoom-in-95 duration-250 max-h-[90vh] overflow-y-auto scrollbar-thin">
+            <button
+              onClick={() => setShowAgendaPopup(false)}
+              className="absolute top-6 right-6 p-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-full text-slate-500 dark:text-slate-400 cursor-pointer transition"
+            >
+              <X size={18} />
+            </button>
+
+            <div className="flex items-center gap-3 border-b border-slate-100 dark:border-slate-800 pb-5 mb-6">
+              <Calendar className="text-[#E4A232]" size={24} />
+              <h2 className="text-lg font-black uppercase tracking-tight text-slate-900 dark:text-white">
+                Agendar Reunião via Agenda
+              </h2>
+            </div>
+
+            {agendaError && (
+              <div className="mb-4 p-4 text-xs font-bold uppercase rounded-2xl bg-red-50 dark:bg-red-950/20 text-red-600 border border-red-200/50 dark:border-red-900/40">
+                ⚠️ {agendaError}
+              </div>
+            )}
+
+            <form onSubmit={handleSaveAgendaPopup} className="space-y-6">
+              
+              {/* Visibilidade do Evento */}
+              <div>
+                <label className="block text-[10px] font-black text-slate-450 dark:text-slate-500 uppercase tracking-widest mb-2 ml-1">
+                  Visibilidade do Evento
+                </label>
+                <div className="grid grid-cols-2 gap-2 p-1.5 bg-slate-50 dark:bg-slate-955 rounded-2xl border border-slate-100 dark:border-slate-850">
+                  <button
+                    type="button"
+                    onClick={() => setAgendaPrivado(false)}
+                    className={`py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition ${
+                      !agendaPrivado
+                        ? 'bg-[#E4A232] text-white shadow-md'
+                        : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    <Globe size={14} />
+                    🌍 Público
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAgendaPrivado(true)}
+                    className={`py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition ${
+                      agendaPrivado
+                        ? 'bg-[#E4A232] text-white shadow-md'
+                        : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    <Lock size={14} />
+                    🔒 Privado
+                  </button>
+                </div>
+              </div>
+
+              {/* Nome do Evento */}
+              <div>
+                <label className="block text-[10px] font-black text-slate-450 dark:text-slate-500 uppercase tracking-widest mb-2 ml-1">
+                  Nome do Evento
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={agendaTitulo}
+                  onChange={(e) => setAgendaTitulo(e.target.value)}
+                  placeholder="Ex: Reunião Geral de Célula"
+                  className="w-full px-4 py-3 rounded-2xl border-2 border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white focus:border-amber-500 dark:focus:border-amber-500 outline-none font-semibold transition animate-none"
+                />
+              </div>
+
+              {/* Local / Endereço */}
+              <div>
+                <label className="block text-[10px] font-black text-slate-450 dark:text-slate-500 uppercase tracking-widest mb-2 ml-1">
+                  📍 Local / Endereço (Texto Livre)
+                </label>
+                <input
+                  type="text"
+                  value={agendaLocal}
+                  onChange={(e) => setAgendaLocal(e.target.value)}
+                  placeholder="Ex: Templo Principal, Área Externa, Online via Zoom"
+                  className="w-full px-4 py-3 rounded-2xl border-2 border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white focus:border-amber-500 dark:focus:border-amber-500 outline-none font-semibold transition"
+                />
+              </div>
+
+              {/* Checkbox Dia Inteiro */}
+              <div className="flex items-center gap-2 px-1 py-1 bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/10 rounded-xl">
+                <input
+                  type="checkbox"
+                  id="agenda_dia_inteiro_form"
+                  checked={agendaDiaInteiro}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setAgendaDiaInteiro(checked);
+                    if (checked) {
+                      setAgendaEvtDateEnd(agendaEvtDate);
+                      setAgendaEvtTimeEnd('23:59');
+                    }
+                  }}
+                  className="w-4 h-4 text-[#E4A232] border-slate-300 rounded focus:ring-amber-500 cursor-pointer accent-amber-500"
+                />
+                <label 
+                  htmlFor="agenda_dia_inteiro_form" 
+                  className="text-[11px] font-extrabold text-slate-700 dark:text-slate-300 uppercase tracking-wide cursor-pointer select-none"
+                >
+                  ⏰ Evento do Dia Inteiro
+                </label>
+              </div>
+
+              {/* Data Inicial e Horário Inicial */}
+              <fieldset className="p-4 border-2 border-slate-100 dark:border-slate-850 rounded-2xl space-y-4">
+                <legend className="px-2 text-[10px] font-black text-amber-550 uppercase tracking-widest">
+                  Início do Evento
+                </legend>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[9px] font-black text-slate-450 dark:text-slate-500 uppercase tracking-widest mb-1">
+                      Data Inicial
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={agendaEvtDate}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setAgendaEvtDate(val);
+                        if (agendaDiaInteiro) {
+                          setAgendaEvtDateEnd(val);
+                        }
+                      }}
+                      className="w-full px-3 py-2.5 rounded-xl border border-slate-205 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-semibold transition text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[9px] font-black text-slate-450 dark:text-slate-500 uppercase tracking-widest mb-1">
+                      Horário Inicial
+                    </label>
+                    <input
+                      type="time"
+                      required
+                      value={agendaEvtTime}
+                      onChange={(e) => setAgendaEvtTime(e.target.value)}
+                      className="w-full px-3 py-2.5 rounded-xl border border-slate-205 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-semibold transition text-xs"
+                    />
+                  </div>
+                </div>
+              </fieldset>
+
+              {/* Data Final e Horário Final */}
+              <fieldset className={`p-4 border-2 border-slate-100 dark:border-slate-850 rounded-2xl space-y-4 transition ${agendaDiaInteiro ? 'opacity-40 pointer-events-none' : ''}`}>
+                <legend className="px-2 text-[10px] font-black text-slate-450 dark:text-slate-500 uppercase tracking-widest">
+                  Fim do Evento {!agendaDiaInteiro ? '' : '(Bloqueado por Dia Inteiro)'}
+                </legend>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[9px] font-black text-slate-450 dark:text-slate-500 uppercase tracking-widest mb-1">
+                      Data Final
+                    </label>
+                    <input
+                      type="date"
+                      required={!agendaDiaInteiro}
+                      disabled={agendaDiaInteiro}
+                      value={agendaDiaInteiro ? agendaEvtDate : agendaEvtDateEnd}
+                      onChange={(e) => setAgendaEvtDateEnd(e.target.value)}
+                      className="w-full px-3 py-2.5 rounded-xl border border-slate-205 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-semibold transition text-xs disabled:bg-slate-100 dark:disabled:bg-slate-900/50"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[9px] font-black text-slate-450 dark:text-slate-500 uppercase tracking-widest mb-1">
+                      Horário Final
+                    </label>
+                    <input
+                      type="time"
+                      required={!agendaDiaInteiro}
+                      disabled={agendaDiaInteiro}
+                      value={agendaDiaInteiro ? '23:59' : agendaEvtTimeEnd}
+                      onChange={(e) => setAgendaEvtTimeEnd(e.target.value)}
+                      className="w-full px-3 py-2.5 rounded-xl border border-slate-205 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-semibold transition text-xs disabled:bg-slate-100 dark:disabled:bg-slate-900/50"
+                    />
+                  </div>
+                </div>
+              </fieldset>
+
+              {/* Status / Prioridade */}
+              <div>
+                <label className="block text-[10px] font-black text-slate-455 dark:text-slate-500 uppercase tracking-widest mb-2 ml-1">
+                  Status / Prioridade
+                </label>
+                <select
+                  value={agendaStatus}
+                  onChange={(e) => setAgendaStatus(e.target.value as any)}
+                  className="w-full px-4 py-3 rounded-2xl border-2 border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-semibold transition cursor-pointer text-xs"
+                >
+                  <option value="Normal">Normal (Azul)</option>
+                  <option value="Importante">Importante (Vermelho)</option>
+                  <option value="Alerta">Alerta (Amarelo)</option>
+                </select>
+              </div>
+
+              {/* Recorrência */}
+              <div>
+                <label className="block text-[10px] font-black text-slate-450 dark:text-slate-500 uppercase tracking-widest mb-2 ml-1">
+                  🔁 Recorrência / Repetição de Agendas
+                </label>
+                <select
+                  value={agendaRecorrencia}
+                  onChange={(e) => setAgendaRecorrencia(e.target.value as any)}
+                  className="w-full px-4 py-3 rounded-2xl border-2 border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-semibold transition cursor-pointer text-xs"
+                >
+                  <option value="Único">Único (Sem repetição)</option>
+                  <option value="Diário">Diário (Duplica todo dia até Data Final)</option>
+                  <option value="Semanal">Semanal (Duplica toda semana até Data Final)</option>
+                  <option value="Mensal">Mensal (Duplica todo mês até Data Final)</option>
+                  <option value="Anual">Anual (Duplica todo ano até Data Final)</option>
+                </select>
+                <p className="text-[10px] text-slate-400 mt-1.5 ml-1">
+                  Escolha um período se deseja criar uma série de reuniões repetidas automaticamente da Data Inicial até a Data Final na Agenda Oficial e replicadas como encontros celulares.
+                </p>
+              </div>
+
+              <div className="flex gap-3 justify-end pt-4 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowAgendaPopup(false)}
+                  className="px-5 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs uppercase tracking-wider transition cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={agendaSubmitting}
+                  className="px-6 py-3 rounded-xl bg-[#E4A232] hover:bg-[#E4A232]/90 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-amber-500/10 flex items-center gap-2 transition cursor-pointer"
+                >
+                  <Save size={14} />
+                  {agendaSubmitting ? 'Salvando...' : 'Confirmar Agenda e Ligar Reunião'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
