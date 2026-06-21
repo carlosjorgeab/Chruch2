@@ -146,7 +146,7 @@ export async function GET(req: NextRequest) {
     ALTER TABLE agendas ADD COLUMN IF NOT EXISTS dia_inteiro BOOLEAN DEFAULT false;
     ALTER TABLE agendas ADD COLUMN IF NOT EXISTS local VARCHAR(255);
     ALTER TABLE agendas ADD COLUMN IF NOT EXISTS privado BOOLEAN DEFAULT false;
-    ALTER TABLE agendas ADD COLUMN IF NOT EXISTS id_comunidade UUID REFERENCES comunidades(id) ON DELETE CASCADE;
+    ALTER TABLE agendas DROP COLUMN IF EXISTS id_comunidade CASCADE;
 
     CREATE TABLE IF NOT EXISTS chamada_reuniao (
       id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

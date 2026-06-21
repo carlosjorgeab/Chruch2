@@ -21,6 +21,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     // Run DB migrations automatically in background
     fetch('/api/migrate').catch(err => console.error('Auto migration failed:', err));
 
+    const savedDark = localStorage.getItem('theme') === 'dark';
+    if (savedDark) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+
     const timer = setTimeout(() => setMounted(true), 0);
     return () => clearTimeout(timer);
   }, []);
@@ -38,7 +45,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
         <div className="max-w-md w-full bg-white p-10 rounded-[3rem] shadow-2xl text-center space-y-8 border border-slate-100">
-          <div className="w-24 h-24 bg-red-50 text-red-500 rounded-3xl flex items-center justify-center mx-auto rotate-3 shadow-inner">
+          <div className="w-24 h-24 bg-transparent text-red-500 rounded-3xl flex items-center justify-center mx-auto rotate-3 shadow-inner">
             <ShieldAlert size={48} />
           </div>
           <div>
@@ -115,10 +122,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               --church-button: ${corBotoes || '#E4A232'};
             }
             .dark {
-              --church-bg: ${corFundo || '#0f172a'};
-              --church-panel: ${corPaineis || '#1e293b'};
-              --church-border: ${corBordas || '#334155'};
-              --church-font: ${corFontes || '#f8fafc'};
+              --church-bg: #090d16;
+              --church-panel: #111625;
+              --church-border: #1f2937;
+              --church-font: #f3f4f6;
               --church-button: ${corBotoes || '#E4A232'};
             }
             

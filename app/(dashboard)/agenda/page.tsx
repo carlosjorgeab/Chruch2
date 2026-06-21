@@ -190,12 +190,23 @@ export default function AgendaPage() {
       
       const { data, error: fetchErr } = await supabase
         .from('agendas')
-        .select('*')
+        .select(`
+          *,
+          reunioes (
+            id_comunidade
+          )
+        `)
         .eq('id_igreja', selectedIgreja.id)
         .order('data_hora', { ascending: true });
 
       if (fetchErr) throw fetchErr;
-      setItems(data || []);
+
+      const mapped = (data || []).map((item: any) => ({
+        ...item,
+        id_comunidade: item.reunioes ? (Array.isArray(item.reunioes) ? item.reunioes[0]?.id_comunidade : item.reunioes?.id_comunidade) : null
+      }));
+
+      setItems(mapped);
     } catch (err: any) {
       console.error('Error fetching agenda:', err);
       setError('Erro ao carregar a agenda da igreja: ' + err.message);
@@ -326,8 +337,7 @@ export default function AgendaPage() {
           dia_inteiro: diaInteiro,
           local: local.trim() || null,
           privado: privado,
-          status: status,
-          id_comunidade: selectedComunidadeId || null
+          status: status
         };
 
         const { error: patchErr } = await supabase
@@ -336,6 +346,29 @@ export default function AgendaPage() {
           .eq('id', editingId);
 
         if (patchErr) throw patchErr;
+
+        if (selectedComunidadeId) {
+          const { error: reunioesErr } = await supabase
+            .from('reunioes')
+            .upsert({
+              id_agenda: editingId,
+              id_comunidade: selectedComunidadeId
+            }, { onConflict: 'id_agenda' });
+
+          if (reunioesErr) {
+            console.error('Error exporting to reunioes (update):', reunioesErr);
+          }
+        } else {
+          // If community link removed, clear from reunioes
+          const { error: delReunioesErr } = await supabase
+            .from('reunioes')
+            .delete()
+            .eq('id_agenda', editingId);
+
+          if (delReunioesErr) {
+            console.error('Error deleting from reunioes (update):', delReunioesErr);
+          }
+        }
 
         setSuccess('Evento atualizado com sucesso!');
       } else {
@@ -358,8 +391,7 @@ export default function AgendaPage() {
             dia_inteiro: diaInteiro,
             local: local.trim() || null,
             privado: privado,
-            status: status,
-            id_comunidade: selectedComunidadeId || null
+            status: status
           });
         } else {
           while (currentStartDate <= limitDate) {
@@ -373,8 +405,7 @@ export default function AgendaPage() {
               dia_inteiro: diaInteiro,
               local: local.trim() || null,
               privado: privado,
-              status: status,
-              id_comunidade: selectedComunidadeId || null
+              status: status
             });
 
             if (recorrencia === 'Diário') {
@@ -389,11 +420,28 @@ export default function AgendaPage() {
           }
         }
 
-        const { error: postErr } = await supabase
+        const { data: insertedData, error: postErr } = await supabase
           .from('agendas')
-          .insert(payloadsToInsert);
+          .insert(payloadsToInsert)
+          .select('id');
 
         if (postErr) throw postErr;
+
+        // Export to reunioes if id_comunidade is selected
+        if (selectedComunidadeId && insertedData && insertedData.length > 0) {
+          const reunioesPayload = insertedData.map((item: any) => ({
+            id_agenda: item.id,
+            id_comunidade: selectedComunidadeId
+          }));
+
+          const { error: reunioesErr } = await supabase
+            .from('reunioes')
+            .upsert(reunioesPayload, { onConflict: 'id_agenda' });
+
+          if (reunioesErr) {
+            console.error('Error exporting to reunioes:', reunioesErr);
+          }
+        }
 
         setSuccess(`Novo evento cadastrado com sucesso! (${payloadsToInsert.length} eventos agendados no período)`);
       }

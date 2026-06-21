@@ -344,7 +344,7 @@ export default function IgrejasPage() {
     return (
       <div className="p-8 flex items-center justify-center min-h-[60vh]">
         <div className="max-w-md w-full bg-white dark:bg-slate-800 p-8 rounded-2xl shadow-md border border-slate-200 dark:border-slate-700 text-center space-y-4">
-          <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-2xl flex items-center justify-center mx-auto">
+          <div className="w-16 h-16 bg-transparent text-red-600 dark:text-red-400 rounded-2xl flex items-center justify-center mx-auto">
             <ShieldAlert size={36} />
           </div>
           <h2 className="text-xl font-bold text-slate-900 dark:text-white">Acesso Restrito</h2>
@@ -703,7 +703,7 @@ export default function IgrejasPage() {
                     <tr key={ig.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/20 transition-all">
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 rounded-lg flex items-center justify-center flex-shrink-0">
+                          <div className="w-10 h-10 bg-transparent text-amber-600 dark:text-amber-400 rounded-lg flex items-center justify-center flex-shrink-0">
                             {ig.logo_url ? (
                               // eslint-disable-next-line @next/next/no-img-element
                               <img src={ig.logo_url} alt="Logo" className="w-8 h-8 object-cover rounded-md" />

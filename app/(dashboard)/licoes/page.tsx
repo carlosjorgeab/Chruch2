@@ -425,7 +425,7 @@ export default function LicoesPage() {
                       <tr key={l.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/20 transition-all">
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 rounded-xl flex items-center justify-center flex-shrink-0">
+                            <div className="w-10 h-10 bg-transparent text-amber-600 dark:text-amber-400 rounded-xl flex items-center justify-center flex-shrink-0">
                               <BookOpen size={20} />
                             </div>
                             <div>

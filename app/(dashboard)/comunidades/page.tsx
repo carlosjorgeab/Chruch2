@@ -113,8 +113,13 @@ export default function ComunidadesPage() {
     try {
       const { data, error: meetErr } = await supabase
         .from('agendas')
-        .select('*')
-        .eq('id_comunidade', comunidadeId)
+        .select(`
+          *,
+          reunioes!inner (
+            id_comunidade
+          )
+        `)
+        .eq('reunioes.id_comunidade', comunidadeId)
         .order('data_hora', { ascending: false });
       if (meetErr) throw meetErr;
       setMeetingsComunidade(data || []);
@@ -212,8 +217,7 @@ export default function ComunidadesPage() {
           dia_inteiro: agendaDiaInteiro,
           local: agendaLocal.trim() || null,
           privado: agendaPrivado,
-          status: agendaStatus,
-          id_comunidade: selectedComunidadeForMeetings.id
+          status: agendaStatus
         });
       } else {
         while (currentStartDate <= limitDate) {
@@ -227,8 +231,7 @@ export default function ComunidadesPage() {
             dia_inteiro: agendaDiaInteiro,
             local: agendaLocal.trim() || null,
             privado: agendaPrivado,
-            status: agendaStatus,
-            id_comunidade: selectedComunidadeForMeetings.id
+            status: agendaStatus
           });
 
           if (agendaRecorrencia === 'Diário') {

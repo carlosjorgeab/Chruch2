@@ -246,7 +246,6 @@ CREATE TABLE IF NOT EXISTS agendas (
   local VARCHAR(255),
   privado BOOLEAN DEFAULT false,
   status VARCHAR(20) DEFAULT 'Normal' CHECK (status IN ('Importante', 'Normal', 'Alerta')),
-  id_comunidade UUID REFERENCES comunidades(id) ON DELETE CASCADE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
