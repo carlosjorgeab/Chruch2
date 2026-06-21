@@ -15,12 +15,25 @@ type Comunidade = {
   horario: string | null;
   local: string | null;
   id_lider: string | null;
+  id_segundo_lider: string | null;
+  id_terceiro_lider: string | null;
+  imagem_base64: string | null;
+  imagem_nome: string | null;
+  categoria: string | null;
   lider?: { nome: string };
+  segundo_lider?: { nome: string };
+  terceiro_lider?: { nome: string };
 };
 
 type Membro = {
   id: string;
   nome: string;
+};
+
+type AssociatedMember = {
+  id: string;
+  nome: string;
+  relationId: string;
 };
 
 export default function ComunidadesPage() {
@@ -31,6 +44,9 @@ export default function ComunidadesPage() {
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [search, setSearch] = useState('');
+  
+  const [associatedMembers, setAssociatedMembers] = useState<AssociatedMember[]>([]);
+  const [selectedAddMember, setSelectedAddMember] = useState<string>('');
 
   const [currentComunidade, setCurrentComunidade] = useState<Partial<Comunidade>>({
     nome: '',
@@ -39,6 +55,11 @@ export default function ComunidadesPage() {
     horario: '19:30',
     local: '',
     id_lider: '',
+    id_segundo_lider: '',
+    id_terceiro_lider: '',
+    imagem_base64: '',
+    imagem_nome: '',
+    categoria: 'Adultos',
   });
 
   const [error, setError] = useState('');
@@ -62,7 +83,12 @@ export default function ComunidadesPage() {
       setError('');
       const { data, error: err } = await supabase
         .from('comunidades')
-        .select('*, lider:membros(nome)')
+        .select(`
+          *,
+          lider:membros!id_lider(nome),
+          segundo_lider:membros!id_segundo_lider(nome),
+          terceiro_lider:membros!id_terceiro_lider(nome)
+        `)
         .eq('id_igreja', selectedIgreja.id)
         .order('nome', { ascending: true });
 
@@ -76,6 +102,80 @@ export default function ComunidadesPage() {
       setLoading(false);
     }
   }
+
+  async function fetchAssociatedMembers(comunidadeId: string) {
+    try {
+      const { data, error: err } = await supabase
+        .from('membros_comunidade')
+        .select(`
+          id,
+          id_membro,
+          membros!id_membro(id, nome)
+        `)
+        .eq('id_comunidade', comunidadeId);
+
+      if (!err && data) {
+        const processed = data.map((d: any) => ({
+          id: d.id_membro,
+          nome: d.membros?.nome || 'Membro desconhecido',
+          relationId: d.id
+        }));
+        setAssociatedMembers(processed);
+      } else {
+        setAssociatedMembers([]);
+      }
+    } catch (e) {
+      console.error('Erro ao buscar membros associados:', e);
+    }
+  }
+
+  const handleAddMember = async () => {
+    if (!currentComunidade.id) return;
+    if (!selectedAddMember) {
+      setError('Selecione um membro para adicionar.');
+      return;
+    }
+    if (associatedMembers.some(m => m.id === selectedAddMember)) {
+      setError('Este membro já faz parte desta comunidade.');
+      return;
+    }
+
+    try {
+      setError('');
+      setSuccess('');
+      const { error: insertErr } = await supabase
+        .from('membros_comunidade')
+        .insert({
+          id_comunidade: currentComunidade.id,
+          id_membro: selectedAddMember
+        });
+
+      if (insertErr) throw insertErr;
+      setSuccess('Membro adicionado à comunidade com sucesso!');
+      setSelectedAddMember('');
+      fetchAssociatedMembers(currentComunidade.id);
+    } catch (e: any) {
+      setError('Erro ao adicionar membro: ' + (e.message || e));
+    }
+  };
+
+  const handleRemoveMember = async (relationId: string) => {
+    if (!currentComunidade.id) return;
+    try {
+      setError('');
+      setSuccess('');
+      const { error: deleteErr } = await supabase
+        .from('membros_comunidade')
+        .delete()
+        .eq('id', relationId);
+
+      if (deleteErr) throw deleteErr;
+      setSuccess('Membro removido da comunidade.');
+      fetchAssociatedMembers(currentComunidade.id);
+    } catch (e: any) {
+      setError('Erro ao remover membro: ' + (e.message || e));
+    }
+  };
 
   async function fetchMembros() {
     if (!selectedIgreja) return;
@@ -100,6 +200,12 @@ export default function ComunidadesPage() {
     setIsEditing(true);
     setError('');
     setSuccess('');
+    setSelectedAddMember('');
+    if (comunidade.id) {
+      fetchAssociatedMembers(comunidade.id);
+    } else {
+      setAssociatedMembers([]);
+    }
   };
 
   const handleNew = () => {
@@ -115,7 +221,14 @@ export default function ComunidadesPage() {
       horario: '19:30',
       local: '',
       id_lider: '',
+      id_segundo_lider: '',
+      id_terceiro_lider: '',
+      imagem_base64: '',
+      imagem_nome: '',
+      categoria: 'Adultos',
     });
+    setAssociatedMembers([]);
+    setSelectedAddMember('');
     setIsEditing(true);
     setError('');
     setSuccess('');
@@ -160,6 +273,11 @@ export default function ComunidadesPage() {
       horario: currentComunidade.horario || null,
       local: currentComunidade.local || null,
       id_lider: currentComunidade.id_lider || null,
+      id_segundo_lider: currentComunidade.id_segundo_lider || null,
+      id_terceiro_lider: currentComunidade.id_terceiro_lider || null,
+      imagem_base64: currentComunidade.imagem_base64 || null,
+      imagem_nome: currentComunidade.imagem_nome || null,
+      categoria: currentComunidade.categoria || null,
     };
 
     try {
@@ -223,124 +341,337 @@ export default function ComunidadesPage() {
       )}
 
       {isEditing ? (
-        <form onSubmit={handleSubmit} className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm p-8 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
-          <div className="flex justify-between items-center border-b border-slate-150 dark:border-slate-700 pb-4">
-            <h3 className="text-xl font-bold text-slate-900 dark:text-white">
-              {currentComunidade.id ? 'Editar Comunidade' : 'Criar Nova Comunidade / Célula'}
-            </h3>
-            <button type="button" onClick={() => setIsEditing(false)} className="text-slate-400 hover:text-slate-600">
-              <X size={20} />
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
-                Nome da Comunidade *
-              </label>
-              <input
-                type="text"
-                required
-                value={currentComunidade.nome || ''}
-                onChange={(e) => setCurrentComunidade({ ...currentComunidade, nome: e.target.value })}
-                className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-bold"
-                placeholder="Ex. Comunidade Restauração"
-              />
+        <div className="space-y-6">
+          <form onSubmit={handleSubmit} className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm p-8 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
+            <div className="flex justify-between items-center border-b border-slate-150 dark:border-slate-700 pb-4">
+              <h3 className="text-xl font-bold text-slate-900 dark:text-white">
+                {currentComunidade.id ? 'Editar Comunidade' : 'Criar Nova Comunidade / Célula'}
+              </h3>
+              <button type="button" onClick={() => setIsEditing(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
+                <X size={20} />
+              </button>
             </div>
 
-            <div>
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
-                Líder Responsável
-              </label>
-              <select
-                value={currentComunidade.id_lider || ''}
-                onChange={(e) => setCurrentComunidade({ ...currentComunidade, id_lider: e.target.value })}
-                className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-bold"
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
+                  Nome da Comunidade *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={currentComunidade.nome || ''}
+                  onChange={(e) => setCurrentComunidade({ ...currentComunidade, nome: e.target.value })}
+                  className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-bold text-sm"
+                  placeholder="Ex. Comunidade Restauração"
+                />
+              </div>
+
+              {/* c) Inserir Categorias no Combo com dados específicos */}
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
+                  Categoria da Comunidade
+                </label>
+                <select
+                  value={currentComunidade.categoria || 'Adultos'}
+                  onChange={(e) => setCurrentComunidade({ ...currentComunidade, categoria: e.target.value })}
+                  className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-bold text-sm cursor-pointer"
+                >
+                  <option value="Idoso">👴 Idoso</option>
+                  <option value="Famílias">👨‍👩‍👧‍👦 Famílias</option>
+                  <option value="Casais">💑 Casais</option>
+                  <option value="Adultos">👥 Adultos</option>
+                  <option value="Jovens">✨ Jovens</option>
+                  <option value="Adolescentes">🎒 Adolescentes</option>
+                  <option value="Crianças">🧸 Crianças</option>
+                </select>
+              </div>
+
+              {/* a) Campos Segundo Lider e Terceiro Lider, recuperando do Cadastro de Membros */}
+              <div className="md:col-span-2">
+                <fieldset className="p-4 border-2 border-slate-100 dark:border-slate-800 rounded-2xl space-y-4">
+                  <legend className="px-2 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                    Liderança da Comunidade (Selecione do cadastro de membros)
+                  </legend>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1.5 ml-1">
+                        Líder Responsável
+                      </label>
+                      <select
+                        value={currentComunidade.id_lider || ''}
+                        onChange={(e) => setCurrentComunidade({ ...currentComunidade, id_lider: e.target.value || null })}
+                        className="w-full px-3 py-2.5 text-xs rounded-xl border border-slate-205 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-semibold cursor-pointer"
+                      >
+                        <option value="">Selecione...</option>
+                        {membros.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.nome}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1.5 ml-1">
+                        Segundo Líder
+                      </label>
+                      <select
+                        value={currentComunidade.id_segundo_lider || ''}
+                        onChange={(e) => setCurrentComunidade({ ...currentComunidade, id_segundo_lider: e.target.value || null })}
+                        className="w-full px-3 py-2.5 text-xs rounded-xl border border-slate-205 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-semibold cursor-pointer"
+                      >
+                        <option value="">Selecione...</option>
+                        {membros.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.nome}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1.5 ml-1">
+                        Terceiro Líder
+                      </label>
+                      <select
+                        value={currentComunidade.id_terceiro_lider || ''}
+                        onChange={(e) => setCurrentComunidade({ ...currentComunidade, id_terceiro_lider: e.target.value || null })}
+                        className="w-full px-3 py-2.5 text-xs rounded-xl border border-slate-205 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-semibold cursor-pointer"
+                      >
+                        <option value="">Selecione...</option>
+                        {membros.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.nome}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </fieldset>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
+                  Dia de Reunião
+                </label>
+                <select
+                  value={currentComunidade.dia_reuniao || 'Quarta-feira'}
+                  onChange={(e) => setCurrentComunidade({ ...currentComunidade, dia_reuniao: e.target.value })}
+                  className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-bold text-sm cursor-pointer"
+                >
+                  <option value="Segunda-feira">Segunda-feira</option>
+                  <option value="Terça-feira">Terça-feira</option>
+                  <option value="Quarta-feira">Quarta-feira</option>
+                  <option value="Quinta-feira">Quinta-feira</option>
+                  <option value="Sexta-feira">Sexta-feira</option>
+                  <option value="Sábado">Sábado</option>
+                  <option value="Domingo">Domingo</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
+                  Horário da Reunião
+                </label>
+                <input
+                  type="text"
+                  value={currentComunidade.horario || '19:30'}
+                  onChange={(e) => setCurrentComunidade({ ...currentComunidade, horario: e.target.value })}
+                  className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-bold text-sm"
+                  placeholder="Ex. 19:30 ou 20:00"
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
+                  Local de Encontro
+                </label>
+                <input
+                  type="text"
+                  value={currentComunidade.local || ''}
+                  onChange={(e) => setCurrentComunidade({ ...currentComunidade, local: e.target.value })}
+                  className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-semibold text-sm"
+                  placeholder="Residência do Irmão João ou Sala Principal do Templo"
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
+                  Descrição da Comunidade
+                </label>
+                <textarea
+                  value={currentComunidade.descricao || ''}
+                  onChange={(e) => setCurrentComunidade({ ...currentComunidade, descricao: e.target.value })}
+                  className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-semibold min-h-[100px] text-sm"
+                  placeholder="Escreva sobre o propósito, o público-alvo ou os objetivos deste pequeno grupo..."
+                />
+              </div>
+
+              {/* b) Inserir um Campo de Download da Imagem da Comunidade, Como utilizado no Cadastro de Mural de Avisos */}
+              <div className="md:col-span-2">
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
+                  Imagem / Banner de Capa da Comunidade
+                </label>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="border border-dashed border-slate-205 dark:border-slate-800 rounded-2xl p-6 flex flex-col items-center justify-center text-center bg-slate-50 dark:bg-slate-950/40">
+                    <p className="text-[11px] text-slate-500 mb-4 max-w-xs leading-relaxed">Arraste ou toque para fazer upload e salvar uma capa visual para sua célula.</p>
+                    <label className="cursor-pointer bg-[#E4A232] hover:bg-[#E4A232]/90 hover:scale-[1.03] text-white font-bold text-xs uppercase tracking-wider py-2.5 px-4 rounded-xl transition duration-150">
+                      Selecionar Arquivo Imagem
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onload = (loadEvt) => {
+                              setCurrentComunidade(prev => ({
+                                ...prev,
+                                imagem_base64: loadEvt.target?.result as string,
+                                imagem_nome: file.name
+                              }));
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                        className="hidden"
+                      />
+                    </label>
+                    {currentComunidade.imagem_nome && (
+                      <p className="text-[10px] text-emerald-600 font-bold mt-2 font-mono truncate max-w-xs">✓ {currentComunidade.imagem_nome}</p>
+                    )}
+                  </div>
+
+                  <div className="border border-slate-150 dark:border-slate-800 rounded-2xl p-4 flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-950/20 min-h-[140px]">
+                    {currentComunidade.imagem_base64 ? (
+                      <div className="text-center space-y-2 w-full">
+                        <img
+                          src={currentComunidade.imagem_base64}
+                          alt="Prévia capa comunidade"
+                          className="w-full h-24 object-cover rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm mx-auto"
+                        />
+                        <div className="flex gap-4 justify-center items-center">
+                          <a
+                            href={currentComunidade.imagem_base64}
+                            download={currentComunidade.imagem_nome || 'capa_comunidade.png'}
+                            className="text-[10px] text-amber-600 hover:underline font-bold flex items-center gap-1 cursor-pointer"
+                          >
+                            ⬇️ Baixar Imagem
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => setCurrentComunidade(prev => ({ ...prev, imagem_base64: null, imagem_nome: null }))}
+                            className="text-[10px] text-red-500 hover:underline font-bold cursor-pointer"
+                          >
+                            Remover
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-slate-450 italic">Nenhuma capa de imagem carregada para a comunidade</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* d) Criar uma Listagem de Membros para a Comunidade (Tabela com adição/remoção em tempo real) */}
+              {currentComunidade.id ? (
+                <div className="md:col-span-2 border-t border-slate-100 dark:border-slate-700 pt-6">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+                    <div>
+                      <h4 className="text-sm font-black uppercase text-slate-800 dark:text-white tracking-wide flex items-center gap-2">
+                        <span>👥 Participantes da Comunidade</span>
+                        <span className="text-xs bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-400 px-2 py-0.5 rounded-full">
+                          {associatedMembers.length}
+                        </span>
+                      </h4>
+                      <p className="text-[11px] text-slate-400">Adicione ou remova membros da congregação neste Pequeno Grupo.</p>
+                    </div>
+
+                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                      <select
+                        value={selectedAddMember}
+                        onChange={(e) => setSelectedAddMember(e.target.value)}
+                        className="px-3 py-2.5 text-xs rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-semibold cursor-pointer w-full sm:w-48"
+                      >
+                        <option value="">Selecione Membro...</option>
+                        {membros.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.nome}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={handleAddMember}
+                        className="px-4 py-2.5 bg-[#E4A232] hover:bg-[#E4A232]/90 text-white rounded-xl font-bold text-xs uppercase tracking-wider transition shrink-0 cursor-pointer"
+                      >
+                        Adicionar
+                      </button>
+                    </div>
+                  </div>
+
+                  {associatedMembers.length === 0 ? (
+                    <div className="border border-dashed border-slate-200 dark:border-slate-800 rounded-xl p-6 text-center text-xs text-slate-450 italic bg-slate-50 dark:bg-slate-950/20">
+                      Nenhum membro vinculado a esta comunidade ainda. Use a caixa de seleção para adicionar novos participantes.
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto border border-slate-150 dark:border-slate-850 rounded-2xl">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="bg-slate-50 dark:bg-slate-950/40 text-[10px] text-slate-450 font-black uppercase tracking-wider border-b border-slate-150 dark:border-slate-800/80">
+                            <th className="p-3 pl-4">Membro Cadastrado</th>
+                            <th className="p-3 text-right pr-4">Ação</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 text-xs font-semibold text-slate-700 dark:text-slate-300">
+                          {associatedMembers.map((member) => (
+                            <tr key={member.relationId} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/10">
+                              <td className="p-3 pl-4 font-bold">{member.nome}</td>
+                              <td className="p-3 text-right pr-4">
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveMember(member.relationId)}
+                                  className="text-red-500 hover:text-red-600 hover:underline font-bold text-xs uppercase tracking-wider cursor-pointer"
+                                >
+                                  Remover
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="md:col-span-2 border-t border-slate-100 dark:border-slate-700 pt-6">
+                  <div className="p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-2xl text-xs text-amber-800 dark:text-amber-400 font-bold flex items-center gap-2">
+                    <span>⚠️ Após Salvar o cadastro inicial desta comunidade, a listagem/tabela para vincular membros e participantes será ativada aqui automaticamente.</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-3 pt-6 border-t border-slate-100 dark:border-slate-700">
+              <button
+                type="button"
+                onClick={() => setIsEditing(false)}
+                className="px-6 py-3 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-900 transition-all uppercase text-xs tracking-wider cursor-pointer"
               >
-                <option value="">Selecione um líder...</option>
-                {membros.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.nome}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
-                Dia de Reunião
-              </label>
-              <select
-                value={currentComunidade.dia_reuniao || 'Quarta-feira'}
-                onChange={(e) => setCurrentComunidade({ ...currentComunidade, dia_reuniao: e.target.value })}
-                className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-bold"
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                className="flex items-center gap-2 bg-[#E4A232] hover:bg-[#E4A232]/90 text-white px-8 py-3 rounded-xl font-bold transition-all shadow-md uppercase text-xs tracking-widest cursor-pointer"
               >
-                <option value="Segunda-feira">Segunda-feira</option>
-                <option value="Terça-feira">Terça-feira</option>
-                <option value="Quarta-feira">Quarta-feira</option>
-                <option value="Quinta-feira">Quinta-feira</option>
-                <option value="Sexta-feira">Sexta-feira</option>
-                <option value="Sábado">Sábado</option>
-                <option value="Domingo">Domingo</option>
-              </select>
+                <Save size={16} />
+                Salvar Comunidade
+              </button>
             </div>
-
-            <div>
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
-                Horário da Reunião
-              </label>
-              <input
-                type="text"
-                value={currentComunidade.horario || '19:30'}
-                onChange={(e) => setCurrentComunidade({ ...currentComunidade, horario: e.target.value })}
-                className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-bold"
-                placeholder="Ex. 19:30 ou 20:00"
-              />
-            </div>
-
-            <div className="md:col-span-2">
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
-                Local de Encontro
-              </label>
-              <input
-                type="text"
-                value={currentComunidade.local || ''}
-                onChange={(e) => setCurrentComunidade({ ...currentComunidade, local: e.target.value })}
-                className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-semibold"
-                placeholder="Residência do Irmão João ou Sala Principal do Templo"
-              />
-            </div>
-
-            <div className="md:col-span-2">
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
-                Descrição da Comunidade
-              </label>
-              <textarea
-                value={currentComunidade.descricao || ''}
-                onChange={(e) => setCurrentComunidade({ ...currentComunidade, descricao: e.target.value })}
-                className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-semibold min-h-[100px]"
-                placeholder="Escreva sobre o propósito, o público-alvo ou os objetivos deste pequeno grupo..."
-              />
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-3 pt-6 border-t border-slate-100 dark:border-slate-700">
-            <button
-              type="button"
-              onClick={() => setIsEditing(false)}
-              className="px-6 py-3 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-900 transition-all uppercase text-xs tracking-wider"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              className="flex items-center gap-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-8 py-3 rounded-xl font-bold transition-all shadow-md hover:opacity-90 uppercase text-xs tracking-widest"
-            >
-              <Save size={16} />
-              Salvar Comunidade
-            </button>
-          </div>
-        </form>
+          </form>
+        </div>
       ) : (
         <div className="space-y-4">
           <div className="relative max-w-md">
@@ -350,7 +681,7 @@ export default function ComunidadesPage() {
               placeholder="Buscar comunidade, descrição ou líder..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-850 bg-white dark:bg-slate-900 text-slate-900 dark:text-white outline-none focus:border-amber-500 transition-all"
+              className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white outline-none focus:border-amber-500 transition-all text-xs font-semibold"
             />
           </div>
 
@@ -366,52 +697,94 @@ export default function ComunidadesPage() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredComunidades.map((c) => (
-                <div key={c.id} className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col justify-between">
+                <div key={c.id} className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col justify-between hover:shadow-md transition-all duration-300">
+                  
+                  {/* b) Colocar a Imagem na Visualização e incluir campo de Download como no Mural */}
+                  {c.imagem_base64 ? (
+                    <div className="relative w-full h-36 bg-slate-100 dark:bg-slate-950/50 border-b border-slate-205 dark:border-slate-800 overflow-hidden">
+                      <img
+                        src={c.imagem_base64}
+                        alt={`capa_${c.nome}`}
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute top-2 right-2">
+                        <a
+                          href={c.imagem_base64}
+                          download={c.imagem_nome || 'capa.png'}
+                          className="bg-black/60 hover:bg-black/80 backdrop-blur-sm text-white text-[9px] font-black uppercase tracking-wider py-1 px-2.5 rounded-lg flex items-center gap-1 transition cursor-pointer"
+                        >
+                          📥 Baixar Capa
+                        </a>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="w-full h-12 bg-gradient-to-r from-amber-500/10 to-transparent dark:from-amber-500/5" />
+                  )}
+
                   <div className="p-6 space-y-4">
                     <div className="flex justify-between items-start">
-                      <div className="w-12 h-12 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 rounded-xl flex items-center justify-center">
-                        <Users size={22} />
+                      <div className="flex flex-wrap items-center gap-2">
+                        {c.categoria && (
+                          <span className="text-[10px] font-black uppercase tracking-wider bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-400 px-2.5 py-1 rounded-full border border-amber-200/50 dark:border-amber-800/30">
+                            {c.categoria}
+                          </span>
+                        )}
                       </div>
-                      <div className="flex gap-1">
+                      <div className="flex gap-1 shrink-0">
                         <button
                           onClick={() => handleEdit(c)}
-                          className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-slate-50 dark:hover:bg-slate-800 transition rounded-lg"
+                          className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-slate-50 dark:hover:bg-slate-800 transition rounded-lg cursor-pointer"
                         >
-                          <Edit2 size={15} />
+                          <Edit2 size={14} />
                         </button>
                         <button
                           onClick={() => handleDelete(c.id, c.nome)}
-                          className="p-1.5 text-slate-400 hover:text-red-650 hover:bg-slate-50 dark:hover:bg-slate-800 transition rounded-lg"
+                          className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-slate-50 dark:hover:bg-slate-800 transition rounded-lg cursor-pointer"
                         >
-                          <Trash2 size={15} />
+                          <Trash2 size={14} />
                         </button>
                       </div>
                     </div>
 
                     <div className="space-y-1">
-                      <h4 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">{c.nome}</h4>
+                      <h4 className="text-base font-black text-slate-900 dark:text-white uppercase tracking-tight">{c.nome}</h4>
                       {c.descricao && (
-                        <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed">{c.descricao}</p>
+                        <p className="text-xs text-slate-550 dark:text-slate-400 line-clamp-2 leading-relaxed font-medium">{c.descricao}</p>
                       )}
                     </div>
 
                     <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-2">
                       <div className="flex items-center gap-2 text-xs font-semibold text-slate-650 dark:text-slate-350">
-                        <Calendar size={14} className="text-amber-600" />
+                        <Calendar size={13} className="text-amber-600" />
                         <span>{c.dia_reuniao} às {c.horario}</span>
                       </div>
                       {c.local && (
                         <div className="flex items-center gap-2 text-xs font-semibold text-slate-650 dark:text-slate-350">
-                          <MapPin size={14} className="text-slate-400" />
+                          <MapPin size={13} className="text-slate-400" />
                           <span className="truncate">{c.local}</span>
                         </div>
                       )}
                     </div>
                   </div>
 
-                  <div className="bg-slate-50 dark:bg-slate-900/40 p-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
-                    <span className="text-[10px] uppercase font-black tracking-wider text-slate-400">Líder</span>
-                    <span className="text-xs font-bold text-slate-900 dark:text-white">{c.lider?.nome || 'Não definido'}</span>
+                  {/* a) Criar os campos Segundo Lider e Terceiro Lider, recuperando do Cadastro de Membros */}
+                  <div className="bg-slate-50 dark:bg-slate-950/40 p-4 border-t border-slate-105 dark:border-slate-800 space-y-2">
+                    <div className="flex justify-between items-center text-[10px] uppercase font-black tracking-wider text-slate-400">
+                      <span>Líder Responsável</span>
+                      <span className="font-bold text-slate-900 dark:text-slate-200">{c.lider?.nome || 'Não definido'}</span>
+                    </div>
+                    {c.segundo_lider?.nome && (
+                      <div className="flex justify-between items-center text-[10px] uppercase font-black tracking-wider text-slate-450 border-t border-slate-100/30 pt-1">
+                        <span>Segundo Líder</span>
+                        <span className="font-bold text-slate-800 dark:text-slate-300">{c.segundo_lider.nome}</span>
+                      </div>
+                    )}
+                    {c.terceiro_lider?.nome && (
+                      <div className="flex justify-between items-center text-[10px] uppercase font-black tracking-wider text-slate-455 border-t border-slate-100/30 pt-1">
+                        <span>Terceiro Líder</span>
+                        <span className="font-bold text-slate-800 dark:text-slate-300">{c.terceiro_lider.nome}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}

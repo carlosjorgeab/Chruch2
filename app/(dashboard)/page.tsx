@@ -30,6 +30,60 @@ function memberBirthdayString(day: number, month: number) {
   return `${day} de ${monthNamesPT[month - 1]}`;
 }
 
+// Calendar Helper utilities for Agenda
+const getStartOfWeek = (d: Date) => {
+  const day = d.getDay();
+  const diff = d.getDate() - day; // adjust when day is sunday
+  const start = new Date(d);
+  start.setDate(diff);
+  start.setHours(0, 0, 0, 0);
+  return start;
+};
+
+const getWeekDays = (current: Date) => {
+  const start = getStartOfWeek(current);
+  const days = [];
+  for (let i = 0; i < 7; i++) {
+    const nextDay = new Date(start);
+    nextDay.setDate(start.getDate() + i);
+    days.push(nextDay);
+  }
+  return days;
+};
+
+const getMonthDaysGrid = (current: Date) => {
+  const year = current.getFullYear();
+  const month = current.getMonth();
+  
+  // First day of current month
+  const firstDay = new Date(year, month, 1);
+  const startPadding = firstDay.getDay(); 
+  
+  // Total days in current month
+  const totalDays = new Date(year, month + 1, 0).getDate();
+  
+  const grid = [];
+  
+  // Add padding from previous month
+  for (let i = startPadding - 1; i >= 0; i--) {
+    grid.push(new Date(year, month, -i));
+  }
+  
+  // Add days of current month
+  for (let i = 1; i <= totalDays; i++) {
+    grid.push(new Date(year, month, i));
+  }
+  
+  // Pad up to 35 or 42 cells (multiple of 7 columns)
+  const currentLength = grid.length;
+  const padNeeded = currentLength <= 35 ? 35 - currentLength : 42 - currentLength;
+  for (let i = 1; i <= padNeeded; i++) {
+    grid.push(new Date(year, month + 1, i));
+  }
+  
+  return grid;
+};
+
 export default function Home() {
   const { selectedIgreja } = useIgreja();
   const [mounted, setMounted] = useState(false);
@@ -45,6 +99,10 @@ export default function Home() {
   const [aniversariantes, setAniversariantes] = useState<any[]>([]);
   const [agendas, setAgendas] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Agenda selectors and view preferences
+  const [viewType, setViewType] = useState<'dia' | 'semana' | 'mes'>('dia');
+  const [currentDate, setCurrentDate] = useState(() => new Date());
 
   const isYouTube = (url: string | null | undefined) => {
     if (!url) return false;
@@ -285,7 +343,9 @@ export default function Home() {
           .order('data_hora', { ascending: true });
 
         if (!errAgenda && agendaData) {
-          setAgendas(agendaData);
+          // Na Visão Geral só podem ser visualizadas as Agendas Públicas
+          const publicAgendas = agendaData.filter((item: any) => !item.privado);
+          setAgendas(publicAgendas);
         } else {
           setAgendas([]);
         }
@@ -885,6 +945,75 @@ export default function Home() {
               </Link>
             </div>
 
+            {/* Selector toolbar header */}
+            <div className="flex flex-wrap items-center justify-between gap-4 bg-slate-50/55 dark:bg-slate-950/45 p-3 rounded-2xl border border-slate-150/40 dark:border-slate-850/50">
+              {/* Segmented Selector slots */}
+              <div className="flex bg-slate-150/50 dark:bg-slate-900 p-1 rounded-xl border border-slate-200/50 dark:border-slate-800 shadow-inner">
+                {(['dia', 'semana', 'mes'] as const).map((vt) => (
+                  <button
+                    key={vt}
+                    onClick={() => setViewType(vt)}
+                    className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer ${
+                      viewType === vt
+                        ? 'bg-amber-600 text-white shadow-md'
+                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-amber-505'
+                    }`}
+                  >
+                    {vt === 'dia' ? 'Dia a Dia' : vt === 'semana' ? 'Semanal' : 'Mensal'}
+                  </button>
+                ))}
+              </div>
+
+              {/* Navigation Arrows for Weeks and Months */}
+              {viewType !== 'dia' ? (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      const newDate = new Date(currentDate);
+                      if (viewType === 'semana') {
+                        newDate.setDate(newDate.getDate() - 7);
+                      } else {
+                        newDate.setMonth(newDate.getMonth() - 1);
+                      }
+                      setCurrentDate(newDate);
+                    }}
+                    className="p-1.5 px-3 bg-white hover:bg-slate-100 dark:bg-slate-850 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-650 dark:text-slate-300 font-extrabold text-[10px] transition cursor-pointer"
+                  >
+                    ◀
+                  </button>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-350 min-w-[120px] text-center">
+                    {viewType === 'semana' ? (
+                      `Sem: ${getStartOfWeek(currentDate).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}`
+                    ) : (
+                      currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+                    )}
+                  </span>
+                  <button
+                    onClick={() => {
+                      const newDate = new Date(currentDate);
+                      if (viewType === 'semana') {
+                        newDate.setDate(newDate.getDate() + 7);
+                      } else {
+                        newDate.setMonth(newDate.getMonth() + 1);
+                      }
+                      setCurrentDate(newDate);
+                    }}
+                    className="p-1.5 px-3 bg-white hover:bg-slate-100 dark:bg-slate-850 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-650 dark:text-slate-300 font-extrabold text-[10px] transition cursor-pointer"
+                  >
+                    ▶
+                  </button>
+                  <button
+                    onClick={() => setCurrentDate(new Date())}
+                    className="p-1 px-2.5 bg-amber-100 dark:bg-amber-955/40 text-amber-600 dark:text-amber-400 border border-amber-200/50 dark:border-amber-900/30 rounded-lg font-black text-[9px] uppercase tracking-wider hover:opacity-95 transition cursor-pointer ml-1"
+                  >
+                    Hoje
+                  </button>
+                </div>
+              ) : (
+                <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">Exibindo próximos 6 compromissos</span>
+              )}
+            </div>
+
             {loading ? (
               <div className="flex flex-col items-center justify-center text-center p-6 min-h-[140px] flex-1">
                 <RefreshCw className="animate-spin text-amber-500" size={24} />
@@ -900,7 +1029,7 @@ export default function Home() {
                   Não há programações agendadas. Clique em "Gerenciar Agenda" para cadastrar eventos.
                 </p>
               </div>
-            ) : (
+            ) : viewType === 'dia' ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {agendas.slice(0, 6).map((item) => {
                   const eventDate = new Date(item.data_hora);
@@ -978,6 +1107,153 @@ export default function Home() {
                     </div>
                   );
                 })}
+              </div>
+            ) : viewType === 'semana' ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+                {getWeekDays(currentDate).map((day) => {
+                  const isToday = day.toDateString() === new Date().toDateString();
+                  const dayEvents = agendas.filter((item) => {
+                    const eventDay = new Date(item.data_hora);
+                    return eventDay.toDateString() === day.toDateString();
+                  });
+                  
+                  return (
+                    <div
+                      key={day.toISOString()}
+                      className={`p-3 rounded-2xl border transition duration-200 ${
+                        isToday
+                          ? 'bg-amber-500/5 dark:bg-amber-500/10 border-amber-500/35'
+                          : 'bg-slate-50/50 dark:bg-slate-955/20 border-slate-100/60 dark:border-slate-800/80'
+                      }`}
+                    >
+                      <div className="text-center pb-2 border-b border-slate-100 dark:border-slate-850 mb-2">
+                        <p className="text-[9px] font-black uppercase tracking-wider text-slate-450 dark:text-slate-500">
+                          {day.toLocaleDateString('pt-BR', { weekday: 'short' })}
+                        </p>
+                        <p className={`text-xs font-black ${isToday ? 'text-amber-500 dark:text-amber-400' : 'text-slate-850 dark:text-slate-100'}`}>
+                          {day.getDate()}
+                        </p>
+                      </div>
+
+                      {dayEvents.length === 0 ? (
+                        <div className="text-center py-4">
+                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Sem Eventos</span>
+                        </div>
+                      ) : (
+                        <div className="space-y-1.5 max-h-[160px] overflow-y-auto scrollbar-thin">
+                          {dayEvents.map((item) => {
+                            const isAllDay = item.dia_inteiro;
+                            const tTime = new Date(item.data_hora).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                            let dotCol = 'bg-blue-500';
+                            if (item.status === 'Importante') dotCol = 'bg-red-500';
+                            else if (item.status === 'Alerta') dotCol = 'bg-amber-500';
+                            
+                            return (
+                              <div
+                                key={item.id}
+                                className="p-1.5 px-2 bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 rounded-xl space-y-0.5 text-left"
+                                title={`${item.titulo}${item.local ? ` em ${item.local}` : ''}`}
+                              >
+                                <div className="flex items-center gap-1">
+                                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotCol}`} />
+                                  <p className="text-[9px] font-bold text-slate-800 dark:text-slate-200 truncate uppercase leading-none">
+                                    {item.titulo}
+                                  </p>
+                                </div>
+                                <p className="text-[8px] text-slate-450 font-bold ml-2.5 leading-none">
+                                  {isAllDay ? 'Dia Int.' : tTime}
+                                </p>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {/* Calendar columns headers */}
+                <div className="grid grid-cols-7 gap-1 text-center font-black text-[9px] uppercase tracking-wider text-slate-400 pb-1">
+                  <div>Dom</div>
+                  <div>Seg</div>
+                  <div>Ter</div>
+                  <div>Qua</div>
+                  <div>Qui</div>
+                  <div>Sex</div>
+                  <div>Sáb</div>
+                </div>
+
+                {/* Calendar Grid cells */}
+                <div className="grid grid-cols-7 gap-1 bg-slate-100/50 dark:bg-slate-950 p-1 rounded-2xl border border-slate-200/50 dark:border-slate-850">
+                  {getMonthDaysGrid(currentDate).map((day) => {
+                    const isCurrentMonth = day.getMonth() === currentDate.getMonth();
+                    const isToday = day.toDateString() === new Date().toDateString();
+                    const dayEvents = agendas.filter((item) => {
+                      const eventDay = new Date(item.data_hora);
+                      return eventDay.toDateString() === day.toDateString();
+                    });
+
+                    return (
+                      <div
+                        key={day.toISOString()}
+                        className={`min-h-[65px] md:min-h-[85px] p-1.5 rounded-xl flex flex-col justify-between transition ${
+                          isToday
+                            ? 'bg-amber-500/10 border border-amber-500/40'
+                            : isCurrentMonth 
+                              ? 'bg-white dark:bg-slate-900 border border-slate-150/40 dark:border-slate-800/50' 
+                              : 'bg-slate-50/50 dark:bg-slate-900/20 opacity-40'
+                        }`}
+                      >
+                        {/* Day number */}
+                        <div className="flex justify-between items-center mb-1">
+                          <span className={`text-[9px] font-black px-1 rounded ${
+                            isToday 
+                              ? 'bg-[#E4A232] text-white' 
+                              : isCurrentMonth 
+                                ? 'text-slate-800 dark:text-white' 
+                                : 'text-slate-400'
+                          }`}>
+                            {day.getDate()}
+                          </span>
+                          {dayEvents.length > 0 && (
+                            <span className="text-[7.5px] font-extrabold text-[#E4A232] bg-amber-50 dark:bg-amber-955/20 border border-amber-100/50 px-1 rounded scale-90">
+                              {dayEvents.length}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* micro bullets list */}
+                        <div className="space-y-0.5 max-h-[35px] md:max-h-[50px] overflow-hidden">
+                          {dayEvents.slice(0, 3).map((item) => {
+                            let statusDot = 'bg-blue-500';
+                            if (item.status === 'Importante') statusDot = 'bg-red-500';
+                            else if (item.status === 'Alerta') statusDot = 'bg-amber-500';
+
+                            return (
+                              <div
+                                key={item.id}
+                                className="flex items-center gap-1 p-0.5 rounded hover:bg-slate-50 dark:hover:bg-slate-800"
+                                title={item.titulo}
+                              >
+                                <span className={`w-1 h-1 rounded-full shrink-0 ${statusDot}`} />
+                                <span className="text-[7.5px] font-black text-slate-750 dark:text-slate-350 truncate uppercase leading-none block">
+                                  {item.titulo}
+                                </span>
+                              </div>
+                            );
+                          })}
+                          {dayEvents.length > 3 && (
+                            <p className="text-[6.5px] font-black text-slate-400 text-center uppercase tracking-widest leading-none">
+                              +{dayEvents.length - 3} mais
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>

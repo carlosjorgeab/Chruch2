@@ -201,6 +201,21 @@ export async function GET(req: NextRequest) {
     -- Set up id_uf inside membros
     ALTER TABLE membros ADD COLUMN IF NOT EXISTS id_uf UUID REFERENCES ufs(id) ON DELETE SET NULL;
 
+    -- Comunidades Table updates
+    ALTER TABLE comunidades ADD COLUMN IF NOT EXISTS id_segundo_lider UUID REFERENCES membros(id) ON DELETE SET NULL;
+    ALTER TABLE comunidades ADD COLUMN IF NOT EXISTS id_terceiro_lider UUID REFERENCES membros(id) ON DELETE SET NULL;
+    ALTER TABLE comunidades ADD COLUMN IF NOT EXISTS imagem_base64 TEXT;
+    ALTER TABLE comunidades ADD COLUMN IF NOT EXISTS imagem_nome VARCHAR(255);
+    ALTER TABLE comunidades ADD COLUMN IF NOT EXISTS categoria VARCHAR(100);
+
+    CREATE TABLE IF NOT EXISTS membros_comunidade (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      id_comunidade UUID REFERENCES comunidades(id) ON DELETE CASCADE,
+      id_membro UUID REFERENCES membros(id) ON DELETE CASCADE,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+      UNIQUE(id_comunidade, id_membro)
+    );
+
     INSERT INTO configuracoes_sistema (chave, valor, descricao)
     VALUES 
       ('translation_overrides_pt', '{}', 'Ajustes de traducción en portugués'),

@@ -52,6 +52,7 @@ export default function AgendaPage() {
   const [privado, setPrivado] = useState<boolean>(false);
   const [diaInteiro, setDiaInteiro] = useState<boolean>(false);
   const [local, setLocal] = useState<string>('');
+  const [recorrencia, setRecorrencia] = useState<'Único' | 'Diário' | 'Semanal' | 'Mensal' | 'Anual'>('Único');
   
   // Start date/time
   const [evtDate, setEvtDate] = useState('');
@@ -104,6 +105,7 @@ export default function AgendaPage() {
       setPrivado(!!item.privado);
       setDiaInteiro(!!item.dia_inteiro);
       setLocal(item.local || '');
+      setRecorrencia('Único');
 
       // Parse Initial Date & Time
       const dtStart = new Date(item.data_hora);
@@ -141,6 +143,7 @@ export default function AgendaPage() {
       setPrivado(false);
       setDiaInteiro(false);
       setLocal('');
+      setRecorrencia('Único');
       
       const today = new Date();
       const todayString = today.toISOString().split('T')[0];
@@ -201,19 +204,19 @@ export default function AgendaPage() {
         }
       }
 
-      const payload = {
-        id_igreja: selectedIgreja.id,
-        titulo: titulo.trim(),
-        data_hora: finalIsoStart,
-        data_hora_fim: finalIsoEnd,
-        dia_inteiro: diaInteiro,
-        local: local.trim() || null,
-        privado: privado,
-        status: status
-      };
-
       if (editingId) {
         // Update
+        const payload = {
+          id_igreja: selectedIgreja.id,
+          titulo: titulo.trim(),
+          data_hora: finalIsoStart,
+          data_hora_fim: finalIsoEnd,
+          dia_inteiro: diaInteiro,
+          local: local.trim() || null,
+          privado: privado,
+          status: status
+        };
+
         const { error: patchErr } = await supabase
           .from('agendas')
           .update(payload)
@@ -222,13 +225,60 @@ export default function AgendaPage() {
         if (patchErr) throw patchErr;
         setSuccess('Evento atualizado com sucesso!');
       } else {
-        // Insert
+        // Generate payloads for single or recurring events
+        const payloadsToInsert = [];
+        let currentStartDate = new Date(finalIsoStart);
+        let durationMs = 0;
+        if (finalIsoEnd) {
+          durationMs = new Date(finalIsoEnd).getTime() - new Date(finalIsoStart).getTime();
+        }
+
+        const limitDate = new Date(`${evtDateEnd}T23:59:59`);
+
+        if (recorrencia === 'Único') {
+          payloadsToInsert.push({
+            id_igreja: selectedIgreja.id,
+            titulo: titulo.trim(),
+            data_hora: finalIsoStart,
+            data_hora_fim: finalIsoEnd,
+            dia_inteiro: diaInteiro,
+            local: local.trim() || null,
+            privado: privado,
+            status: status
+          });
+        } else {
+          while (currentStartDate <= limitDate) {
+            const currentEndDate = finalIsoEnd ? new Date(currentStartDate.getTime() + durationMs) : null;
+            
+            payloadsToInsert.push({
+              id_igreja: selectedIgreja.id,
+              titulo: titulo.trim(),
+              data_hora: currentStartDate.toISOString(),
+              data_hora_fim: currentEndDate ? currentEndDate.toISOString() : null,
+              dia_inteiro: diaInteiro,
+              local: local.trim() || null,
+              privado: privado,
+              status: status
+            });
+
+            if (recorrencia === 'Diário') {
+              currentStartDate.setDate(currentStartDate.getDate() + 1);
+            } else if (recorrencia === 'Semanal') {
+              currentStartDate.setDate(currentStartDate.getDate() + 7);
+            } else if (recorrencia === 'Mensal') {
+              currentStartDate.setMonth(currentStartDate.getMonth() + 1);
+            } else if (recorrencia === 'Anual') {
+              currentStartDate.setFullYear(currentStartDate.getFullYear() + 1);
+            }
+          }
+        }
+
         const { error: postErr } = await supabase
           .from('agendas')
-          .insert([payload]);
+          .insert(payloadsToInsert);
 
         if (postErr) throw postErr;
-        setSuccess('Novo evento agendado com sucesso!');
+        setSuccess(`Novo evento cadastrado com sucesso! (${payloadsToInsert.length} eventos agendados no período)`);
       }
 
       setIsEditing(false);
@@ -420,7 +470,7 @@ export default function AgendaPage() {
                       onClick={() => setPrivado(true)}
                       className={`py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition ${
                         privado
-                          ? 'bg-slate-800 text-white dark:bg-slate-800 shadow-md'
+                          ? 'bg-[#E4A232] text-white shadow-md'
                           : 'text-slate-500 hover:text-slate-700 dark:text-slate-405 dark:hover:text-slate-200'
                       }`}
                     >
@@ -565,7 +615,7 @@ export default function AgendaPage() {
                   <select
                     value={status}
                     onChange={(e) => setStatus(e.target.value as any)}
-                    className="w-full px-4 py-3 rounded-2xl border-2 border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-955 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-semibold transition cursor-pointer"
+                    className="w-full px-4 py-3 rounded-2xl border-2 border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-955 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-semibold transition cursor-pointer text-xs"
                   >
                     <option value="Normal">Normal (Azul)</option>
                     <option value="Importante">Importante (Vermelho)</option>
@@ -575,6 +625,28 @@ export default function AgendaPage() {
                     Cada status possui cores informativas distintas na Agenda e Painéis de Controle.
                   </p>
                 </div>
+
+                {!editingId && (
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-450 dark:text-slate-500 uppercase tracking-widest mb-2 ml-1">
+                      🔁 Recorrência / Repetição de Agendas
+                    </label>
+                    <select
+                      value={recorrencia}
+                      onChange={(e) => setRecorrencia(e.target.value as any)}
+                      className="w-full px-4 py-3 rounded-2xl border-2 border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-955 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-semibold transition cursor-pointer text-xs"
+                    >
+                      <option value="Único">Único (Sem repetição)</option>
+                      <option value="Diário">Diário (Duplica todo dia até Data Final)</option>
+                      <option value="Semanal">Semanal (Duplica toda semana até Data Final)</option>
+                      <option value="Mensal">Mensal (Duplica todo mês até Data Final)</option>
+                      <option value="Anual">Anual (Duplica todo ano até Data Final)</option>
+                    </select>
+                    <p className="text-[10px] text-slate-400 mt-1.5 ml-1">
+                      Escolha um período se deseja criar uma série de agendas repetidas automaticamente da Data Inicial até a Data Final.
+                    </p>
+                  </div>
+                )}
 
                 <div className="flex gap-3 justify-end pt-4 border-t border-slate-100 dark:border-slate-800">
                   <button
