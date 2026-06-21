@@ -19,7 +19,8 @@ import {
   RefreshCw,
   MapPin,
   Lock,
-  Globe
+  Globe,
+  ClipboardCheck
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -33,6 +34,7 @@ type AgendaItem = {
   local?: string | null;       // Texto livre
   privado?: boolean;           // Público (false) ou Privado (true)
   status: 'Importante' | 'Normal' | 'Alerta';
+  id_comunidade?: string | null;
   created_at?: string;
 };
 
@@ -48,6 +50,17 @@ export default function AgendaPage() {
 
   // Form states
   const [titulo, setTitulo] = useState('');
+  const [comunidades, setComunidades] = useState<any[]>([]);
+  const [selectedComunidadeId, setSelectedComunidadeId] = useState<string>('');
+
+  // Presence checklist state
+  const [showPresenceModal, setShowPresenceModal] = useState(false);
+  const [currentPresenceMeeting, setCurrentPresenceMeeting] = useState<AgendaItem | null>(null);
+  const [presenceList, setPresenceList] = useState<Array<{ id_membro: string, nome: string, presente: boolean }>>([]);
+  const [loadingPresence, setLoadingPresence] = useState(false);
+  const [savingPresence, setSavingPresence] = useState(false);
+  const [errorPresence, setErrorPresence] = useState('');
+  const [successPresence, setSuccessPresence] = useState('');
   const [status, setStatus] = useState<'Importante' | 'Normal' | 'Alerta'>('Normal');
   const [privado, setPrivado] = useState<boolean>(false);
   const [diaInteiro, setDiaInteiro] = useState<boolean>(false);
@@ -69,8 +82,105 @@ export default function AgendaPage() {
   useEffect(() => {
     if (selectedIgreja?.id) {
       fetchAgenda();
+      fetchComunidades();
     }
   }, [selectedIgreja]);
+
+  const fetchComunidades = async () => {
+    if (!selectedIgreja?.id) return;
+    try {
+      const { data, error: comErr } = await supabase
+        .from('comunidades')
+        .select('id, nome')
+        .eq('id_igreja', selectedIgreja.id)
+        .order('nome', { ascending: true });
+      if (comErr) throw comErr;
+      setComunidades(data || []);
+    } catch (e) {
+      console.error('Error fetching communities for agenda:', e);
+    }
+  };
+
+  const openPresenceModal = async (item: AgendaItem) => {
+    if (!item.id_comunidade) return;
+    setCurrentPresenceMeeting(item);
+    setLoadingPresence(true);
+    setErrorPresence('');
+    setSuccessPresence('');
+    setPresenceList([]);
+    
+    try {
+      // 1. Fetch community members
+      const { data: membersData, error: membErr } = await supabase
+        .from('membros_comunidade')
+        .select(`
+          id_membro,
+          membros:membros!id_membro(nome)
+        `)
+        .eq('id_comunidade', item.id_comunidade);
+
+      if (membErr) throw membErr;
+
+      // 2. Fetch existing presence records
+      const { data: presenceData, error: presErr } = await supabase
+        .from('chamada_reuniao')
+        .select('*')
+        .eq('id_agenda', item.id);
+
+      if (presErr) throw presErr;
+
+      // 3. Match them up
+      const formattedList = (membersData || []).map((m: any) => {
+        const existing = (presenceData || []).find((p: any) => p.id_membro === m.id_membro);
+        return {
+          id_membro: m.id_membro,
+          nome: m.membros?.nome || 'Membro desconhecido',
+          presente: existing ? !!existing.presente : true
+        };
+      });
+
+      setPresenceList(formattedList);
+      setShowPresenceModal(true);
+    } catch (e: any) {
+      console.error('Error loading presence:', e);
+      setErrorPresence('Erro ao carregar lista de presença: ' + e.message);
+    } finally {
+      setLoadingPresence(false);
+    }
+  };
+
+  const savePresence = async () => {
+    if (!currentPresenceMeeting) return;
+    setSavingPresence(true);
+    setErrorPresence('');
+    setSuccessPresence('');
+    
+    try {
+      if (presenceList.length > 0) {
+        const upserts = presenceList.map(item => ({
+          id_agenda: currentPresenceMeeting.id,
+          id_membro: item.id_membro,
+          presente: item.presente
+        }));
+
+        const { error: upsertErr } = await supabase
+          .from('chamada_reuniao')
+          .upsert(upserts, { onConflict: 'id_agenda,id_membro' });
+
+        if (upsertErr) throw upsertErr;
+      }
+
+      setSuccessPresence('Lista de chamada salva com sucesso!');
+      setTimeout(() => {
+        setShowPresenceModal(false);
+      }, 1000);
+    } catch (e: any) {
+      console.error('Error saving presence:', e);
+      setErrorPresence('Erro ao salvar chamada: ' + e.message);
+    } finally {
+      setSavingPresence(false);
+    }
+  };
 
   const fetchAgenda = async () => {
     if (!selectedIgreja?.id) return;
@@ -106,6 +216,7 @@ export default function AgendaPage() {
       setDiaInteiro(!!item.dia_inteiro);
       setLocal(item.local || '');
       setRecorrencia('Único');
+      setSelectedComunidadeId(item.id_comunidade || '');
 
       // Parse Initial Date & Time
       const dtStart = new Date(item.data_hora);
@@ -144,6 +255,7 @@ export default function AgendaPage() {
       setDiaInteiro(false);
       setLocal('');
       setRecorrencia('Único');
+      setSelectedComunidadeId('');
       
       const today = new Date();
       const todayString = today.toISOString().split('T')[0];
@@ -214,7 +326,8 @@ export default function AgendaPage() {
           dia_inteiro: diaInteiro,
           local: local.trim() || null,
           privado: privado,
-          status: status
+          status: status,
+          id_comunidade: selectedComunidadeId || null
         };
 
         const { error: patchErr } = await supabase
@@ -223,7 +336,7 @@ export default function AgendaPage() {
           .eq('id', editingId);
 
         if (patchErr) throw patchErr;
-        setSuccess('Evento atualizado com sucesso!');
+        setSuccess('Evento updated com sucesso!');
       } else {
         // Generate payloads for single or recurring events
         const payloadsToInsert = [];
@@ -244,7 +357,8 @@ export default function AgendaPage() {
             dia_inteiro: diaInteiro,
             local: local.trim() || null,
             privado: privado,
-            status: status
+            status: status,
+            id_comunidade: selectedComunidadeId || null
           });
         } else {
           while (currentStartDate <= limitDate) {
@@ -258,7 +372,8 @@ export default function AgendaPage() {
               dia_inteiro: diaInteiro,
               local: local.trim() || null,
               privado: privado,
-              status: status
+              status: status,
+              id_comunidade: selectedComunidadeId || null
             });
 
             if (recorrencia === 'Diário') {
@@ -492,6 +607,37 @@ export default function AgendaPage() {
                     placeholder="Ex: Culto de Jovens, Reunião de Líderes"
                     className="w-full px-4 py-3 rounded-2xl border-2 border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white focus:border-amber-500 dark:focus:border-amber-500 outline-none font-semibold transition"
                   />
+                </div>
+
+                {/* Vincular à Comunidade / Célula (Opcional - Habilita lista de presença!) */}
+                <div>
+                  <label className="block text-[10px] font-black text-slate-450 dark:text-slate-500 uppercase tracking-widest mb-2 ml-1">
+                    👥 Vincular à Comunidade / Célula (Opcional)
+                  </label>
+                  <select
+                    value={selectedComunidadeId}
+                    onChange={(e) => {
+                      const cid = e.target.value;
+                      setSelectedComunidadeId(cid);
+                      if (cid) {
+                        const comObj = comunidades.find(x => x.id === cid);
+                        if (comObj && (!titulo || titulo === '' || titulo.startsWith('Reunião '))) {
+                          setTitulo(`Reunião ${comObj.nome}`);
+                        }
+                      }
+                    }}
+                    className="w-full px-4 py-3 rounded-2xl border-2 border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white focus:border-amber-500 dark:focus:border-amber-500 outline-none font-semibold transition text-xs cursor-pointer"
+                  >
+                    <option value="">Não vincular (Apenas evento comum)</option>
+                    {comunidades.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.nome}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[9px] text-slate-400 mt-1 ml-1 leading-normal">
+                    Selecione uma comunidade para vincular e habilitar o controle de presença. O Nome da Reunião herdará o Nome do Evento (Agenda).
+                  </p>
                 </div>
 
                 {/* d) Campo de Local (texto livre) */}
@@ -742,6 +888,11 @@ export default function AgendaPage() {
                           {item.privado ? <Lock size={9} /> : <Globe size={9} />}
                           {item.privado ? 'Privado' : 'Público'}
                         </span>
+                        {item.id_comunidade && (
+                          <span className="inline-flex items-center gap-1 px-2 py-1 text-[9px] font-black uppercase tracking-wider bg-amber-50 border border-amber-200 text-[#E4A232] rounded-lg dark:bg-amber-955/20 dark:border-amber-900/30">
+                            👥 {comunidades.find(c => c.id === item.id_comunidade)?.nome || 'Célula/Comunidade'}
+                          </span>
+                        )}
                       </div>
 
                       {/* Event Title */}
@@ -771,7 +922,17 @@ export default function AgendaPage() {
                     </div>
 
                     {/* Controller actions */}
-                    <div className="flex gap-2 w-full pt-4 border-t border-slate-100 dark:border-slate-850/80 mt-auto justify-end">
+                    <div className="flex gap-2 w-full pt-4 border-t border-slate-100 dark:border-slate-850/80 mt-auto justify-end items-center">
+                      {item.id_comunidade && (
+                        <button
+                          onClick={() => openPresenceModal(item)}
+                          className="mr-auto flex items-center gap-1 px-2.5 py-1.5 bg-amber-500/10 hover:bg-[#E4A232] text-[#E4A232] hover:text-white font-black text-[10px] uppercase tracking-wider rounded-xl transition duration-250 cursor-pointer"
+                          title="Fazer chamada / lista de de presença"
+                        >
+                          <ClipboardCheck size={12} className="mr-0.5" />
+                          Chamada
+                        </button>
+                      )}
                       <button
                         onClick={() => initForm(item)}
                         className="p-2.5 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-350 rounded-xl transition duration-200 hover:scale-[1.04] cursor-pointer"
@@ -792,6 +953,127 @@ export default function AgendaPage() {
                 );
               })}
             </AnimatePresence>
+          </div>
+        )}
+
+        {/* Presence / Attendance checklist modal dialog */}
+        {showPresenceModal && currentPresenceMeeting && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-200">
+            <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 shadow-2xl p-6 sm:p-10 w-full max-w-md my-8 relative animate-in zoom-in-95 duration-250 max-h-[90vh] overflow-y-auto">
+              <button
+                onClick={() => setShowPresenceModal(false)}
+                className="absolute top-6 right-6 p-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-full text-slate-500 dark:text-slate-400 cursor-pointer transition"
+              >
+                <X size={18} />
+              </button>
+
+              <div className="flex items-center gap-3 border-b border-slate-100 dark:border-slate-800 pb-5 mb-6">
+                <ClipboardCheck className="text-[#E4A232]" size={24} />
+                <div>
+                  <h2 className="text-sm font-black uppercase text-slate-900 dark:text-white leading-tight">
+                    Lista de Presença
+                  </h2>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">
+                    {currentPresenceMeeting.titulo}
+                  </p>
+                </div>
+              </div>
+
+              {errorPresence && (
+                <div className="mb-4 p-3 bg-red-55/15 border border-red-500/20 text-red-700 dark:text-red-400 rounded-xl text-xs font-semibold">
+                  {errorPresence}
+                </div>
+              )}
+
+              {successPresence && (
+                <div className="mb-4 p-3 bg-emerald-55/15 border border-emerald-500/20 text-emerald-700 dark:text-emerald-400 rounded-xl text-xs font-semibold">
+                  {successPresence}
+                </div>
+              )}
+
+              {loadingPresence ? (
+                <div className="flex flex-col items-center justify-center py-10">
+                  <RefreshCw className="animate-spin text-amber-500 mb-2" size={24} />
+                  <p className="text-xs text-slate-400 font-bold uppercase">Carregando participantes...</p>
+                </div>
+              ) : presenceList.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-xs text-slate-450 font-bold">Nenhum membro registrado nesta comunidade celular.</p>
+                  <p className="text-[10px] text-slate-400 mt-1">Adicione membros à comunidade no menu "Comunidades".</p>
+                </div>
+              ) : (
+                <div className="space-y-4 mb-6 max-h-[45vh] overflow-y-auto pr-1">
+                  <div className="flex justify-between items-center px-1 text-[10px] uppercase font-black tracking-wider text-slate-400">
+                    <span>Nome do Participante</span>
+                    <span>Presença</span>
+                  </div>
+                  
+                  <div className="divide-y divide-slate-100 dark:divide-slate-800/60">
+                    {presenceList.map((m, idx) => (
+                      <div key={m.id_membro} className="flex items-center justify-between py-3.5 first:pt-0 last:pb-0">
+                        <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                          {m.nome}
+                        </span>
+                        
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = [...presenceList];
+                              updated[idx].presente = true;
+                              setPresenceList(updated);
+                            }}
+                            className={`px-3 py-1 text-[9px] font-black uppercase rounded-lg border transition ${
+                              m.presente
+                                ? 'bg-emerald-50 border-emerald-350 text-emerald-600 dark:bg-emerald-950/20 dark:border-emerald-900/50 dark:text-emerald-400'
+                                : 'bg-slate-50 border-slate-200 text-slate-400 hover:text-slate-600 dark:bg-slate-800/40 dark:border-slate-800 dark:text-slate-500'
+                            }`}
+                          >
+                            Presente
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = [...presenceList];
+                              updated[idx].presente = false;
+                              setPresenceList(updated);
+                            }}
+                            className={`px-3 py-1 text-[9px] font-black uppercase rounded-lg border transition ${
+                              !m.presente
+                                ? 'bg-red-50 border-red-200 text-red-500 dark:bg-red-950/20 dark:border-red-900/30'
+                                : 'bg-slate-50 border-slate-200 text-slate-400 hover:text-slate-600 dark:bg-slate-800/40 dark:border-slate-800 dark:text-slate-500'
+                            }`}
+                          >
+                            Falta
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-3 justify-end pt-4 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowPresenceModal(false)}
+                  className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs uppercase tracking-wider transition cursor-pointer"
+                >
+                  Fechar
+                </button>
+                {presenceList.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={savePresence}
+                    disabled={savingPresence}
+                    className="px-5 py-2.5 rounded-xl bg-[#E4A232] hover:bg-[#E4A232]/90 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-amber-500/10 flex items-center gap-1.5 transition cursor-pointer"
+                  >
+                    <Save size={12} />
+                    {savingPresence ? 'Gravando...' : 'Salvar Chamada'}
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         )}
 

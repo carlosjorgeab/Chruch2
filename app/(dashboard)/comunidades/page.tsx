@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useIgreja } from '@/context/IgrejaContext';
 import { useConfirm } from '@/context/ConfirmContext';
-import { Plus, Edit2, Trash2, Save, X, Search, Users, Calendar, MapPin, RefreshCw } from 'lucide-react';
+import { Plus, Edit2, Trash2, Save, X, Search, Users, Calendar, MapPin, RefreshCw, ClipboardCheck } from 'lucide-react';
 
 type Comunidade = {
   id: string;
@@ -65,6 +65,25 @@ export default function ComunidadesPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
+  // Meetings (reuniões) & presence list states
+  const [meetingsComunidade, setMeetingsComunidade] = useState<any[]>([]);
+  const [showMeetingsModal, setShowMeetingsModal] = useState(false);
+  const [selectedComunidadeForMeetings, setSelectedComunidadeForMeetings] = useState<Comunidade | null>(null);
+
+  const [newMeetingTitle, setNewMeetingTitle] = useState('');
+  const [newMeetingDate, setNewMeetingDate] = useState('');
+  const [newMeetingTime, setNewMeetingTime] = useState('');
+  const [newMeetingLocal, setNewMeetingLocal] = useState('');
+  const [schedulingMeeting, setSchedulingMeeting] = useState(false);
+  const [meetingError, setMeetingError] = useState('');
+
+  const [meetingPresenceList, setMeetingPresenceList] = useState<any[]>([]);
+  const [currentPresMeetingId, setCurrentPresMeetingId] = useState<string | null>(null);
+  const [currentPresMeetingTitle, setCurrentPresMeetingTitle] = useState('');
+  const [showPresMeetingModal, setShowPresMeetingModal] = useState(false);
+  const [loadingPresence, setLoadingPresence] = useState(false);
+  const [savingPresence, setSavingPresence] = useState(false);
+
   useEffect(() => {
     if (selectedIgreja) {
       fetchComunidades();
@@ -75,6 +94,144 @@ export default function ComunidadesPage() {
       setLoading(false);
     }
   }, [selectedIgreja]);
+
+  const fetchMeetings = async (comunidadeId: string) => {
+    try {
+      const { data, error: meetErr } = await supabase
+        .from('agendas')
+        .select('*')
+        .eq('id_comunidade', comunidadeId)
+        .order('data_hora', { ascending: false });
+      if (meetErr) throw meetErr;
+      setMeetingsComunidade(data || []);
+    } catch (e) {
+      console.error('Error fetching meetings:', e);
+    }
+  };
+
+  const openMeetingsPanel = (com: Comunidade) => {
+    setSelectedComunidadeForMeetings(com);
+    setMeetingsComunidade([]);
+    setShowMeetingsModal(true);
+    fetchMeetings(com.id);
+    
+    // Default form fields
+    setNewMeetingTitle(`Reunião ${com.nome}`);
+    const todayStr = new Date().toISOString().split('T')[0];
+    setNewMeetingDate(todayStr);
+    setNewMeetingTime(com.horario || '19:30');
+    setNewMeetingLocal(com.local || '');
+    setMeetingError('');
+  };
+
+  const handleCreateMeeting = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedComunidadeForMeetings || !selectedIgreja) return;
+    setSchedulingMeeting(true);
+    setMeetingError('');
+    try {
+      const dtString = `${newMeetingDate}T${newMeetingTime}:00`;
+      const dateIso = new Date(dtString).toISOString();
+      const payload = {
+        id_igreja: selectedIgreja.id,
+        id_comunidade: selectedComunidadeForMeetings.id,
+        titulo: newMeetingTitle.trim(),
+        data_hora: dateIso,
+        local: newMeetingLocal.trim() || null,
+        privado: false,
+        status: 'Normal'
+      };
+
+      const { error: insErr } = await supabase
+        .from('agendas')
+        .insert(payload);
+
+      if (insErr) throw insErr;
+      
+      // Refresh list
+      fetchMeetings(selectedComunidadeForMeetings.id);
+      
+      // Reset title
+      setNewMeetingTitle(`Reunião ${selectedComunidadeForMeetings.nome}`);
+    } catch (err: any) {
+      console.error('Error scheduling meeting:', err);
+      setMeetingError('Erro ao agendar reunião: ' + err.message);
+    } finally {
+      setSchedulingMeeting(false);
+    }
+  };
+
+  const openCommunityPresence = async (meeting: any) => {
+    setCurrentPresMeetingId(meeting.id);
+    setCurrentPresMeetingTitle(meeting.titulo);
+    setLoadingPresence(true);
+    setMeetingPresenceList([]);
+    try {
+      // 1. Fetch community members
+      const { data: membersData, error: membErr } = await supabase
+        .from('membros_comunidade')
+        .select(`
+          id_membro,
+          membros:membros!id_membro(nome)
+        `)
+        .eq('id_comunidade', selectedComunidadeForMeetings?.id);
+
+      if (membErr) throw membErr;
+
+      // 2. Fetch existing presence records
+      const { data: presenceData, error: presErr } = await supabase
+        .from('chamada_reuniao')
+        .select('*')
+        .eq('id_agenda', meeting.id);
+
+      if (presErr) throw presErr;
+
+      // 3. Match them up
+      const formattedList = (membersData || []).map((m: any) => {
+        const existing = (presenceData || []).find((p: any) => p.id_membro === m.id_membro);
+        return {
+          id_membro: m.id_membro,
+          nome: m.membros?.nome || 'Membro desconhecido',
+          presente: existing ? !!existing.presente : true
+        };
+      });
+
+      setMeetingPresenceList(formattedList);
+      setShowPresMeetingModal(true);
+    } catch (e) {
+      console.error('Error loading community presence:', e);
+    } finally {
+      setLoadingPresence(false);
+    }
+  };
+
+  const saveCommunityPresence = async () => {
+    if (!currentPresMeetingId) return;
+    setSavingPresence(true);
+    try {
+      if (meetingPresenceList.length > 0) {
+        const upserts = meetingPresenceList.map(item => ({
+          id_agenda: currentPresMeetingId,
+          id_membro: item.id_membro,
+          presente: item.presente
+        }));
+
+        const { error: upsertErr } = await supabase
+          .from('chamada_reuniao')
+          .upsert(upserts, { onConflict: 'id_agenda,id_membro' });
+
+        if (upsertErr) throw upsertErr;
+      }
+      setShowPresMeetingModal(false);
+      if (selectedComunidadeForMeetings) {
+        fetchMeetings(selectedComunidadeForMeetings.id);
+      }
+    } catch (e) {
+      console.error('Error saving community presence:', e);
+    } finally {
+      setSavingPresence(false);
+    }
+  };
 
   async function fetchComunidades() {
     if (!selectedIgreja) return;
@@ -764,6 +921,16 @@ export default function ComunidadesPage() {
                           <span className="truncate">{c.local}</span>
                         </div>
                       )}
+
+                      {/* Reuniões e Encontros button trigger */}
+                      <button
+                        type="button"
+                        onClick={() => openMeetingsPanel(c)}
+                        className="w-full mt-3 flex items-center justify-center gap-1.5 py-2 bg-[#E4A232]/10 hover:bg-[#E4A232] text-[#E4A232] hover:text-white font-black text-[10px] uppercase tracking-wider rounded-xl transition duration-200 cursor-pointer"
+                      >
+                        <Calendar size={12} />
+                        📅 Reuniões e Presenças
+                      </button>
                     </div>
                   </div>
 
@@ -792,6 +959,283 @@ export default function ComunidadesPage() {
           )}
         </div>
       )}
+
+      {/* Meetings & Schedule Panel Modal */}
+      {showMeetingsModal && selectedComunidadeForMeetings && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 shadow-2xl p-6 sm:p-10 w-full max-w-3xl my-8 relative animate-in zoom-in-95 duration-250 max-h-[90vh] overflow-y-auto scrollbar-thin">
+            <button
+              onClick={() => setShowMeetingsModal(false)}
+              className="absolute top-6 right-6 p-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-full text-slate-500 dark:text-slate-400 cursor-pointer transition"
+            >
+              <X size={18} />
+            </button>
+
+            <div className="flex items-center gap-3 border-b border-slate-100 dark:border-slate-800 pb-5 mb-6">
+              <Calendar className="text-[#E4A232]" size={24} />
+              <div>
+                <h2 className="text-sm font-black uppercase text-slate-900 dark:text-white leading-tight">
+                  Gestão de Reuniões da Comunidade
+                </h2>
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">
+                  Grupo: {selectedComunidadeForMeetings.nome}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+              
+              {/* 1. Schedule a new meeting form */}
+              <div className="lg:col-span-12 xl:col-span-5 bg-slate-50 dark:bg-slate-950/40 p-5 rounded-3xl border border-slate-200/60 dark:border-slate-850 h-fit space-y-4">
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-250 border-b border-slate-200/45 dark:border-slate-800 pb-2">
+                  ➕ Agendar Nova Reunião
+                </h3>
+
+                {meetingError && (
+                  <div className="p-2.5 bg-red-55/10 border border-red-500/20 text-red-700 dark:text-red-400 rounded-xl text-[10px] font-bold">
+                    {meetingError}
+                  </div>
+                )}
+
+                <form onSubmit={handleCreateMeeting} className="space-y-4">
+                  <div>
+                    <label className="block text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1.5 pl-0.5">
+                      Nome da Reunião
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={newMeetingTitle}
+                      onChange={(e) => setNewMeetingTitle(e.target.value)}
+                      placeholder="Ex: Reunião Geral de Célula"
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-semibold transition"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1.5 pl-0.5">
+                        Data
+                      </label>
+                      <input
+                        type="date"
+                        required
+                        value={newMeetingDate}
+                        onChange={(e) => setNewMeetingDate(e.target.value)}
+                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-semibold transition cursor-pointer"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1.5 pl-0.5">
+                        Horário
+                      </label>
+                      <input
+                        type="time"
+                        required
+                        value={newMeetingTime}
+                        onChange={(e) => setNewMeetingTime(e.target.value)}
+                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-semibold transition cursor-pointer"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1.5 pl-0.5">
+                      Local de Encontro
+                    </label>
+                    <input
+                      type="text"
+                      value={newMeetingLocal}
+                      onChange={(e) => setNewMeetingLocal(e.target.value)}
+                      placeholder="Ex: Templo, Casa de Líder"
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-semibold transition"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={schedulingMeeting}
+                    className="w-full py-2.5 bg-[#E4A232] hover:bg-[#E4A232]/90 text-white font-black text-xs uppercase tracking-widest rounded-xl transition duration-150 hover:scale-[1.01] flex items-center justify-center gap-1.5 shadow-md cursor-pointer"
+                  >
+                    <Save size={13} />
+                    {schedulingMeeting ? 'Agendando...' : 'Salvar Reunião'}
+                  </button>
+                  <p className="text-[8px] text-slate-400 leading-normal pl-0.5">
+                    * Esta reunião será inserida automaticamente na Agenda Pública de eventos da congregação.
+                  </p>
+                </form>
+              </div>
+
+              {/* 2. List of scheduled meetings */}
+              <div className="lg:col-span-12 xl:col-span-7 space-y-4">
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-250 border-b border-slate-200/45 dark:border-slate-800 pb-2">
+                  📋 Histórico e Próximos Encontros
+                </h3>
+
+                {meetingsComunidade.length === 0 ? (
+                  <div className="border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl p-12 text-center text-xs text-slate-450 italic bg-slate-50 dark:bg-slate-950/10">
+                    Nenhuma reunião agendada para esta comunidade celular ainda.
+                  </div>
+                ) : (
+                  <div className="space-y-3.5 max-h-[50vh] overflow-y-auto pr-1">
+                    {meetingsComunidade.map((meet) => {
+                      const mDate = new Date(meet.data_hora);
+                      const formattedDateStr = mDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                      const formattedTimeStr = mDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                      return (
+                        <div key={meet.id} className="p-4 bg-white dark:bg-slate-955 rounded-2xl border border-slate-150 dark:border-slate-800/80 hover:border-slate-300 dark:hover:border-slate-700 transition flex items-start justify-between gap-4">
+                          <div className="space-y-1">
+                            <h4 className="text-xs font-black text-slate-850 dark:text-white uppercase leading-tight">
+                              {meet.titulo}
+                            </h4>
+                            <p className="text-[10px] text-slate-450 font-bold">
+                              📅 {formattedDateStr} às {formattedTimeStr}
+                            </p>
+                            {meet.local && (
+                              <p className="text-[9px] text-slate-400 truncate max-w-xs font-semibold">
+                                📍 {meet.local}
+                              </p>
+                            )}
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => openCommunityPresence(meet)}
+                            className="px-3 py-1.5 bg-amber-500/10 hover:bg-[#E4A232] text-[#E4A232] hover:text-white font-black text-[9px] uppercase tracking-wider rounded-xl transition duration-150 cursor-pointer flex items-center gap-1 shrink-0"
+                          >
+                            <ClipboardCheck size={11} />
+                            Lista Chamada
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-6 border-t border-slate-150 dark:border-slate-800 mt-6">
+              <button
+                type="button"
+                onClick={() => setShowMeetingsModal(false)}
+                className="px-5 py-2.5 rounded-xl bg-slate-150 hover:bg-slate-200 dark:bg-slate-850 dark:text-white text-slate-700 font-bold text-xs uppercase tracking-wider transition cursor-pointer"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Presence / Attendance Checklist Drawer Modal inside Comunidades Page */}
+      {showPresMeetingModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 shadow-2xl p-6 sm:p-10 w-full max-w-md my-8 relative animate-in zoom-in-95 duration-250 max-h-[90vh] overflow-y-auto">
+            <button
+              onClick={() => setShowPresMeetingModal(false)}
+              className="absolute top-6 right-6 p-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-full text-slate-500 dark:text-slate-400 cursor-pointer transition"
+            >
+              <X size={18} />
+            </button>
+
+            <div className="flex items-center gap-3 border-b border-slate-100 dark:border-slate-800 pb-5 mb-6">
+              <ClipboardCheck className="text-[#E4A232]" size={24} />
+              <div>
+                <h2 className="text-sm font-black uppercase text-slate-900 dark:text-white leading-tight">
+                  Lista de Presença
+                </h2>
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">
+                  {currentPresMeetingTitle}
+                </p>
+              </div>
+            </div>
+
+            {loadingPresence ? (
+              <div className="flex flex-col items-center justify-center py-10">
+                <RefreshCw className="animate-spin text-amber-500 mb-2" size={24} />
+                <p className="text-xs text-slate-400 font-bold uppercase">Carregando membros da célula...</p>
+              </div>
+            ) : meetingPresenceList.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-xs text-slate-450 font-bold">Nenhum participante adicionado a este grupo celular ainda.</p>
+                <p className="text-[9px] text-slate-400 mt-1">Feche e use a opção de adicionar membros no botão editar do card principal.</p>
+              </div>
+            ) : (
+                <div className="space-y-4 mb-6 max-h-[45vh] overflow-y-auto pr-1">
+                  <div className="flex justify-between items-center px-1 text-[10px] uppercase font-black tracking-wider text-slate-400">
+                    <span>Membro da Célula</span>
+                    <span>Presença</span>
+                  </div>
+
+                  <div className="divide-y divide-slate-100 dark:divide-slate-800/60">
+                    {meetingPresenceList.map((m, idx) => (
+                      <div key={m.id_membro} className="flex items-center justify-between py-3.5 first:pt-0 last:pb-0">
+                        <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                          {m.nome}
+                        </span>
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = [...meetingPresenceList];
+                              updated[idx].presente = true;
+                              setMeetingPresenceList(updated);
+                            }}
+                            className={`px-3 py-1 text-[9px] font-black uppercase rounded-lg border transition ${
+                              m.presente
+                                ? 'bg-emerald-50 border-emerald-350 text-emerald-600 dark:bg-emerald-950/20 dark:border-emerald-900/50 dark:text-emerald-400'
+                                : 'bg-slate-50 border-slate-200 text-slate-400 hover:text-slate-600 dark:bg-slate-800/40 dark:border-slate-800 dark:text-slate-500'
+                            }`}
+                          >
+                            Presente
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = [...meetingPresenceList];
+                              updated[idx].presente = false;
+                              setMeetingPresenceList(updated);
+                            }}
+                            className={`px-3 py-1 text-[9px] font-black uppercase rounded-lg border transition ${
+                              !m.presente
+                                ? 'bg-red-50 border-red-200 text-red-500 dark:bg-red-950/20 dark:border-red-900/30'
+                                : 'bg-slate-50 border-slate-200 text-slate-400 hover:text-slate-600 dark:bg-slate-800/40 dark:border-slate-800 dark:text-slate-500'
+                            }`}
+                          >
+                            Falta
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+            )}
+
+            <div className="flex gap-3 justify-end pt-4 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setShowPresMeetingModal(false)}
+                className="px-4 py-2.5 rounded-xl bg-slate-150 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs uppercase tracking-wider transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              {meetingPresenceList.length > 0 && (
+                <button
+                  type="button"
+                  onClick={saveCommunityPresence}
+                  disabled={savingPresence}
+                  className="px-5 py-2.5 rounded-xl bg-[#E4A232] hover:bg-[#E4A232]/90 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-amber-500/10 flex items-center gap-1.5 transition cursor-pointer"
+                >
+                  <Save size={12} />
+                  {savingPresence ? 'Gravando...' : 'Salvar Chamada'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
