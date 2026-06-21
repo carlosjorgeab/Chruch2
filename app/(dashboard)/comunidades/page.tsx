@@ -116,13 +116,22 @@ export default function ComunidadesPage() {
         .select(`
           *,
           reunioes!inner (
+            id,
             id_comunidade
           )
         `)
         .eq('reunioes.id_comunidade', comunidadeId)
         .order('data_hora', { ascending: false });
       if (meetErr) throw meetErr;
-      setMeetingsComunidade(data || []);
+
+      const mapped = (data || []).map((item: any) => {
+        const reuniaoObj = Array.isArray(item.reunioes) ? item.reunioes[0] : item.reunioes;
+        return {
+          ...item,
+          id_reuniao: reuniaoObj?.id || null
+        };
+      });
+      setMeetingsComunidade(mapped);
     } catch (e) {
       console.error('Error fetching meetings:', e);
     }
@@ -284,7 +293,7 @@ export default function ComunidadesPage() {
   };
 
   const openCommunityPresence = async (meeting: any) => {
-    setCurrentPresMeetingId(meeting.id);
+    setCurrentPresMeetingId(meeting.id_reuniao);
     setCurrentPresMeetingTitle(meeting.titulo);
     setLoadingPresence(true);
     setMeetingPresenceList([]);
@@ -304,7 +313,7 @@ export default function ComunidadesPage() {
       const { data: presenceData, error: presErr } = await supabase
         .from('chamada_reuniao')
         .select('*')
-        .eq('id_agenda', meeting.id);
+        .eq('id_reuniao', meeting.id_reuniao);
 
       if (presErr) throw presErr;
 
@@ -333,14 +342,14 @@ export default function ComunidadesPage() {
     try {
       if (meetingPresenceList.length > 0) {
         const upserts = meetingPresenceList.map(item => ({
-          id_agenda: currentPresMeetingId,
+          id_reuniao: currentPresMeetingId,
           id_membro: item.id_membro,
           presente: item.presente
         }));
 
         const { error: upsertErr } = await supabase
           .from('chamada_reuniao')
-          .upsert(upserts, { onConflict: 'id_agenda,id_membro' });
+          .upsert(upserts, { onConflict: 'id_reuniao,id_membro' });
 
         if (upsertErr) throw upsertErr;
       }

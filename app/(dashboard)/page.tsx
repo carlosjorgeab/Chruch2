@@ -937,12 +937,6 @@ export default function Home() {
                 </div>
                 <p className="text-slate-500 text-[11px] mt-1 font-medium">Acompanhe as programações, reuniões, cultos e compromissos</p>
               </div>
-              <Link 
-                href="/agenda"
-                className="text-xs font-black text-[#E4A232] hover:underline flex items-center gap-1 uppercase tracking-wider"
-              >
-                Gerenciar Agenda →
-              </Link>
             </div>
 
             {/* Selector toolbar header */}
@@ -1026,7 +1020,7 @@ export default function Home() {
                 </div>
                 <h4 className="text-xs font-bold text-slate-800 dark:text-white uppercase tracking-tight">Nenhum evento agendado</h4>
                 <p className="text-[11px] text-slate-500 font-medium max-w-xs mt-1">
-                  Não há programações agendadas. Clique em "Gerenciar Agenda" para cadastrar eventos.
+                  Não há programações agendadas para o período selecionado.
                 </p>
               </div>
             ) : viewType === 'dia' ? (

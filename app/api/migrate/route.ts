@@ -148,14 +148,7 @@ export async function GET(req: NextRequest) {
     ALTER TABLE agendas ADD COLUMN IF NOT EXISTS privado BOOLEAN DEFAULT false;
     ALTER TABLE agendas DROP COLUMN IF EXISTS id_comunidade CASCADE;
 
-    CREATE TABLE IF NOT EXISTS chamada_reuniao (
-      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-      id_agenda UUID REFERENCES agendas(id) ON DELETE CASCADE,
-      id_membro UUID REFERENCES membros(id) ON DELETE CASCADE,
-      presente BOOLEAN DEFAULT TRUE,
-      created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
-      UNIQUE(id_agenda, id_membro)
-    );
+    DROP TABLE IF EXISTS chamada_reuniao CASCADE;
 
     CREATE TABLE IF NOT EXISTS reunioes (
       id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -163,6 +156,15 @@ export async function GET(req: NextRequest) {
       id_comunidade UUID REFERENCES comunidades(id) ON DELETE CASCADE,
       created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
       UNIQUE(id_agenda)
+    );
+
+    CREATE TABLE IF NOT EXISTS chamada_reuniao (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      id_reuniao UUID REFERENCES reunioes(id) ON DELETE CASCADE,
+      id_membro UUID REFERENCES membros(id) ON DELETE CASCADE,
+      presente BOOLEAN DEFAULT TRUE,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+      UNIQUE(id_reuniao, id_membro)
     );
 
     -- Add columns to membros

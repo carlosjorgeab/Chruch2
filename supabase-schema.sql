@@ -249,14 +249,23 @@ CREATE TABLE IF NOT EXISTS agendas (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- 11. Tabela de Chamada de Reunião
-CREATE TABLE IF NOT EXISTS chamada_reuniao (
+-- 11. Tabela de Reuniões de Comunidades
+CREATE TABLE IF NOT EXISTS reunioes (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   id_agenda UUID REFERENCES agendas(id) ON DELETE CASCADE,
+  id_comunidade UUID REFERENCES comunidades(id) ON DELETE CASCADE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+  UNIQUE(id_agenda)
+);
+
+-- 12. Tabela de Chamada de Reunião
+CREATE TABLE IF NOT EXISTS chamada_reuniao (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id_reuniao UUID REFERENCES reunioes(id) ON DELETE CASCADE,
   id_membro UUID REFERENCES membros(id) ON DELETE CASCADE,
   presente BOOLEAN DEFAULT TRUE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
-  UNIQUE(id_agenda, id_membro)
+  UNIQUE(id_reuniao, id_membro)
 );
 
 
