@@ -587,7 +587,7 @@ export default function Home() {
 
             {activeAvisos.length === 0 ? (
               <div className="flex flex-col items-center justify-center text-center p-6 bg-slate-50 dark:bg-slate-955/20 rounded-2xl border border-slate-100 dark:border-slate-850 min-h-[220px] flex-1">
-                <div className="w-12 h-12 rounded-xl bg-amber-100 dark:bg-amber-950/20 text-amber-600 flex items-center justify-center shrink-0 mb-3">
+                <div className="w-12 h-12 rounded-xl bg-transparent text-amber-600 flex items-center justify-center shrink-0 mb-3">
                   <Megaphone size={24} />
                 </div>
                 <h4 className="text-sm font-bold text-slate-850 dark:text-white uppercase tracking-tight">Sem avisos para hoje</h4>
@@ -857,7 +857,7 @@ export default function Home() {
               </div>
             ) : aniversariantes.length === 0 ? (
               <div className="flex flex-col items-center justify-center text-center p-6 bg-slate-50 dark:bg-slate-955/20 rounded-2xl border border-slate-100 dark:border-slate-850 min-h-[220px] flex-1">
-                <div className="w-12 h-12 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mb-3">
+                <div className="w-12 h-12 rounded-xl bg-transparent text-slate-400 flex items-center justify-center mb-3">
                   <Calendar size={20} />
                 </div>
                 <h4 className="text-xs font-bold text-slate-800 dark:text-white uppercase tracking-tight">Nenhum aniversário cadastrado</h4>
@@ -888,7 +888,7 @@ export default function Home() {
                             referrerPolicy="no-referrer"
                           />
                         ) : (
-                          <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 flex items-center justify-center font-black text-xs font-sans uppercase">
+                          <div className="w-10 h-10 rounded-xl bg-transparent text-amber-600 dark:text-amber-400 border border-amber-500/20 flex items-center justify-center font-black text-xs font-sans uppercase">
                             {membro.nome.substring(0, 2)}
                           </div>
                         )}
@@ -1021,7 +1021,7 @@ export default function Home() {
               </div>
             ) : agendas.length === 0 ? (
               <div className="flex flex-col items-center justify-center text-center p-6 bg-slate-50 dark:bg-slate-955/20 rounded-2xl border border-slate-100 dark:border-slate-850 min-h-[140px] flex-1">
-                <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mb-2">
+                <div className="w-10 h-10 rounded-xl bg-transparent text-slate-400 flex items-center justify-center mb-2">
                   <Calendar size={18} />
                 </div>
                 <h4 className="text-xs font-bold text-slate-800 dark:text-white uppercase tracking-tight">Nenhum evento agendado</h4>
