@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { useIgreja } from '@/context/IgrejaContext';
 import { useConfirm } from '@/context/ConfirmContext';
@@ -985,85 +986,28 @@ export default function ComunidadesPage() {
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
               
-              {/* 1. Schedule a new meeting form */}
-              <div className="lg:col-span-12 xl:col-span-5 bg-slate-50 dark:bg-slate-950/40 p-5 rounded-3xl border border-slate-200/60 dark:border-slate-850 h-fit space-y-4">
-                <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-250 border-b border-slate-200/45 dark:border-slate-800 pb-2">
-                  ➕ Agendar Nova Reunião
+              {/* 1. Schedule a new meeting centralized guidance info */}
+              <div className="lg:col-span-12 xl:col-span-5 bg-gradient-to-br from-amber-500/5 to-amber-500/10 dark:from-amber-500/5 dark:to-amber-500/15 p-6 rounded-3xl border border-amber-500/20 shadow-sm h-fit space-y-4">
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-200 border-b border-amber-500/20 pb-2.5 flex items-center gap-2">
+                  <Calendar size={14} className="text-[#E4A232]" />
+                  Agendamento de Reuniões
                 </h3>
 
-                {meetingError && (
-                  <div className="p-2.5 bg-red-55/10 border border-red-500/20 text-red-700 dark:text-red-400 rounded-xl text-[10px] font-bold">
-                    {meetingError}
-                  </div>
-                )}
+                <p className="text-xs text-slate-600 dark:text-slate-300 font-semibold leading-relaxed">
+                  Para manter a organização conceitual e a exibição integrada das atividades da igreja, <strong>o agendamento de reuniões e cultos domésticos deve ser realizado diretamente no Módulo de Agendas</strong>.
+                </p>
 
-                <form onSubmit={handleCreateMeeting} className="space-y-4">
-                  <div>
-                    <label className="block text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1.5 pl-0.5">
-                      Nome da Reunião
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={newMeetingTitle}
-                      onChange={(e) => setNewMeetingTitle(e.target.value)}
-                      placeholder="Ex: Reunião Geral de Célula"
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-semibold transition"
-                    />
-                  </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-normal font-medium">
+                  Qualquer evento agendado para este grupo celular através da Agenda carregará automaticamente a lista de presença e histórico dos participantes aqui.
+                </p>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1.5 pl-0.5">
-                        Data
-                      </label>
-                      <input
-                        type="date"
-                        required
-                        value={newMeetingDate}
-                        onChange={(e) => setNewMeetingDate(e.target.value)}
-                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-semibold transition cursor-pointer"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1.5 pl-0.5">
-                        Horário
-                      </label>
-                      <input
-                        type="time"
-                        required
-                        value={newMeetingTime}
-                        onChange={(e) => setNewMeetingTime(e.target.value)}
-                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-semibold transition cursor-pointer"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1.5 pl-0.5">
-                      Local de Encontro
-                    </label>
-                    <input
-                      type="text"
-                      value={newMeetingLocal}
-                      onChange={(e) => setNewMeetingLocal(e.target.value)}
-                      placeholder="Ex: Templo, Casa de Líder"
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-semibold transition"
-                    />
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={schedulingMeeting}
-                    className="w-full py-2.5 bg-[#E4A232] hover:bg-[#E4A232]/90 text-white font-black text-xs uppercase tracking-widest rounded-xl transition duration-150 hover:scale-[1.01] flex items-center justify-center gap-1.5 shadow-md cursor-pointer"
-                  >
-                    <Save size={13} />
-                    {schedulingMeeting ? 'Agendando...' : 'Salvar Reunião'}
-                  </button>
-                  <p className="text-[8px] text-slate-400 leading-normal pl-0.5">
-                    * Esta reunião será inserida automaticamente na Agenda Pública de eventos da congregação.
-                  </p>
-                </form>
+                <Link
+                  href="/agenda"
+                  className="w-full py-3 bg-[#E4A232] hover:bg-[#E4A232]/90 text-white font-black text-xs uppercase tracking-widest rounded-xl transition duration-150 hover:scale-[1.01] flex items-center justify-center gap-2 shadow-lg shadow-amber-500/10 cursor-pointer text-center"
+                >
+                  <Calendar size={14} />
+                  Ir para Módulo de Agendas
+                </Link>
               </div>
 
               {/* 2. List of scheduled meetings */}

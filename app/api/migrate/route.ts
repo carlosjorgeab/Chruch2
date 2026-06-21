@@ -157,6 +157,14 @@ export async function GET(req: NextRequest) {
       UNIQUE(id_agenda, id_membro)
     );
 
+    CREATE TABLE IF NOT EXISTS reunioes (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      id_agenda UUID REFERENCES agendas(id) ON DELETE CASCADE,
+      id_comunidade UUID REFERENCES comunidades(id) ON DELETE CASCADE,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+      UNIQUE(id_agenda)
+    );
+
     -- Add columns to membros
     ALTER TABLE membros ADD COLUMN IF NOT EXISTS cpf VARCHAR(25);
     ALTER TABLE membros ADD COLUMN IF NOT EXISTS sexo VARCHAR(15);

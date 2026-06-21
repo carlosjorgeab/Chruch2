@@ -336,7 +336,31 @@ export default function AgendaPage() {
           .eq('id', editingId);
 
         if (patchErr) throw patchErr;
-        setSuccess('Evento updated com sucesso!');
+
+        if (selectedComunidadeId) {
+          const { error: reunioesErr } = await supabase
+            .from('reunioes')
+            .upsert({
+              id_agenda: editingId,
+              id_comunidade: selectedComunidadeId
+            }, { onConflict: 'id_agenda' });
+
+          if (reunioesErr) {
+            console.error('Error exporting to reunioes (update):', reunioesErr);
+          }
+        } else {
+          // If community link removed, clear from reunioes
+          const { error: delReunioesErr } = await supabase
+            .from('reunioes')
+            .delete()
+            .eq('id_agenda', editingId);
+
+          if (delReunioesErr) {
+            console.error('Error deleting from reunioes (update):', delReunioesErr);
+          }
+        }
+
+        setSuccess('Evento atualizado com sucesso!');
       } else {
         // Generate payloads for single or recurring events
         const payloadsToInsert = [];
@@ -388,11 +412,33 @@ export default function AgendaPage() {
           }
         }
 
-        const { error: postErr } = await supabase
+        const { data: insertedData, error: postErr } = await supabase
           .from('agendas')
-          .insert(payloadsToInsert);
+          .insert(payloadsToInsert)
+          .select('id, id_comunidade');
 
         if (postErr) throw postErr;
+
+        // Export to reunioes if id_comunidade is selected
+        if (selectedComunidadeId && insertedData && insertedData.length > 0) {
+          const reunioesPayload = insertedData
+            .filter((item: any) => item.id_comunidade)
+            .map((item: any) => ({
+              id_agenda: item.id,
+              id_comunidade: item.id_comunidade
+            }));
+
+          if (reunioesPayload.length > 0) {
+            const { error: reunioesErr } = await supabase
+              .from('reunioes')
+              .upsert(reunioesPayload, { onConflict: 'id_agenda' });
+
+            if (reunioesErr) {
+              console.error('Error exporting to reunioes:', reunioesErr);
+            }
+          }
+        }
+
         setSuccess(`Novo evento cadastrado com sucesso! (${payloadsToInsert.length} eventos agendados no período)`);
       }
 

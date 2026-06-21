@@ -235,3 +235,29 @@ ON CONFLICT (email) DO NOTHING;
 -- ALTER TABLE igrejas ADD COLUMN IF NOT EXISTS idioma_padrao VARCHAR(10) DEFAULT 'pt';
 -- ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS ativo BOOLEAN DEFAULT true;
 
+-- 10. Tabela de Agendas / Eventos
+CREATE TABLE IF NOT EXISTS agendas (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id_igreja UUID REFERENCES igrejas(id) ON DELETE CASCADE,
+  titulo VARCHAR(255) NOT NULL,
+  data_hora TIMESTAMP WITH TIME ZONE NOT NULL,
+  data_hora_fim TIMESTAMP WITH TIME ZONE,
+  dia_inteiro BOOLEAN DEFAULT false,
+  local VARCHAR(255),
+  privado BOOLEAN DEFAULT false,
+  status VARCHAR(20) DEFAULT 'Normal' CHECK (status IN ('Importante', 'Normal', 'Alerta')),
+  id_comunidade UUID REFERENCES comunidades(id) ON DELETE CASCADE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 11. Tabela de Chamada de Reunião
+CREATE TABLE IF NOT EXISTS chamada_reuniao (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id_agenda UUID REFERENCES agendas(id) ON DELETE CASCADE,
+  id_membro UUID REFERENCES membros(id) ON DELETE CASCADE,
+  presente BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+  UNIQUE(id_agenda, id_membro)
+);
+
+
