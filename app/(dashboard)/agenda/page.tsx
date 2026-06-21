@@ -17,7 +17,9 @@ import {
   CheckCircle, 
   Info,
   RefreshCw,
-  Bell
+  MapPin,
+  Lock,
+  Globe
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -25,7 +27,11 @@ type AgendaItem = {
   id: string;
   id_igreja: string;
   titulo: string;
-  data_hora: string;
+  data_hora: string;          // Data e Hora Inicial
+  data_hora_fim?: string | null;  // Data e Hora Final
+  dia_inteiro?: boolean;       // Checkbox do Dia Inteiro
+  local?: string | null;       // Texto livre
+  privado?: boolean;           // Público (false) ou Privado (true)
   status: 'Importante' | 'Normal' | 'Alerta';
   created_at?: string;
 };
@@ -42,9 +48,18 @@ export default function AgendaPage() {
 
   // Form states
   const [titulo, setTitulo] = useState('');
+  const [status, setStatus] = useState<'Importante' | 'Normal' | 'Alerta'>('Normal');
+  const [privado, setPrivado] = useState<boolean>(false);
+  const [diaInteiro, setDiaInteiro] = useState<boolean>(false);
+  const [local, setLocal] = useState<string>('');
+  
+  // Start date/time
   const [evtDate, setEvtDate] = useState('');
   const [evtTime, setEvtTime] = useState('');
-  const [status, setStatus] = useState<'Importante' | 'Normal' | 'Alerta'>('Normal');
+  
+  // End date/time
+  const [evtDateEnd, setEvtDateEnd] = useState('');
+  const [evtTimeEnd, setEvtTimeEnd] = useState('');
 
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -79,35 +94,64 @@ export default function AgendaPage() {
   };
 
   const initForm = (item?: AgendaItem) => {
+    setError('');
+    setSuccess('');
+    
     if (item) {
       setEditingId(item.id);
       setTitulo(item.titulo);
-      
-      const dt = new Date(item.data_hora);
-      // Format YYYY-MM-DD
-      const year = dt.getFullYear();
-      const month = String(dt.getMonth() + 1).padStart(2, '0');
-      const day = String(dt.getDate()).padStart(2, '0');
-      setEvtDate(`${year}-${month}-${day}`);
-      
-      // Format HH:MM
-      const hours = String(dt.getHours()).padStart(2, '0');
-      const minutes = String(dt.getMinutes()).padStart(2, '0');
-      setEvtTime(`${hours}:${minutes}`);
-      
       setStatus(item.status);
+      setPrivado(!!item.privado);
+      setDiaInteiro(!!item.dia_inteiro);
+      setLocal(item.local || '');
+
+      // Parse Initial Date & Time
+      const dtStart = new Date(item.data_hora);
+      const startYear = dtStart.getFullYear();
+      const startMonth = String(dtStart.getMonth() + 1).padStart(2, '0');
+      const startDay = String(dtStart.getDate()).padStart(2, '0');
+      setEvtDate(`${startYear}-${startMonth}-${startDay}`);
+      
+      const startHours = String(dtStart.getHours()).padStart(2, '0');
+      const startMinutes = String(dtStart.getMinutes()).padStart(2, '0');
+      setEvtTime(`${startHours}:${startMinutes}`);
+
+      // Parse Final Date & Time
+      if (item.data_hora_fim) {
+        const dtEnd = new Date(item.data_hora_fim);
+        const endYear = dtEnd.getFullYear();
+        const endMonth = String(dtEnd.getMonth() + 1).padStart(2, '0');
+        const endDay = String(dtEnd.getDate()).padStart(2, '0');
+        setEvtDateEnd(`${endYear}-${endMonth}-${endDay}`);
+
+        const endHours = String(dtEnd.getHours()).padStart(2, '0');
+        const endMinutes = String(dtEnd.getMinutes()).padStart(2, '0');
+        setEvtTimeEnd(`${endHours}:${endMinutes}`);
+      } else {
+        // Fallback or default
+        setEvtDateEnd(`${startYear}-${startMonth}-${startDay}`);
+        setEvtTimeEnd('21:30');
+      }
+      
       setIsEditing(true);
     } else {
       setEditingId(null);
       setTitulo('');
-      const today = new Date();
-      setEvtDate(today.toISOString().split('T')[0]);
-      setEvtTime('19:30');
       setStatus('Normal');
+      setPrivado(false);
+      setDiaInteiro(false);
+      setLocal('');
+      
+      const today = new Date();
+      const todayString = today.toISOString().split('T')[0];
+      setEvtDate(todayString);
+      setEvtTime('19:30');
+      
+      setEvtDateEnd(todayString);
+      setEvtTimeEnd('21:30');
+      
       setIsEditing(true);
     }
-    setError('');
-    setSuccess('');
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -123,7 +167,12 @@ export default function AgendaPage() {
     }
 
     if (!evtDate || !evtTime) {
-      setError('A data e a hora do evento são obrigatórias.');
+      setError('A data e o horário inicial são obrigatórios.');
+      return;
+    }
+
+    if (!diaInteiro && (!evtDateEnd || !evtTimeEnd)) {
+      setError('A data e o horário final são obrigatórios quando não for Dia Inteiro.');
       return;
     }
 
@@ -133,13 +182,33 @@ export default function AgendaPage() {
       setSuccess('');
 
       // Create timezone-safe ISO string from Date part and Time part
-      const dateTimeString = `${evtDate}T${evtTime}:00`;
-      const finalIso = new Date(dateTimeString).toISOString();
+      const startDateTimeString = `${evtDate}T${evtTime}:00`;
+      const finalIsoStart = new Date(startDateTimeString).toISOString();
+
+      let finalIsoEnd = null;
+      if (diaInteiro) {
+        const endDateTimeString = `${evtDate}T23:59:59`;
+        finalIsoEnd = new Date(endDateTimeString).toISOString();
+      } else {
+        const endDateTimeString = `${evtDateEnd}T${evtTimeEnd}:00`;
+        finalIsoEnd = new Date(endDateTimeString).toISOString();
+        
+        // Assert start is before/equal to end
+        if (new Date(finalIsoStart) > new Date(finalIsoEnd)) {
+          setError('A data e hora inicial não podem ser posteriores à data e hora final.');
+          setSubmitting(false);
+          return;
+        }
+      }
 
       const payload = {
         id_igreja: selectedIgreja.id,
         titulo: titulo.trim(),
-        data_hora: finalIso,
+        data_hora: finalIsoStart,
+        data_hora_fim: finalIsoEnd,
+        dia_inteiro: diaInteiro,
+        local: local.trim() || null,
+        privado: privado,
         status: status
       };
 
@@ -211,7 +280,7 @@ export default function AgendaPage() {
         return {
           wrapper: 'bg-amber-50 dark:bg-amber-950/20 border-amber-250 dark:border-amber-900/30 text-amber-900 dark:text-amber-300',
           badge: 'bg-amber-500 text-slate-900 font-bold',
-          dot: 'bg-amber-550',
+          dot: 'bg-[#E4A232]',
           border: 'border-amber-500/20 dark:border-amber-500/10'
         };
       case 'Normal':
@@ -225,14 +294,31 @@ export default function AgendaPage() {
     }
   };
 
-  const formatEventDate = (iso: string) => {
-    const d = new Date(iso);
-    return d.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+  const formatEventDateRange = (startIso: string, endIso?: string | null, isAllDay?: boolean) => {
+    const start = new Date(startIso);
+    const options: Intl.DateTimeFormatOptions = { weekday: 'short', day: '2-digit', month: 'short' };
+    const dateStr = start.toLocaleDateString('pt-BR', options);
+    
+    if (endIso && !isAllDay) {
+      const end = new Date(endIso);
+      if (start.toDateString() !== end.toDateString()) {
+        const endDateStr = end.toLocaleDateString('pt-BR', options);
+        return `${dateStr} até ${endDateStr}`;
+      }
+    }
+    return start.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
   };
 
-  const formatEventTime = (iso: string) => {
-    const d = new Date(iso);
-    return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  const formatEventTimeRange = (startIso: string, endIso?: string | null, isAllDay?: boolean) => {
+    if (isAllDay) return 'Dia Inteiro';
+    const start = new Date(startIso);
+    const startStr = start.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    if (endIso) {
+      const end = new Date(endIso);
+      const endStr = end.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      return `${startStr} às ${endStr} Horas`;
+    }
+    return `${startStr} Horas`;
   };
 
   return (
@@ -293,8 +379,8 @@ export default function AgendaPage() {
 
         {/* Agenda Scheduling & Editing drawer modal dialog */}
         {isEditing && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 shadow-2xl p-6 sm:p-10 w-full max-w-lg relative animate-in zoom-in-95 duration-250">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-200">
+            <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 shadow-2xl p-6 sm:p-10 w-full max-w-lg my-8 relative animate-in zoom-in-95 duration-250 max-h-[90vh] overflow-y-auto scrollbar-thin">
               <button
                 onClick={() => setIsEditing(false)}
                 className="absolute top-6 right-6 p-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-full text-slate-500 dark:text-slate-400 cursor-pointer transition"
@@ -303,13 +389,47 @@ export default function AgendaPage() {
               </button>
 
               <div className="flex items-center gap-3 border-b border-slate-100 dark:border-slate-800 pb-5 mb-6">
-                <Calendar className="text-amber-500" size={24} />
+                <Calendar className="text-[#E4A232]" size={24} />
                 <h2 className="text-lg font-black uppercase tracking-tight text-slate-900 dark:text-white">
                   {editingId ? 'Editar Evento' : 'Agendar Novo Evento'}
                 </h2>
               </div>
 
               <form onSubmit={handleSave} className="space-y-6">
+                
+                {/* e) Definir Público / Privado no inicio do Cadastro */}
+                <div>
+                  <label className="block text-[10px] font-black text-slate-450 dark:text-slate-500 uppercase tracking-widest mb-2 ml-1">
+                    Visibilidade do Evento
+                  </label>
+                  <div className="grid grid-cols-2 gap-2 p-1.5 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-100 dark:border-slate-850">
+                    <button
+                      type="button"
+                      onClick={() => setPrivado(false)}
+                      className={`py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition ${
+                        !privado
+                          ? 'bg-[#E4A232] text-white shadow-md'
+                          : 'text-slate-500 hover:text-slate-700 dark:text-slate-405 dark:hover:text-slate-200'
+                      }`}
+                    >
+                      <Globe size={14} />
+                      🌍 Público
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPrivado(true)}
+                      className={`py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition ${
+                        privado
+                          ? 'bg-slate-800 text-white dark:bg-slate-800 shadow-md'
+                          : 'text-slate-500 hover:text-slate-700 dark:text-slate-405 dark:hover:text-slate-200'
+                      }`}
+                    >
+                      <Lock size={14} />
+                      🔒 Privado
+                    </button>
+                  </div>
+                </div>
+
                 <div>
                   <label className="block text-[10px] font-black text-slate-450 dark:text-slate-500 uppercase tracking-widest mb-2 ml-1">
                     Nome do Evento
@@ -324,33 +444,119 @@ export default function AgendaPage() {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-[10px] font-black text-slate-450 dark:text-slate-500 uppercase tracking-widest mb-2 ml-1">
-                      Data
-                    </label>
-                    <input
-                      type="date"
-                      required
-                      value={evtDate}
-                      onChange={(e) => setEvtDate(e.target.value)}
-                      className="w-full px-4 py-3 rounded-2xl border-2 border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-semibold transition"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-black text-slate-450 dark:text-slate-500 uppercase tracking-widest mb-2 ml-1">
-                      Hora
-                    </label>
-                    <input
-                      type="time"
-                      required
-                      value={evtTime}
-                      onChange={(e) => setEvtTime(e.target.value)}
-                      className="w-full px-4 py-3 rounded-2xl border-2 border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-semibold transition py-3"
-                    />
-                  </div>
+                {/* d) Campo de Local (texto livre) */}
+                <div>
+                  <label className="block text-[10px] font-black text-slate-450 dark:text-slate-500 uppercase tracking-widest mb-2 ml-1">
+                    📍 Local / Endereço (Texto Livre)
+                  </label>
+                  <input
+                    type="text"
+                    value={local}
+                    onChange={(e) => setLocal(e.target.value)}
+                    placeholder="Ex: Templo Principal, Área Externa, Online via Zoom"
+                    className="w-full px-4 py-3 rounded-2xl border-2 border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white focus:border-amber-500 dark:focus:border-amber-500 outline-none font-semibold transition"
+                  />
                 </div>
+
+                {/* c) Checkbox Dia Inteiro */}
+                <div className="flex items-center gap-2 px-1 py-1 bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/10 rounded-xl">
+                  <input
+                    type="checkbox"
+                    id="dia_inteiro_form"
+                    checked={diaInteiro}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setDiaInteiro(checked);
+                      if (checked) {
+                        setEvtDateEnd(evtDate);
+                        setEvtTimeEnd('23:59');
+                      }
+                    }}
+                    className="w-4 h-4 text-[#E4A232] border-slate-300 rounded focus:ring-amber-500 cursor-pointer accent-amber-500"
+                  />
+                  <label 
+                    htmlFor="dia_inteiro_form" 
+                    className="text-[11px] font-extrabold text-slate-700 dark:text-slate-300 uppercase tracking-wide cursor-pointer select-none"
+                  >
+                    ⏰ Evento do Dia Inteiro
+                  </label>
+                </div>
+
+                {/* a) Alterar Data da Agenda para Data Inicial e Horario para Horario Inicial */}
+                <fieldset className="p-4 border-2 border-slate-100 dark:border-slate-850 rounded-2xl space-y-4">
+                  <legend className="px-2 text-[10px] font-black text-amber-550 uppercase tracking-widest">
+                    Início do Evento
+                  </legend>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[9px] font-black text-slate-450 dark:text-slate-500 uppercase tracking-widest mb-1">
+                        Data Inicial
+                      </label>
+                      <input
+                        type="date"
+                        required
+                        value={evtDate}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setEvtDate(val);
+                          if (diaInteiro) {
+                            setEvtDateEnd(val);
+                          }
+                        }}
+                        className="w-full px-3 py-2.5 rounded-xl border border-slate-205 dark:border-slate-800 bg-slate-50 dark:bg-slate-955 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-semibold transition text-xs"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[9px] font-black text-slate-450 dark:text-slate-500 uppercase tracking-widest mb-1">
+                        Horário Inicial
+                      </label>
+                      <input
+                        type="time"
+                        required
+                        value={evtTime}
+                        onChange={(e) => setEvtTime(e.target.value)}
+                        className="w-full px-3 py-2.5 rounded-xl border border-slate-205 dark:border-slate-800 bg-slate-50 dark:bg-slate-955 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-semibold transition text-xs"
+                      />
+                    </div>
+                  </div>
+                </fieldset>
+
+                {/* b) Criar uma Nova Data, Data Final e Horário Final da Agenda (desabilitados se dia inteiro) */}
+                <fieldset className={`p-4 border-2 border-slate-100 dark:border-slate-850 rounded-2xl space-y-4 transition ${diaInteiro ? 'opacity-40 pointer-events-none' : ''}`}>
+                  <legend className="px-2 text-[10px] font-black text-slate-450 dark:text-slate-500 uppercase tracking-widest">
+                    Fim do Evento {!diaInteiro ? '' : '(Bloqueado por Dia Inteiro)'}
+                  </legend>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[9px] font-black text-slate-450 dark:text-slate-500 uppercase tracking-widest mb-1">
+                        Data Final
+                      </label>
+                      <input
+                        type="date"
+                        required={!diaInteiro}
+                        disabled={diaInteiro}
+                        value={diaInteiro ? evtDate : evtDateEnd}
+                        onChange={(e) => setEvtDateEnd(e.target.value)}
+                        className="w-full px-3 py-2.5 rounded-xl border border-slate-205 dark:border-slate-800 bg-slate-50 dark:bg-slate-955 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-semibold transition text-xs disabled:bg-slate-100 dark:disabled:bg-slate-900/50"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[9px] font-black text-slate-450 dark:text-slate-500 uppercase tracking-widest mb-1">
+                        Horário Final
+                      </label>
+                      <input
+                        type="time"
+                        required={!diaInteiro}
+                        disabled={diaInteiro}
+                        value={diaInteiro ? '23:59' : evtTimeEnd}
+                        onChange={(e) => setEvtTimeEnd(e.target.value)}
+                        className="w-full px-3 py-2.5 rounded-xl border border-slate-205 dark:border-slate-800 bg-slate-50 dark:bg-slate-955 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-semibold transition text-xs disabled:bg-slate-100 dark:disabled:bg-slate-900/50"
+                      />
+                    </div>
+                  </div>
+                </fieldset>
 
                 <div>
                   <label className="block text-[10px] font-black text-slate-450 dark:text-slate-500 uppercase tracking-widest mb-2 ml-1">
@@ -359,7 +565,7 @@ export default function AgendaPage() {
                   <select
                     value={status}
                     onChange={(e) => setStatus(e.target.value as any)}
-                    className="w-full px-4 py-3 rounded-2xl border-2 border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-semibold transition cursor-pointer"
+                    className="w-full px-4 py-3 rounded-2xl border-2 border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-955 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-semibold transition cursor-pointer"
                   >
                     <option value="Normal">Normal (Azul)</option>
                     <option value="Importante">Importante (Vermelho)</option>
@@ -401,7 +607,7 @@ export default function AgendaPage() {
               placeholder="Pesquisar evento pelo nome..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-11 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white placeholder-slate-400 focus:border-amber-500 outline-none text-xs font-semibold"
+              className="w-full pl-11 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-955 text-slate-900 dark:text-white placeholder-slate-400 focus:border-amber-500 outline-none text-xs font-semibold"
             />
           </div>
           <div className="flex items-center gap-4 text-xs font-bold text-slate-400 dark:text-slate-500">
@@ -450,11 +656,21 @@ export default function AgendaPage() {
                     )}
 
                     <div className="space-y-4 w-full">
-                      {/* Priority Tag line */}
-                      <span className={`inline-flex items-center gap-1.5 px-3 py-1 text-[9px] font-black uppercase tracking-wider rounded-lg border ${styles.wrapper}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${styles.dot}`} />
-                        Status: {item.status === 'Normal' ? 'Normal (Azul)' : item.status === 'Importante' ? 'Importante (Vermelho)' : 'Alerta (Amarelo)'}
-                      </span>
+                      {/* Priority Tag line & Visibility indicator */}
+                      <div className="flex flex-wrap gap-2 items-center">
+                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 text-[9px] font-black uppercase tracking-wider rounded-lg border ${styles.wrapper}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${styles.dot}`} />
+                          {item.status}
+                        </span>
+                        <span className={`inline-flex items-center gap-1 px-2 py-1 text-[9px] font-black uppercase tracking-wider rounded-lg border ${
+                          item.privado 
+                            ? 'bg-slate-100 border-slate-200 text-slate-600 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400' 
+                            : 'bg-green-50 border-green-200 text-green-700 dark:bg-green-950/20 dark:border-green-900/30 dark:text-green-400'
+                        }`}>
+                          {item.privado ? <Lock size={9} /> : <Globe size={9} />}
+                          {item.privado ? 'Privado' : 'Público'}
+                        </span>
+                      </div>
 
                       {/* Event Title */}
                       <h3 className="text-sm font-black uppercase tracking-tight text-slate-850 dark:text-white leading-snug line-clamp-2">
@@ -464,13 +680,21 @@ export default function AgendaPage() {
                       {/* Date and Time block */}
                       <div className="space-y-2 border-t border-slate-100 dark:border-slate-850 pt-4 w-full">
                         <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 font-bold text-xs">
-                          <Calendar size={14} className="text-amber-500 shrink-0" />
-                          <span className="line-clamp-1">{formatEventDate(item.data_hora)}</span>
+                          <Calendar size={14} className="text-[#E4A232] shrink-0" />
+                          <span className="line-clamp-1">{formatEventDateRange(item.data_hora, item.data_hora_fim, item.dia_inteiro)}</span>
                         </div>
                         <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 font-bold text-xs">
-                          <Clock size={14} className="text-amber-500 shrink-0" />
-                          <span>{formatEventTime(item.data_hora)} Horas</span>
+                          <Clock size={14} className="text-[#E4A232] shrink-0" />
+                          <span>{formatEventTimeRange(item.data_hora, item.data_hora_fim, item.dia_inteiro)}</span>
                         </div>
+                        
+                        {/* Render Local details */}
+                        {item.local && (
+                          <div className="flex items-start gap-2 text-slate-500 dark:text-slate-400 font-bold text-xs pt-1">
+                            <MapPin size={14} className="text-amber-550 shrink-0 mt-0.5" />
+                            <span className="line-clamp-2 leading-tight">{item.local}</span>
+                          </div>
+                        )}
                       </div>
                     </div>
 

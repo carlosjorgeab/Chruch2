@@ -243,8 +243,7 @@ export default function Home() {
 
         if (!errBirthdays && membBirthdays) {
           const today = new Date();
-          const currentMonthVal = today.getMonth() + 1; // 1-12
-          const nextMonthVal = currentMonthVal === 12 ? 1 : currentMonthVal + 1;
+          const todayReset = new Date(today.getFullYear(), today.getMonth(), today.getDate());
 
           const processed = membBirthdays.map((m: any) => {
             const birth = m.data_nascimento; // e.g., "1994-06-25"
@@ -255,12 +254,12 @@ export default function Home() {
 
             // Calculate "days until next birthday" starting from today
             let nextBirthDate = new Date(today.getFullYear(), bMonth - 1, bDay);
-            if (nextBirthDate < new Date(today.getFullYear(), today.getMonth(), today.getDate())) {
+            if (nextBirthDate < todayReset) {
               nextBirthDate.setFullYear(today.getFullYear() + 1);
             }
 
-            const diffTime = nextBirthDate.getTime() - today.getTime();
-            const daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            const diffTime = nextBirthDate.getTime() - todayReset.getTime();
+            const daysLeft = Math.round(diffTime / (1000 * 60 * 60 * 24));
 
             return {
               ...m,
@@ -269,7 +268,7 @@ export default function Home() {
               daysLeft,
               nextBirthDate
             };
-          }).filter((m: any) => m !== null && (m.bMonth === currentMonthVal || m.bMonth === nextMonthVal)) as any[];
+          }).filter((m: any) => m !== null && m.daysLeft >= 0 && m.daysLeft <= 30) as any[];
 
           // Sort by daysLeft ascending (soonest first)
           processed.sort((a, b) => a.daysLeft - b.daysLeft);
@@ -674,32 +673,17 @@ export default function Home() {
                           )
                         )}
 
-                        {/* 5. PDF Uploaded file - Shows optimized Cover thumbnail card */}
+                        {/* 5. PDF Uploaded file - Shows the PDF embedded directly, showing only the first page */}
                         {!hasVideoLink && item.arquivo_base64 && item.arquivo_base64.startsWith('data:application/pdf') && (
-                          <div className="w-full h-full relative overflow-hidden bg-slate-50 dark:bg-slate-900 border border-slate-150 dark:border-slate-800 flex flex-col justify-between p-6 rounded-2xl">
-                            {/* Watermark/Background PDF Icon */}
-                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-[0.025] dark:opacity-[0.04] pointer-events-none text-slate-900 dark:text-white">
-                              <FileText size={160} />
-                            </div>
-
-                            <div className="flex items-start gap-4">
-                              <div className="p-3 bg-red-50 dark:bg-red-950/30 rounded-xl text-red-600 dark:text-red-400 border border-red-155 dark:border-red-900/30 shadow-sm flex items-center justify-center shrink-0">
-                                <FileText size={36} />
-                              </div>
-                              <div className="space-y-1 flex-1 min-w-0">
-                                <span className="bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-400 text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded border border-red-200 dark:border-red-900/30">
-                                  Documento PDF
-                                </span>
-                                <h4 className="text-xs font-black text-slate-800 dark:text-slate-200 truncate mt-1">
-                                  {item.arquivo_nome || 'anuncio.pdf'}
-                                </h4>
-                                <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed font-bold">
-                                  Para melhor desempenho, use os botões abaixo para visualizar em tela cheia de forma interativa ou salvar no dispositivo.
-                                </p>
-                              </div>
-                            </div>
-
-                            <div className="flex gap-2 w-full pt-4 border-t border-slate-100 dark:border-slate-800 relative z-20">
+                          <div className="w-full h-full relative overflow-hidden rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-150 dark:border-slate-800 flex flex-col">
+                            <iframe
+                              src={`${item.arquivo_base64.split('#')[0]}#page=1&toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
+                              className="w-full h-full object-cover pointer-events-none select-none overflow-hidden"
+                              style={{ border: 0, overflow: 'hidden' }}
+                              title={item.titulo}
+                            />
+                            {/* Overlay to block actions, intercept clicks and provide controls */}
+                            <div className="absolute inset-0 bg-transparent flex items-end justify-end p-3 bg-gradient-to-t from-slate-950/70 via-transparent to-transparent">
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -715,18 +699,10 @@ export default function Home() {
                                     );
                                   }
                                 }}
-                                className="flex-1 flex items-center justify-center gap-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-extrabold py-2 px-3 rounded-xl shadow-sm transition duration-200 uppercase text-[9px] tracking-wider cursor-pointer"
+                                className="bg-amber-600/90 hover:bg-amber-600 text-white text-[9px] font-black uppercase tracking-wider px-3 py-1.5 rounded-xl flex items-center gap-1.5 hover:scale-105 transition cursor-pointer backdrop-blur-xs shadow-md border border-amber-500/25"
                               >
-                                <ExternalLink size={10} /> Visualizar PDF
+                                <ExternalLink size={11} /> Expandir e Baixar
                               </button>
-                              <a
-                                href={item.arquivo_base64}
-                                download={item.arquivo_nome || 'anuncio.pdf'}
-                                className="flex-1 flex items-center justify-center gap-1.5 bg-amber-600 hover:bg-amber-700 text-white font-extrabold py-2 px-3 rounded-xl shadow-sm transition duration-200 uppercase text-[9px] tracking-wider cursor-pointer font-sans"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <Download size={10} /> Baixar PDF
-                              </a>
                             </div>
                           </div>
                         )}
@@ -940,6 +916,24 @@ export default function Home() {
                     borderStyle = "border-amber-100 dark:border-amber-950/20";
                   }
 
+                  const hasEnd = item.data_hora_fim;
+                  const isAllDay = item.dia_inteiro;
+                  const finalDate = hasEnd ? new Date(item.data_hora_fim) : null;
+                  
+                  let dateLabel = eventDate.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+                  if (finalDate && !isAllDay && eventDate.toDateString() !== finalDate.toDateString()) {
+                    dateLabel += ` - ${finalDate.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}`;
+                  } else {
+                    dateLabel = eventDate.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+                  }
+
+                  let timeLabel = isAllDay ? 'Dia Inteiro' : eventDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                  if (finalDate && !isAllDay) {
+                    timeLabel += ` às ${finalDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} Horas`;
+                  } else if (!isAllDay) {
+                    timeLabel += ' Horas';
+                  }
+
                   return (
                     <div 
                       key={item.id}
@@ -947,9 +941,16 @@ export default function Home() {
                     >
                       <div className="space-y-2">
                         <div className="flex justify-between items-start gap-2">
-                          <span className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-wider border ${badgeColor}`}>
-                            {item.status}
-                          </span>
+                          <div className="flex gap-1 items-center">
+                            <span className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-wider border ${badgeColor}`}>
+                              {item.status}
+                            </span>
+                            {item.privado && (
+                              <span className="bg-slate-100 dark:bg-slate-800 text-slate-550 dark:text-slate-400 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider border border-slate-200 dark:border-slate-700 flex items-center gap-0.5" title="Evento Privado">
+                                🔒 Privado
+                              </span>
+                            )}
+                          </div>
                           {!isUpcoming && (
                             <span className="text-[8px] text-slate-450 dark:text-slate-500 uppercase font-black tracking-widest bg-slate-100 dark:bg-slate-900 px-1.5 py-0.5 rounded">
                               Encerrado
@@ -962,12 +963,17 @@ export default function Home() {
                       </div>
                       
                       <div className="space-y-1 pt-2 border-t border-slate-100 dark:border-slate-850">
-                        <div className="text-[10px] text-slate-500 dark:text-slate-400 font-bold flex items-center gap-1.5">
-                          📅 {eventDate.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
+                        <div className="text-[10px] text-slate-500 dark:text-slate-400 font-bold flex items-center gap-1.5 truncate">
+                          📅 {dateLabel}
                         </div>
-                        <div className="text-[10px] text-slate-500 dark:text-slate-400 font-bold flex items-center gap-1.5">
-                          ⏰ {eventDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} Horas
+                        <div className="text-[10px] text-slate-500 dark:text-slate-400 font-bold flex items-center gap-1.5 truncate">
+                          ⏰ {timeLabel}
                         </div>
+                        {item.local && (
+                          <div className="text-[10px] text-slate-550 dark:text-slate-400 font-bold flex items-center gap-1.5 truncate" title={item.local}>
+                            📍 {item.local}
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
@@ -1075,7 +1081,7 @@ export default function Home() {
         </div>
 
         {/* CHART 2: CATEGORIAS DE ENTRADA/SAÍDA */}
-        <div className="bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800 space-y-6 flex flex-col lg:col-span-2" id="panel-category-breakdown">
+        <div className="bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800 space-y-6 flex flex-col" id="panel-category-breakdown">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-100 dark:border-slate-800 pb-5" id="panel-category-header">
             <div>
               <div className="flex items-center gap-2 text-slate-800 dark:text-white">

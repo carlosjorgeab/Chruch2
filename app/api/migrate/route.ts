@@ -142,6 +142,11 @@ export async function GET(req: NextRequest) {
       created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
     );
 
+    ALTER TABLE agendas ADD COLUMN IF NOT EXISTS data_hora_fim TIMESTAMP WITH TIME ZONE;
+    ALTER TABLE agendas ADD COLUMN IF NOT EXISTS dia_inteiro BOOLEAN DEFAULT false;
+    ALTER TABLE agendas ADD COLUMN IF NOT EXISTS local VARCHAR(255);
+    ALTER TABLE agendas ADD COLUMN IF NOT EXISTS privado BOOLEAN DEFAULT false;
+
     -- Add columns to membros
     ALTER TABLE membros ADD COLUMN IF NOT EXISTS cpf VARCHAR(25);
     ALTER TABLE membros ADD COLUMN IF NOT EXISTS sexo VARCHAR(15);
