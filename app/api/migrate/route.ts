@@ -167,6 +167,47 @@ export async function GET(req: NextRequest) {
       UNIQUE(id_reuniao, id_membro)
     );
 
+    CREATE TABLE IF NOT EXISTS eventos (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      id_igreja UUID REFERENCES igrejas(id) ON DELETE CASCADE,
+      titulo VARCHAR(255) NOT NULL,
+      sub_titulo VARCHAR(255),
+      qtd_vagas INT,
+      status VARCHAR(20) DEFAULT 'Confirmado' CHECK (status IN ('Confirmado', 'Pendente', 'Cancelado')),
+      valor_inscricao DECIMAL(10,2) DEFAULT 0.00,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS eventos_arquivos (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      id_evento UUID REFERENCES eventos(id) ON DELETE CASCADE,
+      nome VARCHAR(255) NOT NULL,
+      tipo_arquivo VARCHAR(100),
+      arquivo_base64 TEXT,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS eventos_programacao (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      id_evento UUID REFERENCES eventos(id) ON DELETE CASCADE,
+      descricao TEXT NOT NULL,
+      id_agenda UUID REFERENCES agendas(id) ON DELETE SET NULL,
+      palestrante VARCHAR(100),
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS eventos_inscricoes (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      id_evento UUID REFERENCES eventos(id) ON DELETE CASCADE,
+      tipo_participante VARCHAR(20) CHECK (tipo_participante IN ('Membro', 'Visitante')),
+      id_membro UUID REFERENCES membros(id) ON DELETE SET NULL,
+      nome_visitante VARCHAR(255),
+      valor_pago DECIMAL(10,2) DEFAULT 0.00,
+      data_pagamento DATE,
+      pago BOOLEAN DEFAULT FALSE,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+    );
+
     -- Add columns to membros
     ALTER TABLE membros ADD COLUMN IF NOT EXISTS cpf VARCHAR(25);
     ALTER TABLE membros ADD COLUMN IF NOT EXISTS sexo VARCHAR(15);
