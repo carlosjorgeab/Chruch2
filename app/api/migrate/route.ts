@@ -175,6 +175,8 @@ export async function GET(req: NextRequest) {
       qtd_vagas INT,
       status VARCHAR(20) DEFAULT 'Confirmado' CHECK (status IN ('Confirmado', 'Pendente', 'Cancelado')),
       valor_inscricao DECIMAL(10,2) DEFAULT 0.00,
+      palestrante VARCHAR(255),
+      id_agenda UUID REFERENCES agendas(id) ON DELETE SET NULL,
       created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
     );
 
@@ -193,6 +195,7 @@ export async function GET(req: NextRequest) {
       descricao TEXT NOT NULL,
       id_agenda UUID REFERENCES agendas(id) ON DELETE SET NULL,
       palestrante VARCHAR(100),
+      data_hora TIMESTAMP WITH TIME ZONE,
       created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
     );
 
@@ -283,6 +286,11 @@ export async function GET(req: NextRequest) {
       ('translation_overrides_es', '{}', 'Ajustes de traducción en español'),
       ('translation_overrides_en', '{}', 'Ajustes de traducción en inglés')
     ON CONFLICT (chave) DO NOTHING;
+
+    -- Upgrades for Eventos module changes
+    ALTER TABLE eventos ADD COLUMN IF NOT EXISTS palestrante VARCHAR(255);
+    ALTER TABLE eventos ADD COLUMN IF NOT EXISTS id_agenda UUID REFERENCES agendas(id) ON DELETE SET NULL;
+    ALTER TABLE eventos_programacao ADD COLUMN IF NOT EXISTS data_hora TIMESTAMP WITH TIME ZONE;
 
     -- Force reload schema cache for PostgREST
     NOTIFY pgrst, 'reload schema';

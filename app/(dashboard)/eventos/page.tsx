@@ -39,8 +39,15 @@ type Evento = {
   qtd_vagas: number | null;
   status: 'Confirmado' | 'Pendente' | 'Cancelado';
   valor_inscricao: number;
+  palestrante?: string | null;
+  id_agenda?: string | null;
   created_at?: string;
   _count_inscricoes?: number;
+  agenda?: {
+    titulo: string;
+    data_hora: string;
+    local: string | null;
+  };
 };
 
 type EventoArquivo = {
@@ -58,6 +65,7 @@ type EventoProgramacao = {
   descricao: string;
   id_agenda: string | null;
   palestrante: string | null;
+  data_hora?: string | null;
   created_at?: string;
   agenda?: {
     titulo: string;
@@ -115,6 +123,14 @@ export default function EventosPage() {
   const [progAgendaDataHora, setProgAgendaDataHora] = useState('');
   const [progAgendaLocal, setProgAgendaLocal] = useState('');
 
+  // New features state
+  const [isDragging, setIsDragging] = useState(false);
+  const [editingProgId, setEditingProgId] = useState<string | null>(null);
+  const [progDataHora, setProgDataHora] = useState('');
+  const [eventCreateAgenda, setEventCreateAgenda] = useState(false);
+  const [eventAgendaDataHora, setEventAgendaDataHora] = useState('');
+  const [eventAgendaLocal, setEventAgendaLocal] = useState('');
+
   const [showAddInsc, setShowAddInsc] = useState(false);
   const [inscTipo, setInscTipo] = useState<'Membro' | 'Visitante'>('Membro');
   const [inscIdMembro, setInscIdMembro] = useState('');
@@ -148,6 +164,11 @@ export default function EventosPage() {
         .from('eventos')
         .select(`
           *,
+          agenda:agendas (
+            titulo,
+            data_hora,
+            local
+          ),
           eventos_inscricoes(count)
         `)
         .eq('id_igreja', selectedIgreja.id)
@@ -254,8 +275,13 @@ export default function EventosPage() {
       sub_titulo: '',
       qtd_vagas: null,
       status: 'Confirmado',
-      valor_inscricao: 0
+      valor_inscricao: 0,
+      palestrante: '',
+      id_agenda: null
     });
+    setEventCreateAgenda(false);
+    setEventAgendaDataHora('');
+    setEventAgendaLocal('');
     setActiveTab('main');
     setIsModalOpen(true);
     setError('');
@@ -264,6 +290,15 @@ export default function EventosPage() {
 
   const handleOpenEditEvent = (evt: Evento) => {
     setCurrentEvent(evt);
+    if (evt.id_agenda && evt.agenda) {
+      setEventCreateAgenda(true);
+      setEventAgendaDataHora(evt.agenda.data_hora ? new Date(evt.agenda.data_hora).toISOString().slice(0, 16) : '');
+      setEventAgendaLocal(evt.agenda.local || '');
+    } else {
+      setEventCreateAgenda(false);
+      setEventAgendaDataHora('');
+      setEventAgendaLocal('');
+    }
     setActiveTab('main');
     setIsModalOpen(true);
     setError('');
@@ -283,13 +318,50 @@ export default function EventosPage() {
       setError('');
       setSuccess('');
 
+      // Agenda item handling (create, update, or delete)
+      let agendaId: string | null = currentEvent.id_agenda || null;
+      if (eventCreateAgenda && eventAgendaDataHora) {
+        const agendaPayload = {
+          id_igreja: selectedIgreja.id,
+          titulo: `Evento: ${currentEvent.titulo}`,
+          data_hora: new Date(eventAgendaDataHora).toISOString(),
+          local: eventAgendaLocal || null,
+          status: 'Normal' as any,
+          privado: false
+        };
+
+        if (agendaId) {
+          // Update
+          const { error: agendaErr } = await supabase
+            .from('agendas')
+            .update(agendaPayload)
+            .eq('id', agendaId);
+          if (agendaErr) throw agendaErr;
+        } else {
+          // Create
+          const { data: agendaData, error: agendaErr } = await supabase
+            .from('agendas')
+            .insert([agendaPayload])
+            .select('id')
+            .single();
+          if (agendaErr) throw agendaErr;
+          agendaId = agendaData?.id || null;
+        }
+      } else if (!eventCreateAgenda && agendaId) {
+        // Untoggled, delete associated agenda
+        await supabase.from('agendas').delete().eq('id', agendaId);
+        agendaId = null;
+      }
+
       const payload = {
         id_igreja: selectedIgreja.id,
         titulo: currentEvent.titulo,
         sub_titulo: currentEvent.sub_titulo || null,
         qtd_vagas: currentEvent.qtd_vagas || null,
         status: currentEvent.status || 'Confirmado',
-        valor_inscricao: Number(currentEvent.valor_inscricao || 0)
+        valor_inscricao: Number(currentEvent.valor_inscricao || 0),
+        palestrante: currentEvent.palestrante || null,
+        id_agenda: agendaId
       };
 
       if (currentEvent.id) {
@@ -298,21 +370,47 @@ export default function EventosPage() {
           .from('eventos')
           .update(payload)
           .eq('id', currentEvent.id)
-          .select()
+          .select(`
+            *,
+            agenda:agendas (
+              titulo,
+              data_hora,
+              local
+            ),
+            eventos_inscricoes(count)
+          `)
           .single();
         if (err) throw err;
         setSuccess('Evento atualizado com sucesso!');
-        setCurrentEvent(data);
+        
+        const mapped = {
+          ...data,
+          _count_inscricoes: data.eventos_inscricoes?.[0]?.count || 0
+        };
+        setCurrentEvent(mapped);
       } else {
         // Create Mode
         const { data, error: err } = await supabase
           .from('eventos')
           .insert([payload])
-          .select()
+          .select(`
+            *,
+            agenda:agendas (
+              titulo,
+              data_hora,
+              local
+            ),
+            eventos_inscricoes(count)
+          `)
           .single();
         if (err) throw err;
         setSuccess('Evento cadastrado com sucesso!');
-        setCurrentEvent(data);
+        
+        const mapped = {
+          ...data,
+          _count_inscricoes: data.eventos_inscricoes?.[0]?.count || 0
+        };
+        setCurrentEvent(mapped);
       }
 
       await fetchEventos();
@@ -349,9 +447,8 @@ export default function EventosPage() {
     });
   };
 
-  // Sub-entity: Arquivos upload and download
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  // Helper for actual upload of a single file
+  const processAndUploadFile = async (file: File) => {
     if (!file || !currentEvent?.id) return;
 
     try {
@@ -389,6 +486,14 @@ export default function EventosPage() {
     } catch (err: any) {
       setUploadingFile(false);
       setError('Falha ao processar arquivo para upload.');
+    }
+  };
+
+  // Sub-entity: Arquivos upload and download
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      await processAndUploadFile(file);
     }
   };
 
@@ -438,51 +543,56 @@ export default function EventosPage() {
       setError('');
       setSuccess('');
 
-      let agendaId: string | null = null;
+      const payload = {
+        id_evento: currentEvent.id,
+        descricao: progDesc,
+        data_hora: progDataHora ? new Date(progDataHora).toISOString() : null,
+        id_agenda: null,
+        palestrante: null
+      };
 
-      // Create agenda entry if checked
-      if (progCreateAgenda && progAgendaDataHora) {
-        const { data: agendaData, error: agendaErr } = await supabase
-          .from('agendas')
-          .insert([{
-            id_igreja: selectedIgreja?.id,
-            titulo: `${currentEvent.titulo}: ${progDesc}`,
-            data_hora: new Date(progAgendaDataHora).toISOString(),
-            local: progAgendaLocal || null,
-            status: 'Normal',
-            privado: false
-          }])
-          .select('id')
-          .single();
+      if (editingProgId) {
+        // Edit Mode
+        const { error: progErr } = await supabase
+          .from('eventos_programacao')
+          .update(payload)
+          .eq('id', editingProgId);
 
-        if (agendaErr) throw agendaErr;
-        agendaId = agendaData?.id || null;
+        if (progErr) throw progErr;
+        setSuccess('Programação atualizada com sucesso!');
+      } else {
+        // Create Mode
+        const { error: progErr } = await supabase
+          .from('eventos_programacao')
+          .insert([payload]);
+
+        if (progErr) throw progErr;
+        setSuccess('Programação adicionada com sucesso!');
       }
 
-      // Safe save programming segment
-      const { error: progErr } = await supabase
-        .from('eventos_programacao')
-        .insert([{
-          id_evento: currentEvent.id,
-          descricao: progDesc,
-          id_agenda: agendaId,
-          palestrante: progPalestrante.slice(0, 100) || null
-        }]);
-
-      if (progErr) throw progErr;
-
-      setSuccess('Programação adicionada com sucesso!');
       setProgDesc('');
-      setProgPalestrante('');
-      setProgCreateAgenda(false);
-      setProgAgendaDataHora('');
-      setProgAgendaLocal('');
+      setProgDataHora('');
+      setEditingProgId(null);
       setShowAddProg(false);
       fetchProgramacao(currentEvent.id);
     } catch (err: any) {
       console.error('Error writing programacao:', err);
       setError(err.message || 'Falha ao salvar programação.');
     }
+  };
+
+  const handleStartEditProgramacao = (item: EventoProgramacao) => {
+    setEditingProgId(item.id);
+    setProgDesc(item.descricao);
+    setProgDataHora(item.data_hora ? new Date(item.data_hora).toISOString().slice(0, 16) : '');
+    setShowAddProg(true);
+  };
+
+  const handleCancelEditProgramacao = () => {
+    setEditingProgId(null);
+    setProgDesc('');
+    setProgDataHora('');
+    setShowAddProg(false);
   };
 
   const handleDeleteProgramacao = async (id: string, associatedAgendaId: string | null) => {
@@ -917,6 +1027,59 @@ export default function EventosPage() {
                         <option value="Cancelado">3) Cancelado</option>
                       </select>
                     </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-450 dark:text-slate-400">
+                        Palestrante Principal
+                      </label>
+                      <input
+                        type="text"
+                        maxLength={255}
+                        placeholder="Nome do Palestrante principal (campo livre)"
+                        value={currentEvent.palestrante || ''}
+                        onChange={(e) => setCurrentEvent({...currentEvent, palestrante: e.target.value})}
+                        className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-205 dark:border-slate-800 p-3.5 rounded-xl text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:border-amber-500 font-bold"
+                      />
+                    </div>
+
+                    <div className="col-span-1 md:col-span-2 p-4 bg-amber-500/5 border border-amber-500/10 rounded-xl space-y-3">
+                      <label className="flex items-center gap-2.5 cursor-pointer selection:bg-transparent">
+                        <input
+                          type="checkbox"
+                          checked={eventCreateAgenda}
+                          onChange={(e) => setEventCreateAgenda(e.target.checked)}
+                          className="w-4 h-4 rounded text-[#E4A232] focus:ring-amber-500 accent-amber-500 cursor-pointer"
+                        />
+                        <span className="text-[10px] font-black uppercase tracking-wider text-slate-700 dark:text-slate-350">
+                          Auto-criar/Sincronizar compromisso correspondente na Agenda da igreja
+                        </span>
+                      </label>
+
+                      {eventCreateAgenda && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 font-black">Data e Hora do Evento *</label>
+                            <input
+                              type="datetime-local"
+                              required={eventCreateAgenda}
+                              value={eventAgendaDataHora}
+                              onChange={(e) => setEventAgendaDataHora(e.target.value)}
+                              className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-2.5 rounded-lg text-xs font-bold"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 font-black">Local / Sala</label>
+                            <input
+                              type="text"
+                              placeholder="Auditório principal, sala 3, etc."
+                              value={eventAgendaLocal}
+                              onChange={(e) => setEventAgendaLocal(e.target.value)}
+                              className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-2.5 rounded-lg text-xs font-bold"
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   <div className="flex gap-3 justify-end pt-5 border-t border-slate-100 dark:border-slate-800">
@@ -942,30 +1105,42 @@ export default function EventosPage() {
               {/* TAB CONTENT: ARQUIVOS ATTACHMENTS */}
               {activeTab === 'arquivos' && currentEvent.id && (
                 <div className="space-y-6">
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-2xl bg-amber-500/5 border border-amber-500/10">
-                    <div>
-                      <h4 className="text-xs font-black uppercase text-slate-900 dark:text-white">Gerenciar Documentos</h4>
-                      <p className="text-[10px] text-slate-450 font-medium">Anexe manuais, cartazes, fichas de inscrição ou cronogramas.</p>
+                  <div 
+                    onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                    onDragLeave={() => setIsDragging(false)}
+                    onDrop={async (e) => {
+                      e.preventDefault();
+                      setIsDragging(false);
+                      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                        await processAndUploadFile(e.dataTransfer.files[0]);
+                      }
+                    }}
+                    className={`flex flex-col items-center justify-center p-8 border-2 border-dashed rounded-[2rem] transition-all text-center space-y-3 cursor-pointer ${
+                      isDragging 
+                        ? 'border-amber-500 bg-amber-500/10 scale-[1.01]' 
+                        : 'border-slate-205 dark:border-slate-800 bg-slate-50/50 hover:bg-slate-50 dark:bg-slate-950/20'
+                    }`}
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <div className="p-3 bg-amber-500/10 rounded-full text-[#E4A232]">
+                      <Upload size={24} />
                     </div>
-                    
-                    <button
-                      type="button"
-                      disabled={uploadingFile}
-                      onClick={() => fileInputRef.current?.click()}
-                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 dark:bg-slate-800 hover:opacity-90 text-white text-[11px] font-black uppercase tracking-wider cursor-pointer"
-                    >
-                      {uploadingFile ? (
-                        <>
-                          <RefreshCw size={13} className="animate-spin" />
-                          Gravando Banco...
-                        </>
-                      ) : (
-                        <>
-                          <Upload size={13} />
-                          Fazer Upload de arquivo
-                        </>
-                      )}
-                    </button>
+                    <div>
+                      <p className="text-xs font-black uppercase text-slate-800 dark:text-slate-200">
+                        Arraste seu arquivo aqui ou clique para selecionar
+                      </p>
+                      <p className="text-[10px] text-slate-450 dark:text-slate-400 mt-1">
+                        Anexe manuais, cartazes, fichas de inscrição ou cronogramas
+                      </p>
+                    </div>
+
+                    {uploadingFile && (
+                      <div className="flex items-center gap-1.5 text-xs text-amber-600 font-bold">
+                        <RefreshCw size={12} className="animate-spin" />
+                        Salvando arquivo no banco de dados...
+                      </div>
+                    )}
+
                     <input
                       type="file"
                       ref={fileInputRef}
@@ -1033,7 +1208,12 @@ export default function EventosPage() {
                     {!showAddProg && (
                       <button
                         type="button"
-                        onClick={() => setShowAddProg(true)}
+                        onClick={() => {
+                          setEditingProgId(null);
+                          setProgDesc('');
+                          setProgDataHora('');
+                          setShowAddProg(true);
+                        }}
                         className="flex items-center gap-1 px-4 py-2 rounded-xl bg-[#E4A232] text-white text-[10px] font-black uppercase tracking-wider cursor-pointer"
                       >
                         <Plus size={12} />
@@ -1042,19 +1222,21 @@ export default function EventosPage() {
                     )}
                   </div>
 
-                  {/* Add Program form drawer */}
+                  {/* Add/Edit Program form drawer */}
                   {showAddProg && (
                     <form onSubmit={handleSaveProgramacao} className="p-5 border border-slate-205 dark:border-slate-800 rounded-[1.8rem] bg-slate-50/50 dark:bg-slate-950/20 space-y-4">
                       <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
-                        <span className="text-[10px] font-black uppercase tracking-wider text-[#E4A232]">Novo Item na Grade de Programação</span>
-                        <button type="button" onClick={() => setShowAddProg(false)} className="text-slate-450 hover:text-slate-700">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-[#E4A232]">
+                          {editingProgId ? 'Editar Item da Grade de Programação' : 'Novo Item na Grade de Programação'}
+                        </span>
+                        <button type="button" onClick={handleCancelEditProgramacao} className="text-slate-450 hover:text-slate-700">
                           <X size={14} />
                         </button>
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-1">
-                          <label className="text-[9px] font-black uppercase tracking-wider text-slate-450">Descrição do Item *</label>
+                          <label className="text-[9px] font-black uppercase tracking-wider text-slate-450 font-black">Descrição do Item *</label>
                           <input
                             type="text"
                             required
@@ -1066,62 +1248,20 @@ export default function EventosPage() {
                         </div>
 
                         <div className="space-y-1">
-                          <label className="text-[9px] font-black uppercase tracking-wider text-slate-450">Palestrante / Moderador</label>
+                          <label className="text-[9px] font-black uppercase tracking-wider text-slate-450 font-black">Data e Hora da Programação</label>
                           <input
-                            type="text"
-                            maxLength={100}
-                            placeholder="Nome livre do Palestrante (máx 100 caracteres)"
-                            value={progPalestrante}
-                            onChange={(e) => setProgPalestrante(e.target.value)}
+                            type="datetime-local"
+                            value={progDataHora}
+                            onChange={(e) => setProgDataHora(e.target.value)}
                             className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-3 rounded-lg text-xs font-bold"
                           />
                         </div>
                       </div>
 
-                      {/* INTEGRATION WITH CHURCH AGENDAS TABLE */}
-                      <div className="p-4 bg-amber-500/5 border border-amber-500/10 rounded-xl space-y-3">
-                        <label className="flex items-center gap-2.5 cursor-pointer selection:bg-transparent">
-                          <input
-                            type="checkbox"
-                            checked={progCreateAgenda}
-                            onChange={(e) => setProgCreateAgenda(e.target.checked)}
-                            className="w-4 h-4 rounded text-[#E4A232] focus:ring-amber-500 accent-amber-500 cursor-pointer"
-                          />
-                          <span className="text-[10px] font-black uppercase tracking-wider text-slate-700 dark:text-slate-350">
-                            Auto-criar compromisso correspondente na Agenda da igreja
-                          </span>
-                        </label>
-
-                        {progCreateAgenda && (
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
-                            <div className="space-y-1">
-                              <label className="text-[9px] font-black uppercase tracking-wider text-slate-500">Data e Hora *</label>
-                              <input
-                                type="datetime-local"
-                                required={progCreateAgenda}
-                                value={progAgendaDataHora}
-                                onChange={(e) => setProgAgendaDataHora(e.target.value)}
-                                className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-2.5 rounded-lg text-xs font-bold"
-                              />
-                            </div>
-                            <div className="space-y-1">
-                              <label className="text-[9px] font-black uppercase tracking-wider text-slate-500">Local na Igreja / Sala</label>
-                              <input
-                                type="text"
-                                placeholder="Auditório principal, sala 3, etc."
-                                value={progAgendaLocal}
-                                onChange={(e) => setProgAgendaLocal(e.target.value)}
-                                className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-2.5 rounded-lg text-xs font-bold"
-                              />
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
                       <div className="flex gap-2 justify-end pt-2">
                         <button
                           type="button"
-                          onClick={() => setShowAddProg(false)}
+                          onClick={handleCancelEditProgramacao}
                           className="px-4 py-2 text-[10px] uppercase font-black tracking-wider text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-lg"
                         >
                           Cancelar
@@ -1130,7 +1270,7 @@ export default function EventosPage() {
                           type="submit"
                           className="px-5 py-2 text-[10px] uppercase font-black tracking-wider bg-[#E4A232] text-white rounded-lg"
                         >
-                          Confirmar Adição
+                          {editingProgId ? 'Confirmar Alteração' : 'Confirmar Adição'}
                         </button>
                       </div>
                     </form>
@@ -1140,7 +1280,7 @@ export default function EventosPage() {
                     <div className="text-center py-10 border border-dashed border-slate-200 dark:border-slate-850 rounded-[1.5rem]">
                       <ClipboardList className="mx-auto text-slate-350 dark:text-slate-650 mb-2" size={32} />
                       <p className="text-xs font-bold text-slate-450 uppercase">Nenhuma programação descrita ainda</p>
-                      <p className="text-[9px] text-slate-400 mt-0.5">Use o botão de Grade acima para inserir de forma rápida compromissos sincronizados com a Agenda principal.</p>
+                      <p className="text-[9px] text-slate-400 mt-0.5">Use o botão de Grade acima para inserir itens de programação.</p>
                     </div>
                   ) : (
                     <div className="space-y-3">
@@ -1149,38 +1289,39 @@ export default function EventosPage() {
                           key={item.id}
                           className="p-4 bg-slate-50 dark:bg-slate-950 border border-slate-150 dark:border-slate-850 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:border-amber-500/20 transition"
                         >
-                          <div>
-                            <div className="flex items-center gap-2">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <span className="text-xs font-black text-slate-900 dark:text-white">{item.descricao}</span>
-                              {item.palestrante && (
-                                <span className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider">
-                                  Palestrante: {item.palestrante}
-                                </span>
-                              )}
                             </div>
 
-                            {/* Agenda linkage info */}
-                            {item.agenda ? (
-                              <div className="flex items-center gap-1.5 mt-2 text-[10px] font-bold text-slate-450">
+                            {item.data_hora && (
+                              <div className="flex items-center gap-1.5 mt-1 text-[10px] font-bold text-slate-450">
                                 <Calendar size={12} className="text-amber-500" />
-                                <span>Agendado para:</span>
-                                <span className="text-slate-700 dark:text-slate-350">
-                                  {new Date(item.agenda.data_hora).toLocaleString('pt-BR')} {item.agenda.local ? `(${item.agenda.local})` : ''}
+                                <span className="text-slate-750 dark:text-slate-300">
+                                  {new Date(item.data_hora).toLocaleString('pt-BR')}
                                 </span>
                               </div>
-                            ) : (
-                              <p className="text-[9px] text-slate-400 font-semibold mt-1">Item informativo de grade diária, não indexado na agenda principal</p>
                             )}
                           </div>
 
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteProgramacao(item.id, item.id_agenda)}
-                            className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50/50 dark:hover:bg-red-950/20 rounded-xl transition sm:ml-auto"
-                            title="Remover Programação"
-                          >
-                            <Trash2 size={13} />
-                          </button>
+                          <div className="flex items-center gap-1.5 sm:ml-auto">
+                            <button
+                              type="button"
+                              onClick={() => handleStartEditProgramacao(item)}
+                              className="p-2 text-slate-400 hover:text-[#E4A232] hover:bg-amber-50/50 dark:hover:bg-amber-950/20 rounded-xl transition"
+                              title="Editar Programação"
+                            >
+                              <Edit2 size={13} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteProgramacao(item.id, item.id_agenda)}
+                              className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50/50 dark:hover:bg-red-950/20 rounded-xl transition"
+                              title="Remover Programação"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>

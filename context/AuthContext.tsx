@@ -269,7 +269,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     if (!user) return false;
     if (user.is_admin) return true;
-    if (menu === '/' || menu === '/mapa' || menu === '/formularios' || menu === '/mural' || menu === '/agenda' || menu === '/eventos') return true; // Always allowed
+    if (menu === '/' || menu === '/mapa' || menu === '/formularios' || menu === '/mural') return true; // Always allowed
     if (!user.perfil) return false;
     return user.perfil.permissoes.includes(menu);
   };

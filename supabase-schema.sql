@@ -277,6 +277,8 @@ CREATE TABLE IF NOT EXISTS eventos (
   qtd_vagas INT,
   status VARCHAR(20) DEFAULT 'Confirmado' CHECK (status IN ('Confirmado', 'Pendente', 'Cancelado')),
   valor_inscricao DECIMAL(10,2) DEFAULT 0.00,
+  palestrante VARCHAR(255),
+  id_agenda UUID REFERENCES agendas(id) ON DELETE SET NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -295,6 +297,7 @@ CREATE TABLE IF NOT EXISTS eventos_programacao (
   descricao TEXT NOT NULL,
   id_agenda UUID REFERENCES agendas(id) ON DELETE SET NULL,
   palestrante VARCHAR(100),
+  data_hora TIMESTAMP WITH TIME ZONE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 

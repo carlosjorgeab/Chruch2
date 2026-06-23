@@ -15,6 +15,8 @@ type Perfil = {
 const MENU_OPTIONS = [
   { id: '/membros', label: 'Gestão de Membros' },
   { id: '/comunidades', label: 'Gestão de Comunidades' },
+  { id: '/agenda', label: 'Agenda da Igreja' },
+  { id: '/eventos', label: 'Gestão de Eventos' },
   { id: '/mural', label: 'Mural de Avisos' },
   { id: '/licoes', label: 'Gestão de Lições' },
   { id: '/presencas', label: 'Controle de Presenças / Assistências' },
