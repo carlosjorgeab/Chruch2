@@ -292,6 +292,10 @@ export async function GET(req: NextRequest) {
     ALTER TABLE eventos ADD COLUMN IF NOT EXISTS id_agenda UUID REFERENCES agendas(id) ON DELETE SET NULL;
     ALTER TABLE eventos_programacao ADD COLUMN IF NOT EXISTS data_hora TIMESTAMP WITH TIME ZONE;
 
+    -- New upgrades (Quinzenal, Members category, Profile church ID linkage)
+    ALTER TABLE membros ADD COLUMN IF NOT EXISTS categoria VARCHAR(100);
+    ALTER TABLE perfis ADD COLUMN IF NOT EXISTS id_igreja UUID REFERENCES igrejas(id) ON DELETE CASCADE;
+
     -- Force reload schema cache for PostgREST
     NOTIFY pgrst, 'reload schema';
     `;

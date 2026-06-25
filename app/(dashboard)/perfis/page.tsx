@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
+import { useIgreja } from '@/context/IgrejaContext';
 import { useConfirm } from '@/context/ConfirmContext';
 import { Plus, Edit2, Trash2, Save, X, Shield } from 'lucide-react';
 
@@ -10,6 +11,7 @@ type Perfil = {
   id: string;
   nome: string;
   permissoes: string[];
+  id_igreja: string | null;
 };
 
 const MENU_OPTIONS = [
@@ -33,16 +35,26 @@ const MENU_OPTIONS = [
 
 export default function PerfisPage() {
   const { user } = useAuth();
+  const { selectedIgreja } = useIgreja();
   const { confirmDelete } = useConfirm();
   const [perfis, setPerfis] = useState<Perfil[]>([]);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
-  const [currentPerfil, setCurrentPerfil] = useState<Partial<Perfil>>({ nome: '', permissoes: [] });
+  const [currentPerfil, setCurrentPerfil] = useState<Partial<Perfil>>({ nome: '', permissoes: [], id_igreja: null });
   const [error, setError] = useState('');
 
   async function fetchPerfis() {
+    if (!selectedIgreja?.id) {
+      setPerfis([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
-    const { data, error } = await supabase.from('perfis').select('*').order('created_at', { ascending: false });
+    const { data, error } = await supabase
+      .from('perfis')
+      .select('*')
+      .eq('id_igreja', selectedIgreja.id)
+      .order('created_at', { ascending: false });
     if (!error && data) {
       setPerfis(data);
     }
@@ -50,20 +62,24 @@ export default function PerfisPage() {
   }
 
   useEffect(() => {
-    // eslint-disable-next-line
     fetchPerfis();
-  }, []);
+  }, [selectedIgreja?.id]);
 
   const handleSave = async () => {
     if (!currentPerfil.nome) {
       setError('O nome do perfil é obrigatório.');
       return;
     }
+    if (!selectedIgreja?.id) {
+      setError('Selecione uma igreja ativa no sistema.');
+      return;
+    }
 
     setError('');
     const perfilData = {
       nome: currentPerfil.nome,
-      permissoes: currentPerfil.permissoes || []
+      permissoes: currentPerfil.permissoes || [],
+      id_igreja: selectedIgreja.id
     };
 
     if (currentPerfil.id) {
@@ -119,7 +135,7 @@ export default function PerfisPage() {
         </div>
         {!isEditing && (
           <button 
-            onClick={() => { setCurrentPerfil({ nome: '', permissoes: [] }); setIsEditing(true); }}
+            onClick={() => { setCurrentPerfil({ nome: '', permissoes: [], id_igreja: selectedIgreja?.id || null }); setIsEditing(true); }}
             className="flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-lg font-bold hover:bg-primary/90 transition-colors"
           >
             <Plus size={20} />

@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS perfis (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   nome TEXT NOT NULL,
   permissoes JSONB NOT NULL DEFAULT '[]'::jsonb,
+  id_igreja UUID REFERENCES igrejas(id) ON DELETE CASCADE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -83,6 +84,7 @@ CREATE TABLE IF NOT EXISTS membros (
   cep VARCHAR(20),
   pais VARCHAR(100) DEFAULT 'Brasil',
   recepcao VARCHAR(50) DEFAULT 'Batismo',
+  categoria VARCHAR(100),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 

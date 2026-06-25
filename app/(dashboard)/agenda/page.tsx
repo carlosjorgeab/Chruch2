@@ -65,7 +65,7 @@ export default function AgendaPage() {
   const [privado, setPrivado] = useState<boolean>(false);
   const [diaInteiro, setDiaInteiro] = useState<boolean>(false);
   const [local, setLocal] = useState<string>('');
-  const [recorrencia, setRecorrencia] = useState<'Único' | 'Diário' | 'Semanal' | 'Mensal' | 'Anual'>('Único');
+  const [recorrencia, setRecorrencia] = useState<'Único' | 'Diário' | 'Semanal' | 'Quinzenal' | 'Mensal' | 'Anual'>('Único');
   
   // Start date/time
   const [evtDate, setEvtDate] = useState('');
@@ -412,6 +412,8 @@ export default function AgendaPage() {
               currentStartDate.setDate(currentStartDate.getDate() + 1);
             } else if (recorrencia === 'Semanal') {
               currentStartDate.setDate(currentStartDate.getDate() + 7);
+            } else if (recorrencia === 'Quinzenal') {
+              currentStartDate.setDate(currentStartDate.getDate() + 15);
             } else if (recorrencia === 'Mensal') {
               currentStartDate.setMonth(currentStartDate.getMonth() + 1);
             } else if (recorrencia === 'Anual') {
@@ -537,7 +539,7 @@ export default function AgendaPage() {
   };
 
   return (
-    <main className="min-h-screen pt-20 pb-16 px-4 sm:px-6 lg:px-8 bg-slate-50 dark:bg-slate-950 transition-colors duration-300 text-slate-800 dark:text-slate-100 font-['Inter']">
+    <div className="min-h-screen pt-20 pb-16 px-4 sm:px-6 lg:px-8 transition-colors duration-300 font-['Inter']">
       <div className="max-w-6xl mx-auto space-y-8">
         
         {/* Header section with ambient design card */}
@@ -804,6 +806,7 @@ export default function AgendaPage() {
                       <option value="Único">Único (Sem repetição)</option>
                       <option value="Diário">Diário (Duplica todo dia até Data Final)</option>
                       <option value="Semanal">Semanal (Duplica toda semana até Data Final)</option>
+                      <option value="Quinzenal">Quinzenal (Duplica a cada 15 dias até Data Final)</option>
                       <option value="Mensal">Mensal (Duplica todo mês até Data Final)</option>
                       <option value="Anual">Anual (Duplica todo ano até Data Final)</option>
                     </select>
@@ -965,6 +968,6 @@ export default function AgendaPage() {
 
 
       </div>
-    </main>
+    </div>
   );
 }

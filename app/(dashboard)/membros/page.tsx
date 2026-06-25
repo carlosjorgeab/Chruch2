@@ -34,6 +34,7 @@ type Membro = {
   cep: string | null;
   pais: string | null;
   recepcao: string | null;
+  categoria: string | null;
 };
 
 type UfInfo = {
@@ -77,6 +78,7 @@ export default function MembrosPage() {
     cep: '',
     pais: 'Brasil',
     recepcao: 'Batismo',
+    categoria: 'Adulto',
   });
 
   const [error, setError] = useState('');
@@ -172,6 +174,7 @@ export default function MembrosPage() {
       cep: '',
       pais: 'Brasil',
       recepcao: 'Batismo',
+      categoria: 'Adulto',
     });
     setIsEditing(true);
     setError('');
@@ -238,6 +241,7 @@ export default function MembrosPage() {
       cep: currentMembro.cep || null,
       pais: currentMembro.pais || null,
       recepcao: currentMembro.recepcao || null,
+      categoria: currentMembro.categoria || 'Adulto',
     };
 
     try {
@@ -819,6 +823,23 @@ export default function MembrosPage() {
               />
             </div>
 
+            <div>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
+                Categoria *
+              </label>
+              <select
+                value={currentMembro.categoria || 'Adulto'}
+                onChange={(e) => setCurrentMembro({ ...currentMembro, categoria: e.target.value })}
+                className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-bold"
+              >
+                <option value="Adulto">Adulto</option>
+                <option value="Idoso">Idoso</option>
+                <option value="Jovens">Jovens</option>
+                <option value="Adolescentes">Adolescentes</option>
+                <option value="Crianças">Crianças</option>
+              </select>
+            </div>
+
             {/* Secção II: Contato e Endereço */}
             <div className="md:col-span-2 border-b border-slate-100 dark:border-slate-700/80 pt-4 pb-2">
               <h4 className="text-xs font-black uppercase tracking-widest text-[#E4A232]">II. Contato e Endereço</h4>
@@ -1147,6 +1168,7 @@ export default function MembrosPage() {
                       <th className="px-6 py-4">Membro</th>
                       <th className="px-6 py-4">Contato</th>
                       <th className="px-6 py-4">Cargo / Função</th>
+                      <th className="px-6 py-4">Categoria</th>
                       <th className="px-6 py-4">Quadro de Recepção</th>
                       <th className="px-6 py-4 text-right">Ações</th>
                     </tr>
@@ -1192,6 +1214,11 @@ export default function MembrosPage() {
                         <td className="px-6 py-4">
                           <span className="bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-300 text-xs px-2.5 py-1 rounded-full font-bold">
                             {m.cargo || 'Membro'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-400 text-xs px-2.5 py-1 rounded-full font-bold">
+                            {m.categoria || 'Adulto'}
                           </span>
                         </td>
                         <td className="px-6 py-4">

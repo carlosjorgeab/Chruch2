@@ -22,7 +22,7 @@ type Usuario = {
 
 export default function UsuariosPage() {
   const { user } = useAuth();
-  const { igrejas } = useIgreja();
+  const { selectedIgreja, igrejas } = useIgreja();
   const { confirmDelete } = useConfirm();
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [perfis, setPerfis] = useState<{id: string, nome: string}[]>([]);
@@ -41,20 +41,30 @@ export default function UsuariosPage() {
   const [error, setError] = useState('');
 
   async function fetchData() {
+    if (!selectedIgreja?.id) {
+      setUsuarios([]);
+      setPerfis([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     
-    // Fetch users
+    // Fetch users for selected church
     const { data: usersData, error: usersError } = await supabase
       .from('usuarios')
       .select('*, perfil:perfis(nome), igreja:igrejas(nome)')
+      .eq('id_igreja', selectedIgreja.id)
       .order('created_at', { ascending: false });
       
     if (!usersError && usersData) {
       setUsuarios(usersData as any);
     }
 
-    // Fetch profiles
-    const { data: perfisData } = await supabase.from('perfis').select('id, nome');
+    // Fetch profiles for selected church
+    const { data: perfisData } = await supabase
+      .from('perfis')
+      .select('id, nome')
+      .eq('id_igreja', selectedIgreja.id);
     if (perfisData) {
       setPerfis(perfisData);
     }
@@ -63,9 +73,8 @@ export default function UsuariosPage() {
   }
 
   useEffect(() => {
-    // eslint-disable-next-line
     fetchData();
-  }, []);
+  }, [selectedIgreja?.id]);
 
   const handleSave = async () => {
     if (!currentUser.email) {
@@ -80,8 +89,8 @@ export default function UsuariosPage() {
       setError('Selecione um perfil para o usuário.');
       return;
     }
-    if (!currentUser.is_admin && !currentUser.id_igreja) {
-      setError('Selecione uma igreja para o usuário.');
+    if (!currentUser.is_admin && !selectedIgreja?.id) {
+      setError('Selecione uma igreja ativa no sistema.');
       return;
     }
 
@@ -90,7 +99,7 @@ export default function UsuariosPage() {
       nome: currentUser.nome || '',
       email: currentUser.email,
       id_perfil: currentUser.is_admin ? null : currentUser.id_perfil,
-      id_igreja: currentUser.is_admin ? null : currentUser.id_igreja,
+      id_igreja: currentUser.is_admin ? null : selectedIgreja?.id,
       is_admin: currentUser.is_admin || false,
       ativo: currentUser.ativo !== false,
       foto_url: currentUser.foto_url || ''
@@ -167,7 +176,7 @@ export default function UsuariosPage() {
         {!isEditing && (
           <button 
             onClick={() => { 
-              setCurrentUser({ nome: '', email: '', senha: '', id_perfil: '', id_igreja: '', is_admin: false }); 
+              setCurrentUser({ nome: '', email: '', senha: '', id_perfil: '', id_igreja: selectedIgreja?.id || '', is_admin: false }); 
               setIsEditing(true); 
             }}
             className="flex items-center gap-2 bg-amber-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-amber-700 transition-colors"
@@ -259,35 +268,19 @@ export default function UsuariosPage() {
             </div>
 
             {!currentUser.is_admin && (
-              <>
-                <div>
-                  <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Perfil de Acesso</label>
-                  <select 
-                    value={currentUser.id_perfil || ''} 
-                    onChange={(e) => setCurrentUser({...currentUser, id_perfil: e.target.value})}
-                    className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500 outline-none"
-                  >
-                    <option value="" disabled>Selecione um perfil</option>
-                    {perfis.map(p => (
-                      <option key={p.id} value={p.id}>{p.nome}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Igreja Vinculada</label>
-                  <select 
-                    value={currentUser.id_igreja || ''} 
-                    onChange={(e) => setCurrentUser({...currentUser, id_igreja: e.target.value})}
-                    className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500 outline-none"
-                  >
-                    <option value="" disabled>Selecione uma igreja</option>
-                    {igrejas.map(ig => (
-                      <option key={ig.id} value={ig.id}>{ig.nome}</option>
-                    ))}
-                  </select>
-                </div>
-              </>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Perfil de Acesso</label>
+                <select 
+                  value={currentUser.id_perfil || ''} 
+                  onChange={(e) => setCurrentUser({...currentUser, id_perfil: e.target.value})}
+                  className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500 outline-none"
+                >
+                  <option value="" disabled>Selecione um perfil</option>
+                  {perfis.map(p => (
+                    <option key={p.id} value={p.id}>{p.nome}</option>
+                  ))}
+                </select>
+              </div>
             )}
           </div>
 

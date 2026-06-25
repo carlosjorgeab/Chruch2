@@ -149,6 +149,7 @@ export default function EventosPage() {
   const [agendaEvtDateEnd, setAgendaEvtDateEnd] = useState('');
   const [agendaEvtTimeEnd, setAgendaEvtTimeEnd] = useState('');
   const [agendaStatus, setAgendaStatus] = useState<'Importante' | 'Normal' | 'Alerta'>('Normal');
+  const [agendaRecorrencia, setAgendaRecorrencia] = useState<'Único' | 'Diário' | 'Semanal' | 'Quinzenal' | 'Mensal' | 'Anual'>('Único');
 
   const [showAddInsc, setShowAddInsc] = useState(false);
   const [inscTipo, setInscTipo] = useState<'Membro' | 'Visitante'>('Membro');
@@ -346,6 +347,7 @@ export default function EventosPage() {
     setAgendaEvtDateEnd(today);
     setAgendaEvtTimeEnd('21:30');
     setAgendaStatus('Normal');
+    setAgendaRecorrencia('Único');
     setActiveTab('main');
     setIsModalOpen(true);
     setError('');
@@ -388,6 +390,7 @@ export default function EventosPage() {
       setAgendaPrivado(false);
       setAgendaDiaInteiro(false);
       setAgendaStatus('Normal');
+      setAgendaRecorrencia('Único');
       const today = new Date().toISOString().split('T')[0];
       setAgendaEvtDate(today);
       setAgendaEvtTime('19:30');
@@ -447,6 +450,16 @@ export default function EventosPage() {
         };
 
         if (agendaId) {
+          const agendaPayload = {
+            id_igreja: selectedIgreja.id,
+            titulo: agendaTitulo.trim() || `Evento: ${currentEvent.titulo}`,
+            data_hora: finalIsoStart,
+            data_hora_fim: finalIsoEnd,
+            dia_inteiro: agendaDiaInteiro,
+            local: agendaLocal.trim() || null,
+            privado: agendaPrivado,
+            status: agendaStatus
+          };
           // Update
           const { error: agendaErr } = await supabase
             .from('agendas')
@@ -455,13 +468,69 @@ export default function EventosPage() {
           if (agendaErr) throw agendaErr;
         } else {
           // Create
-          const { data: agendaData, error: agendaErr } = await supabase
-            .from('agendas')
-            .insert([agendaPayload])
-            .select('id')
-            .single();
-          if (agendaErr) throw agendaErr;
-          agendaId = agendaData?.id || null;
+          if (agendaRecorrencia === 'Único') {
+            const agendaPayload = {
+              id_igreja: selectedIgreja.id,
+              titulo: agendaTitulo.trim() || `Evento: ${currentEvent.titulo}`,
+              data_hora: finalIsoStart,
+              data_hora_fim: finalIsoEnd,
+              dia_inteiro: agendaDiaInteiro,
+              local: agendaLocal.trim() || null,
+              privado: agendaPrivado,
+              status: agendaStatus
+            };
+            const { data: agendaData, error: agendaErr } = await supabase
+              .from('agendas')
+              .insert([agendaPayload])
+              .select('id')
+              .single();
+            if (agendaErr) throw agendaErr;
+            agendaId = agendaData?.id || null;
+          } else {
+            // Recurring agenda creation
+            const payloadsToInsert = [];
+            let currentStartDate = new Date(finalIsoStart);
+            let durationMs = 0;
+            if (finalIsoEnd) {
+              durationMs = new Date(finalIsoEnd).getTime() - new Date(finalIsoStart).getTime();
+            }
+            const limitDate = new Date(`${agendaEvtDateEnd}T23:59:59`);
+
+            while (currentStartDate <= limitDate) {
+              const currentEndDate = finalIsoEnd ? new Date(currentStartDate.getTime() + durationMs) : null;
+              payloadsToInsert.push({
+                id_igreja: selectedIgreja.id,
+                titulo: agendaTitulo.trim() || `Evento: ${currentEvent.titulo}`,
+                data_hora: currentStartDate.toISOString(),
+                data_hora_fim: currentEndDate ? currentEndDate.toISOString() : null,
+                dia_inteiro: agendaDiaInteiro,
+                local: agendaLocal.trim() || null,
+                privado: agendaPrivado,
+                status: agendaStatus
+              });
+
+              if (agendaRecorrencia === 'Diário') {
+                currentStartDate.setDate(currentStartDate.getDate() + 1);
+              } else if (agendaRecorrencia === 'Semanal') {
+                currentStartDate.setDate(currentStartDate.getDate() + 7);
+              } else if (agendaRecorrencia === 'Quinzenal') {
+                currentStartDate.setDate(currentStartDate.getDate() + 15);
+              } else if (agendaRecorrencia === 'Mensal') {
+                currentStartDate.setMonth(currentStartDate.getMonth() + 1);
+              } else if (agendaRecorrencia === 'Anual') {
+                currentStartDate.setFullYear(currentStartDate.getFullYear() + 1);
+              }
+            }
+
+            if (payloadsToInsert.length > 0) {
+              const { data: insertedAgendas, error: agendaErr } = await supabase
+                .from('agendas')
+                .insert(payloadsToInsert)
+                .select('id');
+              if (agendaErr) throw agendaErr;
+              agendaId = insertedAgendas && insertedAgendas.length > 0 ? insertedAgendas[0].id : null;
+            }
+          }
         }
       } else if (!hasAgendaConfigured && agendaId) {
         // Untoggled, delete associated agenda
@@ -842,7 +911,7 @@ export default function EventosPage() {
   });
 
   return (
-    <main className="min-h-screen bg-slate-50 dark:bg-slate-950 font-['Inter'] transition-colors p-4 sm:p-8">
+    <div className="min-h-screen font-['Inter'] transition-colors p-4 sm:p-8">
       <div className="max-w-7xl mx-auto space-y-6">
         
         {/* Header section with Action Button */}
@@ -1942,6 +2011,29 @@ export default function EventosPage() {
                     <option value="Alerta">Alerta (Amarelo)</option>
                   </select>
                 </div>
+
+                {!currentEvent?.id_agenda && (
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-450 dark:text-slate-550 uppercase tracking-widest mb-1.5 ml-1">
+                      🔁 Recorrência / Repetição de Agendas
+                    </label>
+                    <select
+                      value={agendaRecorrencia}
+                      onChange={(e) => setAgendaRecorrencia(e.target.value as any)}
+                      className="w-full px-4 py-3 rounded-xl border border-slate-205 dark:border-slate-800 bg-slate-50 dark:bg-slate-955 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-semibold transition cursor-pointer text-xs"
+                    >
+                      <option value="Único">Único (Sem repetição)</option>
+                      <option value="Diário">Diário (Duplica todo dia até Data Final)</option>
+                      <option value="Semanal">Semanal (Duplica toda semana até Data Final)</option>
+                      <option value="Quinzenal">Quinzenal (Duplica a cada 15 dias até Data Final)</option>
+                      <option value="Mensal">Mensal (Duplica todo mês até Data Final)</option>
+                      <option value="Anual">Anual (Duplica todo ano até Data Final)</option>
+                    </select>
+                    <p className="text-[9px] text-slate-400 mt-1 ml-1 font-bold">
+                      Gera uma série de compromissos na agenda da Data Inicial até a Data Final. O evento será vinculado ao primeiro.
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Modal Actions */}
@@ -1987,6 +2079,6 @@ export default function EventosPage() {
         )}
 
       </div>
-    </main>
+    </div>
   );
 }
