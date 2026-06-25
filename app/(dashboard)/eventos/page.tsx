@@ -44,10 +44,15 @@ type Evento = {
   created_at?: string;
   _count_inscricoes?: number;
   agenda?: {
+    id?: string;
     titulo: string;
     data_hora: string;
+    data_hora_fim?: string | null;
+    dia_inteiro?: boolean;
     local: string | null;
-  };
+    privado?: boolean;
+    status?: 'Importante' | 'Normal' | 'Alerta';
+  } | null;
 };
 
 type EventoArquivo = {
@@ -127,9 +132,23 @@ export default function EventosPage() {
   const [isDragging, setIsDragging] = useState(false);
   const [editingProgId, setEditingProgId] = useState<string | null>(null);
   const [progDataHora, setProgDataHora] = useState('');
-  const [eventCreateAgenda, setEventCreateAgenda] = useState(false);
-  const [eventAgendaDataHora, setEventAgendaDataHora] = useState('');
-  const [eventAgendaLocal, setEventAgendaLocal] = useState('');
+  // Summary Panel Metrics States
+  const [totalParticipants, setTotalParticipants] = useState(0);
+  const [totalRevenue, setTotalRevenue] = useState(0);
+  const [totalVacancies, setTotalVacancies] = useState(0);
+
+  // Agenda popup form states
+  const [isAgendaModalOpen, setIsAgendaModalOpen] = useState(false);
+  const [hasAgendaConfigured, setHasAgendaConfigured] = useState(false);
+  const [agendaPrivado, setAgendaPrivado] = useState(false);
+  const [agendaTitulo, setAgendaTitulo] = useState('');
+  const [agendaLocal, setAgendaLocal] = useState('');
+  const [agendaDiaInteiro, setAgendaDiaInteiro] = useState(false);
+  const [agendaEvtDate, setAgendaEvtDate] = useState('');
+  const [agendaEvtTime, setAgendaEvtTime] = useState('');
+  const [agendaEvtDateEnd, setAgendaEvtDateEnd] = useState('');
+  const [agendaEvtTimeEnd, setAgendaEvtTimeEnd] = useState('');
+  const [agendaStatus, setAgendaStatus] = useState<'Importante' | 'Normal' | 'Alerta'>('Normal');
 
   const [showAddInsc, setShowAddInsc] = useState(false);
   const [inscTipo, setInscTipo] = useState<'Membro' | 'Visitante'>('Membro');
@@ -165,9 +184,14 @@ export default function EventosPage() {
         .select(`
           *,
           agenda:agendas (
+            id,
             titulo,
             data_hora,
-            local
+            data_hora_fim,
+            dia_inteiro,
+            local,
+            privado,
+            status
           ),
           eventos_inscricoes(count)
         `)
@@ -182,6 +206,38 @@ export default function EventosPage() {
       }));
 
       setEventos(mapped);
+
+      // Compute summary metrics across all listed events for the current church
+      let participantsSum = 0;
+      let vacanciesSum = 0;
+      mapped.forEach((evt: any) => {
+        participantsSum += evt._count_inscricoes || 0;
+        if (evt.qtd_vagas !== null) {
+          const diff = evt.qtd_vagas - (evt._count_inscricoes || 0);
+          vacanciesSum += diff > 0 ? diff : 0;
+        }
+      });
+      setTotalParticipants(participantsSum);
+      setTotalVacancies(vacanciesSum);
+
+      // Fetch precise revenue collected across all active inscriptions
+      if (mapped.length > 0) {
+        const { data: allInscs, error: inscsErr } = await supabase
+          .from('eventos_inscricoes')
+          .select('valor_pago, pago, id_evento')
+          .in('id_evento', mapped.map((x: any) => x.id));
+        
+        if (!inscsErr && allInscs) {
+          const revenueSum = allInscs
+            .filter((i: any) => i.pago)
+            .reduce((sum: number, i: any) => sum + Number(i.valor_pago || 0), 0);
+          setTotalRevenue(revenueSum);
+        } else {
+          setTotalRevenue(0);
+        }
+      } else {
+        setTotalRevenue(0);
+      }
     } catch (e: any) {
       console.error('Error fetching eventos:', e);
       setError('Falha ao carregar lista de eventos.');
@@ -279,9 +335,17 @@ export default function EventosPage() {
       palestrante: '',
       id_agenda: null
     });
-    setEventCreateAgenda(false);
-    setEventAgendaDataHora('');
-    setEventAgendaLocal('');
+    setHasAgendaConfigured(false);
+    setAgendaPrivado(false);
+    setAgendaTitulo('');
+    setAgendaLocal('');
+    setAgendaDiaInteiro(false);
+    const today = new Date().toISOString().split('T')[0];
+    setAgendaEvtDate(today);
+    setAgendaEvtTime('19:30');
+    setAgendaEvtDateEnd(today);
+    setAgendaEvtTimeEnd('21:30');
+    setAgendaStatus('Normal');
     setActiveTab('main');
     setIsModalOpen(true);
     setError('');
@@ -291,18 +355,56 @@ export default function EventosPage() {
   const handleOpenEditEvent = (evt: Evento) => {
     setCurrentEvent(evt);
     if (evt.id_agenda && evt.agenda) {
-      setEventCreateAgenda(true);
-      setEventAgendaDataHora(evt.agenda.data_hora ? new Date(evt.agenda.data_hora).toISOString().slice(0, 16) : '');
-      setEventAgendaLocal(evt.agenda.local || '');
+      setHasAgendaConfigured(true);
+      setAgendaTitulo(evt.agenda.titulo || '');
+      setAgendaLocal(evt.agenda.local || '');
+      setAgendaPrivado(!!evt.agenda.privado);
+      setAgendaDiaInteiro(!!evt.agenda.dia_inteiro);
+      setAgendaStatus(evt.agenda.status || 'Normal');
+      
+      if (evt.agenda.data_hora) {
+        const dtStart = new Date(evt.agenda.data_hora);
+        setAgendaEvtDate(dtStart.toISOString().split('T')[0]);
+        setAgendaEvtTime(dtStart.toTimeString().slice(0, 5));
+      } else {
+        const today = new Date().toISOString().split('T')[0];
+        setAgendaEvtDate(today);
+        setAgendaEvtTime('19:30');
+      }
+
+      if (evt.agenda.data_hora_fim) {
+        const dtEnd = new Date(evt.agenda.data_hora_fim);
+        setAgendaEvtDateEnd(dtEnd.toISOString().split('T')[0]);
+        setAgendaEvtTimeEnd(dtEnd.toTimeString().slice(0, 5));
+      } else {
+        const today = new Date().toISOString().split('T')[0];
+        setAgendaEvtDateEnd(today);
+        setAgendaEvtTimeEnd('21:30');
+      }
     } else {
-      setEventCreateAgenda(false);
-      setEventAgendaDataHora('');
-      setEventAgendaLocal('');
+      setHasAgendaConfigured(false);
+      setAgendaTitulo('');
+      setAgendaLocal('');
+      setAgendaPrivado(false);
+      setAgendaDiaInteiro(false);
+      setAgendaStatus('Normal');
+      const today = new Date().toISOString().split('T')[0];
+      setAgendaEvtDate(today);
+      setAgendaEvtTime('19:30');
+      setAgendaEvtDateEnd(today);
+      setAgendaEvtTimeEnd('21:30');
     }
     setActiveTab('main');
     setIsModalOpen(true);
     setError('');
     setSuccess('');
+  };
+
+  const handleOpenAgendaModal = () => {
+    if (!agendaTitulo && currentEvent?.titulo) {
+      setAgendaTitulo(`Evento: ${currentEvent.titulo}`);
+    }
+    setIsAgendaModalOpen(true);
   };
 
   const handleSaveEvent = async (e: React.FormEvent) => {
@@ -320,14 +422,28 @@ export default function EventosPage() {
 
       // Agenda item handling (create, update, or delete)
       let agendaId: string | null = currentEvent.id_agenda || null;
-      if (eventCreateAgenda && eventAgendaDataHora) {
+      if (hasAgendaConfigured) {
+        const startDateTimeString = `${agendaEvtDate}T${agendaEvtTime}:00`;
+        const finalIsoStart = new Date(startDateTimeString).toISOString();
+
+        let finalIsoEnd = null;
+        if (agendaDiaInteiro) {
+          const endDateTimeString = `${agendaEvtDate}T23:59:59`;
+          finalIsoEnd = new Date(endDateTimeString).toISOString();
+        } else {
+          const endDateTimeString = `${agendaEvtDateEnd}T${agendaEvtTimeEnd}:00`;
+          finalIsoEnd = new Date(endDateTimeString).toISOString();
+        }
+
         const agendaPayload = {
           id_igreja: selectedIgreja.id,
-          titulo: `Evento: ${currentEvent.titulo}`,
-          data_hora: new Date(eventAgendaDataHora).toISOString(),
-          local: eventAgendaLocal || null,
-          status: 'Normal' as any,
-          privado: false
+          titulo: agendaTitulo.trim() || `Evento: ${currentEvent.titulo}`,
+          data_hora: finalIsoStart,
+          data_hora_fim: finalIsoEnd,
+          dia_inteiro: agendaDiaInteiro,
+          local: agendaLocal.trim() || null,
+          privado: agendaPrivado,
+          status: agendaStatus
         };
 
         if (agendaId) {
@@ -347,7 +463,7 @@ export default function EventosPage() {
           if (agendaErr) throw agendaErr;
           agendaId = agendaData?.id || null;
         }
-      } else if (!eventCreateAgenda && agendaId) {
+      } else if (!hasAgendaConfigured && agendaId) {
         // Untoggled, delete associated agenda
         await supabase.from('agendas').delete().eq('id', agendaId);
         agendaId = null;
@@ -373,9 +489,14 @@ export default function EventosPage() {
           .select(`
             *,
             agenda:agendas (
+              id,
               titulo,
               data_hora,
-              local
+              data_hora_fim,
+              dia_inteiro,
+              local,
+              privado,
+              status
             ),
             eventos_inscricoes(count)
           `)
@@ -396,9 +517,14 @@ export default function EventosPage() {
           .select(`
             *,
             agenda:agendas (
+              id,
               titulo,
               data_hora,
-              local
+              data_hora_fim,
+              dia_inteiro,
+              local,
+              privado,
+              status
             ),
             eventos_inscricoes(count)
           `)
@@ -756,6 +882,66 @@ export default function EventosPage() {
           </div>
         )}
 
+        {/* Summary Metrics Panel */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          {/* Card 1: Confirmed Participants */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-6 rounded-[2rem] shadow-sm flex items-center gap-4 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 rounded-full bg-blue-500/5 dark:bg-blue-500/2 blur-2xl -z-10 pointer-events-none" />
+            <div className="p-4 bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-2xl">
+              <Users size={22} />
+            </div>
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-550">
+                Participantes Confirmados
+              </p>
+              <h3 className="text-2xl font-black text-slate-800 dark:text-white mt-1 leading-none">
+                {totalParticipants}
+              </h3>
+              <p className="text-[9px] text-slate-450 dark:text-slate-400 mt-1.5 font-bold uppercase tracking-wider">
+                Inscrições Realizadas
+              </p>
+            </div>
+          </div>
+
+          {/* Card 2: Revenue Collected */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-6 rounded-[2rem] shadow-sm flex items-center gap-4 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 rounded-full bg-emerald-500/5 dark:bg-emerald-500/2 blur-2xl -z-10 pointer-events-none" />
+            <div className="p-4 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-2xl">
+              <DollarSign size={22} />
+            </div>
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-550">
+                Receita Arrecadada
+              </p>
+              <h3 className="text-2xl font-black text-slate-800 dark:text-white mt-1 leading-none">
+                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalRevenue)}
+              </h3>
+              <p className="text-[9px] text-slate-450 dark:text-slate-400 mt-1.5 font-bold uppercase tracking-wider">
+                Inscrições Pagas
+              </p>
+            </div>
+          </div>
+
+          {/* Card 3: Available Vacancies */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-6 rounded-[2rem] shadow-sm flex items-center gap-4 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 rounded-full bg-amber-500/5 dark:bg-amber-500/2 blur-2xl -z-10 pointer-events-none" />
+            <div className="p-4 bg-amber-500/10 text-[#E4A232] rounded-2xl">
+              <CheckCircle2 size={22} />
+            </div>
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-550">
+                Vagas Disponíveis
+              </p>
+              <h3 className="text-2xl font-black text-slate-800 dark:text-white mt-1 leading-none">
+                {totalVacancies}
+              </h3>
+              <p className="text-[9px] text-slate-450 dark:text-slate-400 mt-1.5 font-bold uppercase tracking-wider">
+                Em eventos limitados
+              </p>
+            </div>
+          </div>
+        </div>
+
         {/* Quick Toolbar (Search / Filters) */}
         <div className="flex flex-col sm:flex-row items-center gap-4 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-4 sm:px-6 rounded-3xl shadow-sm">
           <div className="relative w-full sm:max-w-md">
@@ -1042,40 +1228,62 @@ export default function EventosPage() {
                       />
                     </div>
 
-                    <div className="col-span-1 md:col-span-2 p-4 bg-amber-500/5 border border-amber-500/10 rounded-xl space-y-3">
-                      <label className="flex items-center gap-2.5 cursor-pointer selection:bg-transparent">
-                        <input
-                          type="checkbox"
-                          checked={eventCreateAgenda}
-                          onChange={(e) => setEventCreateAgenda(e.target.checked)}
-                          className="w-4 h-4 rounded text-[#E4A232] focus:ring-amber-500 accent-amber-500 cursor-pointer"
-                        />
-                        <span className="text-[10px] font-black uppercase tracking-wider text-slate-700 dark:text-slate-350">
-                          Auto-criar/Sincronizar compromisso correspondente na Agenda da igreja
-                        </span>
-                      </label>
+                    <div className="col-span-1 md:col-span-2 p-4 bg-amber-500/5 border border-amber-500/10 rounded-xl space-y-4">
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                        <div>
+                          <h4 className="text-[11px] font-black uppercase tracking-wider text-slate-800 dark:text-slate-200">
+                            Agenda da Igreja
+                          </h4>
+                          <p className="text-[10px] text-slate-550 dark:text-slate-400 font-semibold">
+                            {hasAgendaConfigured 
+                              ? `Compromisso vinculado: "${agendaTitulo || 'Sem título'}"` 
+                              : "Nenhum compromisso correspondente vinculado na agenda."}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleOpenAgendaModal}
+                          className="px-4 py-2.5 rounded-xl bg-[#E4A232] hover:bg-[#E4A232]/90 text-white font-black text-xs uppercase tracking-wider shadow-md transition flex items-center gap-1.5 cursor-pointer select-none"
+                        >
+                          <Calendar size={14} />
+                          {hasAgendaConfigured ? 'Editar Agenda' : 'Configurar Agenda'}
+                        </button>
+                      </div>
 
-                      {eventCreateAgenda && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
-                          <div className="space-y-1">
-                            <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 font-black">Data e Hora do Evento *</label>
-                            <input
-                              type="datetime-local"
-                              required={eventCreateAgenda}
-                              value={eventAgendaDataHora}
-                              onChange={(e) => setEventAgendaDataHora(e.target.value)}
-                              className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-2.5 rounded-lg text-xs font-bold"
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 font-black">Local / Sala</label>
-                            <input
-                              type="text"
-                              placeholder="Auditório principal, sala 3, etc."
-                              value={eventAgendaLocal}
-                              onChange={(e) => setEventAgendaLocal(e.target.value)}
-                              className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-2.5 rounded-lg text-xs font-bold"
-                            />
+                      {hasAgendaConfigured && (
+                        <div className="p-3.5 bg-white dark:bg-slate-950 border border-slate-200/60 dark:border-slate-850 rounded-xl space-y-2 text-xs font-bold text-slate-700 dark:text-slate-300">
+                          <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[11px]">
+                            <div>
+                              <span className="text-slate-450 uppercase text-[9px] block">Nome do Compromisso</span>
+                              <span>{agendaTitulo || currentEvent.titulo || 'Evento'}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-450 uppercase text-[9px] block">📍 Local</span>
+                              <span>{agendaLocal || 'Não informado'}</span>
+                            </div>
+                            <div className="mt-1.5">
+                              <span className="text-slate-450 uppercase text-[9px] block">🕒 Período</span>
+                              <span>
+                                {agendaDiaInteiro 
+                                  ? `Dia Inteiro - ${agendaEvtDate}`
+                                  : `${agendaEvtDate} às ${agendaEvtTime} até ${agendaEvtDateEnd} às ${agendaEvtTimeEnd}`}
+                              </span>
+                            </div>
+                            <div className="mt-1.5">
+                              <span className="text-slate-450 uppercase text-[9px] block">Visibilidade e Status</span>
+                              <span className="flex items-center gap-2 mt-0.5">
+                                <span className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-850 text-[9px]">
+                                  {agendaPrivado ? '🔒 Privado' : '🌍 Público'}
+                                </span>
+                                <span className={`px-1.5 py-0.5 rounded text-[9px] ${
+                                  agendaStatus === 'Importante' ? 'bg-red-50 dark:bg-red-950/30 text-red-600' :
+                                  agendaStatus === 'Alerta' ? 'bg-amber-50 dark:bg-amber-950/30 text-amber-600' :
+                                  'bg-blue-50 dark:bg-blue-950/30 text-blue-600'
+                                }`}>
+                                  Status: {agendaStatus}
+                                </span>
+                              </span>
+                            </div>
                           </div>
                         </div>
                       )}
@@ -1532,6 +1740,248 @@ export default function EventosPage() {
                   )}
                 </div>
               )}
+            </motion.div>
+          </div>
+        )}
+
+        {/* AGENDA CONFIRMATION/EDIT MODAL OVERLAY */}
+        {isAgendaModalOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-200">
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 shadow-2xl p-6 sm:p-10 w-full max-w-lg my-8 relative max-h-[90vh] overflow-y-auto flex flex-col"
+            >
+              <button
+                type="button"
+                onClick={() => setIsAgendaModalOpen(false)}
+                className="absolute top-6 right-6 p-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-full text-slate-500 dark:text-slate-400 cursor-pointer transition"
+              >
+                <X size={18} />
+              </button>
+
+              <div className="flex items-center gap-3 border-b border-slate-100 dark:border-slate-800 pb-5 mb-6">
+                <Calendar className="text-[#E4A232]" size={24} />
+                <h2 className="text-lg font-black uppercase tracking-tight text-slate-900 dark:text-white">
+                  Vincular Compromisso na Agenda
+                </h2>
+              </div>
+
+              <div className="space-y-5 flex-1">
+                {/* Visibility Selector */}
+                <div>
+                  <label className="block text-[10px] font-black text-slate-450 dark:text-slate-500 uppercase tracking-widest mb-2 ml-1">
+                    Visibilidade do Compromisso
+                  </label>
+                  <div className="grid grid-cols-2 gap-2 p-1.5 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-100 dark:border-slate-850">
+                    <button
+                      type="button"
+                      onClick={() => setAgendaPrivado(false)}
+                      className={`py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer select-none ${
+                        !agendaPrivado
+                          ? 'bg-[#E4A232] text-white shadow-md'
+                          : 'text-slate-500 hover:text-slate-700 dark:text-slate-455 dark:hover:text-slate-250'
+                      }`}
+                    >
+                      <span>🌍 Público</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAgendaPrivado(true)}
+                      className={`py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer select-none ${
+                        agendaPrivado
+                          ? 'bg-[#E4A232] text-white shadow-md'
+                          : 'text-slate-500 hover:text-slate-700 dark:text-slate-455 dark:hover:text-slate-250'
+                      }`}
+                    >
+                      <span>🔒 Privado</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Title */}
+                <div>
+                  <label className="block text-[10px] font-black text-slate-450 dark:text-slate-550 uppercase tracking-widest mb-1.5 ml-1">
+                    Nome do Evento na Agenda
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ex: Culto Especial de Jovens"
+                    value={agendaTitulo}
+                    onChange={(e) => setAgendaTitulo(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-205 dark:border-slate-800 p-3.5 rounded-xl text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:border-amber-500 font-bold"
+                  />
+                </div>
+
+                {/* Local */}
+                <div>
+                  <label className="block text-[10px] font-black text-slate-450 dark:text-slate-550 uppercase tracking-widest mb-1.5 ml-1">
+                    📍 Local / Endereço (Texto Livre)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ex: Templo Principal, Área Gourmet, etc."
+                    value={agendaLocal}
+                    onChange={(e) => setAgendaLocal(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-205 dark:border-slate-800 p-3.5 rounded-xl text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:border-amber-500 font-bold"
+                  />
+                </div>
+
+                {/* All Day Checkbox */}
+                <div className="flex items-center gap-2 px-3 py-2.5 bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/10 rounded-xl">
+                  <input
+                    type="checkbox"
+                    id="agenda_dia_inteiro_checkbox"
+                    checked={agendaDiaInteiro}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setAgendaDiaInteiro(checked);
+                      if (checked) {
+                        setAgendaEvtDateEnd(agendaEvtDate);
+                      }
+                    }}
+                    className="w-4 h-4 text-[#E4A232] border-slate-300 rounded focus:ring-amber-500 cursor-pointer accent-amber-500"
+                  />
+                  <label 
+                    htmlFor="agenda_dia_inteiro_checkbox" 
+                    className="text-[10px] font-extrabold text-slate-700 dark:text-slate-300 uppercase tracking-wide cursor-pointer select-none"
+                  >
+                    ⏰ Evento do Dia Inteiro
+                  </label>
+                </div>
+
+                {/* Start Date & Time */}
+                <fieldset className="p-4 border-2 border-slate-100 dark:border-slate-850 rounded-2xl space-y-3">
+                  <legend className="px-2 text-[10px] font-black text-amber-500 uppercase tracking-widest">
+                    Início do Evento
+                  </legend>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[9px] font-black text-slate-450 dark:text-slate-550 uppercase tracking-widest mb-1">
+                        Data Inicial
+                      </label>
+                      <input
+                        type="date"
+                        required
+                        value={agendaEvtDate}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setAgendaEvtDate(val);
+                          if (agendaDiaInteiro) {
+                            setAgendaEvtDateEnd(val);
+                          }
+                        }}
+                        className="w-full px-3 py-2.5 rounded-xl border border-slate-205 dark:border-slate-800 bg-slate-50 dark:bg-slate-955 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-semibold transition text-xs"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[9px] font-black text-slate-450 dark:text-slate-550 uppercase tracking-widest mb-1">
+                        Horário Inicial
+                      </label>
+                      <input
+                        type="time"
+                        required
+                        value={agendaEvtTime}
+                        onChange={(e) => setAgendaEvtTime(e.target.value)}
+                        className="w-full px-3 py-2.5 rounded-xl border border-slate-205 dark:border-slate-800 bg-slate-50 dark:bg-slate-955 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-semibold transition text-xs"
+                      />
+                    </div>
+                  </div>
+                </fieldset>
+
+                {/* End Date & Time */}
+                <fieldset className={`p-4 border-2 border-slate-100 dark:border-slate-850 rounded-2xl space-y-3 transition ${agendaDiaInteiro ? 'opacity-40 pointer-events-none' : ''}`}>
+                  <legend className="px-2 text-[10px] font-black text-slate-450 dark:text-slate-550 uppercase tracking-widest">
+                    Fim do Evento {!agendaDiaInteiro ? '' : '(Bloqueado por Dia Inteiro)'}
+                  </legend>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[9px] font-black text-slate-450 dark:text-slate-550 uppercase tracking-widest mb-1">
+                        Data Final
+                      </label>
+                      <input
+                        type="date"
+                        required={!agendaDiaInteiro}
+                        disabled={agendaDiaInteiro}
+                        value={agendaDiaInteiro ? agendaEvtDate : agendaEvtDateEnd}
+                        onChange={(e) => setAgendaEvtDateEnd(e.target.value)}
+                        className="w-full px-3 py-2.5 rounded-xl border border-slate-205 dark:border-slate-800 bg-slate-50 dark:bg-slate-955 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-semibold transition text-xs disabled:bg-slate-100 dark:disabled:bg-slate-900/50"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[9px] font-black text-slate-450 dark:text-slate-550 uppercase tracking-widest mb-1">
+                        Horário Final
+                      </label>
+                      <input
+                        type="time"
+                        required={!agendaDiaInteiro}
+                        disabled={agendaDiaInteiro}
+                        value={agendaDiaInteiro ? '23:59' : agendaEvtTimeEnd}
+                        onChange={(e) => setAgendaEvtTimeEnd(e.target.value)}
+                        className="w-full px-3 py-2.5 rounded-xl border border-slate-205 dark:border-slate-800 bg-slate-50 dark:bg-slate-955 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-semibold transition text-xs disabled:bg-slate-100 dark:disabled:bg-slate-900/50"
+                      />
+                    </div>
+                  </div>
+                </fieldset>
+
+                {/* Priority Status */}
+                <div>
+                  <label className="block text-[10px] font-black text-slate-450 dark:text-slate-550 uppercase tracking-widest mb-1.5 ml-1">
+                    Status / Prioridade
+                  </label>
+                  <select
+                    value={agendaStatus}
+                    onChange={(e) => setAgendaStatus(e.target.value as any)}
+                    className="w-full px-4 py-3 rounded-xl border border-slate-205 dark:border-slate-800 bg-slate-50 dark:bg-slate-955 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-semibold transition cursor-pointer text-xs"
+                  >
+                    <option value="Normal">Normal (Azul)</option>
+                    <option value="Importante">Importante (Vermelho)</option>
+                    <option value="Alerta">Alerta (Amarelo)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Modal Actions */}
+              <div className="flex gap-3 justify-between pt-4 mt-6 border-t border-slate-100 dark:border-slate-800">
+                {hasAgendaConfigured ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setHasAgendaConfigured(false);
+                      setIsAgendaModalOpen(false);
+                    }}
+                    className="px-4 py-3 rounded-xl bg-red-50 hover:bg-red-100 dark:bg-red-950/20 dark:hover:bg-red-950/30 text-red-600 font-bold text-xs uppercase tracking-wider transition cursor-pointer"
+                  >
+                    Remover Vínculo
+                  </button>
+                ) : <div />}
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsAgendaModalOpen(false)}
+                    className="px-5 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs uppercase tracking-wider transition cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!agendaTitulo.trim()) {
+                        setAgendaTitulo(`Evento: ${currentEvent?.titulo || 'Sem título'}`);
+                      }
+                      setHasAgendaConfigured(true);
+                      setIsAgendaModalOpen(false);
+                    }}
+                    className="px-5 py-3 rounded-xl bg-[#E4A232] hover:bg-[#E4A232]/90 text-white font-black text-xs uppercase tracking-wider shadow-md transition cursor-pointer"
+                  >
+                    Confirmar Agenda
+                  </button>
+                </div>
+              </div>
             </motion.div>
           </div>
         )}
