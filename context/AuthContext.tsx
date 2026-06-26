@@ -66,9 +66,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     if (storedUser) {
-      // eslint-disable-next-line
-      setUser(JSON.parse(storedUser));
+      const parsedUser = JSON.parse(storedUser);
+      setUser(parsedUser);
       setSessionId(storedSession);
+
+      // Re-fetch user details in background to ensure up-to-date permissions/profile
+      (async () => {
+        try {
+          const { data } = await supabase
+            .from('usuarios')
+            .select('*, perfil:perfis(nome, permissoes)')
+            .eq('id', parsedUser.id)
+            .single();
+
+          if (data) {
+            const userData: User = {
+              id: data.id,
+              nome: data.nome,
+              email: data.email,
+              id_perfil: data.id_perfil,
+              id_igreja: data.id_igreja,
+              is_admin: data.is_admin,
+              foto_url: data.foto_url,
+              perfil: data.perfil
+            };
+            setUser(userData);
+            localStorage.setItem('democracia_user', JSON.stringify(userData));
+          }
+        } catch (err) {
+          console.error('Error re-fetching user profile in background:', err);
+        }
+      })();
     }
     setLoading(false);
   }, []);
@@ -269,9 +297,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     if (!user) return false;
     if (user.is_admin) return true;
-    if (menu === '/' || menu === '/mapa' || menu === '/formularios' || menu === '/mural' || menu === '/perfis' || menu === '/usuarios') return true; // Always allowed
+    if (menu === '/' || menu === '/mapa' || menu === '/formularios' || menu === '/mural') return true; // Always allowed
     if (!user.perfil) return false;
-    return user.perfil.permissoes.includes(menu);
+    const perms = Array.isArray(user.perfil.permissoes) ? user.perfil.permissoes : [];
+    return perms.includes(menu);
   };
 
   return (

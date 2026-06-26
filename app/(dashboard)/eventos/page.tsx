@@ -53,6 +53,7 @@ type Evento = {
     privado?: boolean;
     status?: 'Importante' | 'Normal' | 'Alerta';
   } | null;
+  eventos_arquivos?: EventoArquivo[] | null;
 };
 
 type EventoArquivo = {
@@ -194,7 +195,8 @@ export default function EventosPage() {
             privado,
             status
           ),
-          eventos_inscricoes(count)
+          eventos_inscricoes(count),
+          eventos_arquivos(id, nome, tipo_arquivo, arquivo_base64)
         `)
         .eq('id_igreja', selectedIgreja.id)
         .order('created_at', { ascending: false });
@@ -1047,28 +1049,53 @@ export default function EventosPage() {
             {filteredEventos.map((evt) => {
               const vagasDisponiveis = evt.qtd_vagas ? evt.qtd_vagas - (evt._count_inscricoes || 0) : null;
               const isEsgotado = vagasDisponiveis !== null && vagasDisponiveis <= 0;
+              const imageFile = evt.eventos_arquivos?.find(file => 
+                file.tipo_arquivo?.startsWith('image/') || 
+                file.arquivo_base64?.startsWith('data:image/') ||
+                /\.(png|jpe?g|gif|webp|svg)$/i.test(file.nome)
+              );
 
               return (
                 <div
                   key={evt.id}
                   className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-850 hover:border-amber-550/30 dark:hover:border-amber-510/30 rounded-[2rem] shadow-sm overflow-hidden flex flex-col group transition-all duration-300 hover:-translate-y-1"
                 >
-                  {/* Status header line */}
-                  <div className="flex justify-between items-center px-6 pt-6 pb-2">
-                    <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border ${
-                      evt.status === 'Confirmado'
-                        ? 'bg-emerald-50 border-emerald-300 text-emerald-600 dark:bg-emerald-950/20 dark:border-emerald-900 dark:text-emerald-400'
-                        : evt.status === 'Pendente'
-                        ? 'bg-amber-50 border-amber-300 text-amber-600 dark:bg-amber-950/20 dark:border-amber-900 dark:text-amber-400'
-                        : 'bg-red-50 border-red-300 text-red-600 dark:bg-red-950/20 dark:border-red-900 dark:text-red-400'
-                    }`}>
-                      {evt.status}
-                    </span>
-                    
-                    <span className="text-xs font-black text-slate-900 dark:text-white flex items-center gap-1 bg-slate-50 dark:bg-slate-800 px-3 py-1 rounded-xl">
-                      <DollarSign size={13} className="text-amber-500" />
-                      {evt.valor_inscricao ? `R$ ${evt.valor_inscricao.toFixed(2)}` : 'Grátis'}
-                    </span>
+                  {/* Event Image Banner */}
+                  <div className="relative h-44 w-full bg-slate-100 dark:bg-slate-950 overflow-hidden">
+                    {imageFile && imageFile.arquivo_base64 ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img 
+                        src={imageFile.arquivo_base64} 
+                        alt={evt.titulo} 
+                        className="w-full h-full object-cover group-hover:scale-105 transition-all duration-500"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-amber-500/10 to-amber-600/5 dark:from-slate-800 dark:to-slate-900 text-slate-350 dark:text-slate-700">
+                        <Calendar size={36} className="text-amber-500/30 dark:text-amber-500/10 mb-1" />
+                        <span className="text-[10px] font-black uppercase tracking-widest text-amber-500/40 dark:text-amber-500/20">Evento</span>
+                      </div>
+                    )}
+
+                    {/* Overlays */}
+                    <div className="absolute top-4 left-4">
+                      <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border shadow-sm backdrop-blur-sm ${
+                        evt.status === 'Confirmado'
+                          ? 'bg-emerald-50/95 border-emerald-300 text-emerald-600 dark:bg-emerald-950/80 dark:border-emerald-900 dark:text-emerald-400'
+                          : evt.status === 'Pendente'
+                          ? 'bg-amber-50/95 border-amber-300 text-amber-600 dark:bg-amber-950/80 dark:border-amber-900 dark:text-amber-400'
+                          : 'bg-red-50/95 border-red-300 text-red-600 dark:bg-red-950/80 dark:border-red-900 dark:text-red-400'
+                      }`}>
+                        {evt.status}
+                      </span>
+                    </div>
+
+                    <div className="absolute top-4 right-4">
+                      <span className="text-xs font-black text-slate-900 dark:text-white flex items-center gap-1 bg-white/90 dark:bg-slate-900/90 px-3 py-1 rounded-xl shadow-sm backdrop-blur-sm">
+                        <DollarSign size={13} className="text-amber-500" />
+                        {evt.valor_inscricao ? `R$ ${evt.valor_inscricao.toFixed(2)}` : 'Grátis'}
+                      </span>
+                    </div>
                   </div>
 
                   {/* Body content */}

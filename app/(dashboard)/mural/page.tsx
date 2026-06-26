@@ -883,6 +883,10 @@ NOTIFY pgrst, 'reload schema';`}
               {filteredMurais.map((m) => {
                 const isActive = m.status === 'Publicado';
                 const originalIndex = murais.findIndex(item => item.id === m.id);
+                const isImageFile = m.arquivo_base64 && (
+                  m.arquivo_base64.startsWith('data:image/') ||
+                  (m.arquivo_nome && /\.(png|jpe?g|gif|webp|svg)$/i.test(m.arquivo_nome))
+                );
 
                 return (
                   <div 
@@ -891,9 +895,20 @@ NOTIFY pgrst, 'reload schema';`}
                     onDragStart={(e) => handleDragStart(e, originalIndex)}
                     onDragOver={(e) => handleDragOver(e, originalIndex)}
                     onDrop={(e) => handleDrop(e, originalIndex)}
-                    className={`bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col justify-between hover:border-slate-350 dark:hover:border-slate-700 transition ${draggedIndex === originalIndex ? 'opacity-45 scale-95 border-amber-500 border-2 border-dashed' : ''} ${search === '' ? 'cursor-grab active:cursor-grabbing' : ''}`}
+                    className={`group bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col justify-between hover:border-slate-350 dark:hover:border-slate-700 transition ${draggedIndex === originalIndex ? 'opacity-45 scale-95 border-amber-500 border-2 border-dashed' : ''} ${search === '' ? 'cursor-grab active:cursor-grabbing' : ''}`}
                   >
-                    <div className="p-6 space-y-4">
+                    {isImageFile ? (
+                      <div className="relative h-44 w-full bg-slate-100 dark:bg-slate-950 overflow-hidden border-b border-slate-150 dark:border-slate-850">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img 
+                          src={m.arquivo_base64!} 
+                          alt={m.titulo} 
+                          className="w-full h-full object-cover group-hover:scale-105 transition-all duration-500"
+                          referrerPolicy="no-referrer"
+                        />
+                      </div>
+                    ) : null}
+                    <div className="p-6 space-y-4 flex-1 flex flex-col justify-between">
                       <div className="flex justify-between items-start">
                         <div className="flex items-center gap-2">
                           {search === '' && (

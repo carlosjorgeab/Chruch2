@@ -29,10 +29,7 @@ export function Sidebar({ isOpen = false, setIsOpen }: { isOpen?: boolean, setIs
     { href: '/usuarios', icon: Users, label: t('menu_usuarios'), disabled: false, id: '/usuarios' },
     { href: '/configuracoes', icon: Settings, label: t('menu_configuracoes'), disabled: false, id: '/configuracoes' },
   ].filter(item => {
-    if (item.id === '/perfis' || item.id === '/usuarios') {
-      return true;
-    }
-    if (item.id === '/configuracoes' || item.id === '/igrejas' || item.id === '/fornecedores') {
+    if (item.id === '/perfis' || item.id === '/usuarios' || item.id === '/configuracoes' || item.id === '/igrejas' || item.id === '/fornecedores') {
       return user?.is_admin || hasPermission(item.id);
     }
     return hasPermission(item.id);

@@ -34,7 +34,7 @@ const MENU_OPTIONS = [
 ];
 
 export default function PerfisPage() {
-  const { user } = useAuth();
+  const { user, hasPermission } = useAuth();
   const { selectedIgreja } = useIgreja();
   const { confirmDelete } = useConfirm();
   const [perfis, setPerfis] = useState<Perfil[]>([]);
@@ -119,7 +119,7 @@ export default function PerfisPage() {
     }
   };
 
-  if (!user?.is_admin && !user?.perfil?.permissoes.includes('/perfis')) {
+  if (!user?.is_admin && !hasPermission('/perfis')) {
     return <div className="p-8 text-center text-slate-500">Acesso negado.</div>;
   }
 

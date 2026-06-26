@@ -21,7 +21,7 @@ type Usuario = {
 };
 
 export default function UsuariosPage() {
-  const { user } = useAuth();
+  const { user, hasPermission } = useAuth();
   const { selectedIgreja, igrejas } = useIgreja();
   const { confirmDelete } = useConfirm();
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
@@ -159,7 +159,7 @@ export default function UsuariosPage() {
     });
   };
 
-  if (!user?.is_admin && !user?.perfil?.permissoes.includes('/usuarios')) {
+  if (!user?.is_admin && !hasPermission('/usuarios')) {
     return <div className="p-8 text-center text-slate-500">Acesso negado.</div>;
   }
 
