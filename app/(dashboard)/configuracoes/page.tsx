@@ -1,11 +1,18 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { Settings, Save, Bell, Shield, Globe, Moon, Clock, Lock, MonitorStop, RefreshCw, CheckCircle, AlertTriangle, Database, FileText, Copy, Check } from 'lucide-react';
+import { Settings, Save, Bell, Shield, Globe, Moon, Clock, Lock, MonitorStop, RefreshCw, CheckCircle, AlertTriangle, Database, FileText, Copy, Check, UserPlus, Cake, BookOpen } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useLanguage } from '@/context/LanguageContext';
 import { defaultTranslations } from '@/lib/translations';
+import { useAuth } from '@/context/AuthContext';
+import { useIgreja } from '@/context/IgrejaContext';
 
 export default function ConfiguracoesPage() {
+  const { user, hasPermission } = useAuth();
+  const { selectedIgreja } = useIgreja();
+  
+  const canEdit = user?.is_admin || (hasPermission('/usuarios') && hasPermission('/perfis'));
+
   const [activeTab, setActiveTab] = useState('geral');
   const [darkMode, setDarkMode] = useState(false);
   const [sessionTimeout, setSessionTimeout] = useState('30');
@@ -19,6 +26,8 @@ export default function ConfiguracoesPage() {
   const [notifyLessons, setNotifyLessons] = useState(true);
   const [notifyLowBalance, setNotifyLowBalance] = useState(false);
   const [notifyBirthdays, setNotifyBirthdays] = useState(true);
+  const [reminderValue, setReminderValue] = useState('60');
+  const [reminderUnit, setReminderUnit] = useState('minutos');
 
   const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -92,6 +101,12 @@ export default function ConfiguracoesPage() {
     setDarkMode(savedDark);
   }, []);
 
+  useEffect(() => {
+    if (mounted) {
+      fetchConfigs();
+    }
+  }, [selectedIgreja?.id]);
+
   const fetchConfigs = async () => {
     try {
       setLoading(true);
@@ -102,6 +117,8 @@ export default function ConfiguracoesPage() {
       if (error) throw error;
 
       if (data) {
+        let val = '60';
+        let unit = 'minutos';
         data.forEach((config: any) => {
           if (config.chave === 'session_timeout') setSessionTimeout(config.valor);
           if (config.chave === 'disable_multi_login') setDisableMultiLogin(config.valor === 'true');
@@ -110,7 +127,18 @@ export default function ConfiguracoesPage() {
           if (config.chave === 'notify_lessons') setNotifyLessons(config.valor === 'true');
           if (config.chave === 'notify_low_balance') setNotifyLowBalance(config.valor === 'true');
           if (config.chave === 'notify_birthdays') setNotifyBirthdays(config.valor === 'true');
+          if (config.chave === 'event_reminder_value') val = config.valor;
+          if (config.chave === 'event_reminder_unit') unit = config.valor;
         });
+
+        // Church specific overrides
+        data.forEach((config: any) => {
+          if (selectedIgreja?.id && config.chave === `event_reminder_value_${selectedIgreja.id}`) val = config.valor;
+          if (selectedIgreja?.id && config.chave === `event_reminder_unit_${selectedIgreja.id}`) unit = config.valor;
+        });
+
+        setReminderValue(val);
+        setReminderUnit(unit);
       }
     } catch (error) {
       console.error('Error fetching configs:', error);
@@ -132,6 +160,10 @@ export default function ConfiguracoesPage() {
   };
 
   const handleSave = async () => {
+    if (!canEdit) {
+      setStatusMessage({ type: 'error', text: 'Você não possui as permissões necessárias nos módulos de Usuários e Perfil para salvar estas alterações.' });
+      return;
+    }
     try {
       setSaving(true);
       setStatusMessage(null);
@@ -141,6 +173,12 @@ export default function ConfiguracoesPage() {
       localStorage.setItem('theme', themeVal);
       localStorage.setItem('session_timeout', sessionTimeout);
       localStorage.setItem('disable_multi_login', String(disableMultiLogin));
+      if (selectedIgreja?.id) {
+        localStorage.setItem(`event_reminder_value_${selectedIgreja.id}`, String(reminderValue));
+        localStorage.setItem(`event_reminder_unit_${selectedIgreja.id}`, reminderUnit);
+      }
+      localStorage.setItem('event_reminder_value', String(reminderValue));
+      localStorage.setItem('event_reminder_unit', reminderUnit);
 
       // 1. Update system-wide configurations
       const updates = [
@@ -153,6 +191,18 @@ export default function ConfiguracoesPage() {
         { chave: 'notify_low_balance', valor: String(notifyLowBalance) },
         { chave: 'notify_birthdays', valor: String(notifyBirthdays) }
       ];
+
+      if (selectedIgreja?.id) {
+        updates.push(
+          { chave: `event_reminder_value_${selectedIgreja.id}`, valor: String(reminderValue) },
+          { chave: `event_reminder_unit_${selectedIgreja.id}`, valor: reminderUnit }
+        );
+      } else {
+        updates.push(
+          { chave: 'event_reminder_value', valor: String(reminderValue) },
+          { chave: 'event_reminder_unit', valor: reminderUnit }
+        );
+      }
 
       for (const update of updates) {
         await supabase
@@ -191,7 +241,7 @@ export default function ConfiguracoesPage() {
   if (!mounted) return null;
 
   return (
-    <div className="p-8 space-y-8 max-w-5xl mx-auto">
+    <div className="configuracoes-page p-8 space-y-8 max-w-5xl mx-auto">
       <div>
         <p className="text-sm font-bold text-primary uppercase tracking-widest mb-1">Sistema</p>
         <h2 className="text-3xl font-black font-headline text-slate-900 dark:text-white uppercase tracking-tight">Configurações</h2>
@@ -205,6 +255,13 @@ export default function ConfiguracoesPage() {
         }`}>
           {statusMessage.type === 'success' ? <CheckCircle size={20} /> : <AlertTriangle size={20} />}
           <span>{statusMessage.text}</span>
+        </div>
+      )}
+
+      {!canEdit && (
+        <div className="p-4 rounded-2xl flex items-center gap-3 font-bold text-sm border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-500 animate-in fade-in duration-300">
+          <Lock size={20} className="text-amber-600 dark:text-amber-500" />
+          <span>Apenas usuários com permissões específicas nos módulos de 'Usuários' e 'Perfil' podem alterar estas configurações.</span>
         </div>
       )}
 
@@ -266,7 +323,7 @@ export default function ConfiguracoesPage() {
               <div className="pt-8 flex justify-end">
                 <button 
                   onClick={handleSave}
-                  disabled={saving || loading}
+                  disabled={saving || loading || !canEdit}
                   className="flex items-center gap-2 bg-slate-900 dark:bg-white dark:text-slate-900 text-white px-8 py-3 rounded-xl font-bold transition-all shadow-lg hover:opacity-90 active:scale-95 disabled:opacity-50"
                 >
                   {saving ? <RefreshCw size={18} className="animate-spin" /> : <Save size={18} />}
@@ -384,7 +441,7 @@ export default function ConfiguracoesPage() {
                       <Clock size={20} className="text-primary" />
                       <p className="font-bold">Tempo de Inatividade</p>
                     </div>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">Encerrar sessão automaticamente após minutos sem atividade.</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Encerrar a sessao do usuario apos o periodo de inatividade configurado.</p>
                     <div className="flex items-center gap-4">
                       <input 
                         type="number" 
@@ -392,7 +449,7 @@ export default function ConfiguracoesPage() {
                         className="w-24 bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 font-bold focus:border-primary outline-none text-slate-900 dark:text-white"
                         value={sessionTimeout}
                         onChange={(e) => setSessionTimeout(e.target.value)}
-                        disabled={saving}
+                        disabled={saving || !canEdit}
                       />
                       <span className="text-sm font-bold text-slate-500 uppercase tracking-widest">Minutos</span>
                     </div>
@@ -400,8 +457,8 @@ export default function ConfiguracoesPage() {
 
                   {/* Login Simultâneo */}
                   <div 
-                    onClick={() => !saving && setDisableMultiLogin(!disableMultiLogin)}
-                    className={`flex items-center justify-between p-6 bg-slate-50 dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 transition-all group ${saving ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:border-primary'}`}
+                    onClick={() => !saving && canEdit && setDisableMultiLogin(!disableMultiLogin)}
+                    className={`flex items-center justify-between p-6 bg-slate-50 dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 transition-all group ${saving || !canEdit ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:border-primary'}`}
                   >
                     <div className="flex items-center gap-4">
                       <div className="w-10 h-10 bg-white dark:bg-slate-800 rounded-xl flex items-center justify-center text-slate-400 border border-slate-100 dark:border-slate-700 group-hover:text-primary transition-colors">
@@ -436,7 +493,7 @@ export default function ConfiguracoesPage() {
               <div className="pt-8 flex justify-end">
                 <button 
                   onClick={handleSave}
-                  disabled={saving || loading}
+                  disabled={saving || loading || !canEdit}
                   className="flex items-center gap-2 bg-slate-900 dark:bg-white dark:text-slate-900 text-white px-8 py-3 rounded-xl font-bold transition-all shadow-lg hover:opacity-90 active:scale-95 disabled:opacity-50"
                 >
                   {saving ? <RefreshCw size={18} className="animate-spin" /> : <Save size={18} />}
@@ -459,80 +516,163 @@ export default function ConfiguracoesPage() {
                   <p className="font-bold uppercase tracking-widest text-xs">Carregando...</p>
                 </div>
               ) : (
-                <div className="space-y-6">
-                  {/* Novos Membros */}
-                  <div 
-                    onClick={() => !saving && setNotifyNewMembers(!notifyNewMembers)}
-                    className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 cursor-pointer hover:border-primary transition-all group"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 bg-white dark:bg-slate-800 rounded-xl flex items-center justify-center text-slate-400 border border-slate-100 dark:border-slate-700 group-hover:text-primary transition-colors">
-                         <Bell size={20} />
-                      </div>
+                <div className="space-y-8">
+                  {/* Categorized Grid Layout */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Category: Membresia & Comunidade */}
+                    <div className="space-y-4 bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 p-6 rounded-[2rem] shadow-sm flex flex-col justify-between">
                       <div>
-                         <p className="font-bold text-slate-900 dark:text-white">Novos Membros Cadastrados</p>
-                         <p className="text-xs text-slate-500 dark:text-slate-400">Notificar quando um novo membro se registrar ou for adicionado</p>
+                        <div className="flex items-center gap-3 pb-3 border-b border-slate-100 dark:border-slate-800 mb-4">
+                          <div className="p-2.5 bg-amber-500/10 text-amber-500 rounded-xl">
+                            <UserPlus size={18} />
+                          </div>
+                          <div>
+                            <h4 className="text-xs font-black uppercase text-slate-900 dark:text-white tracking-widest">Membresia & Comunidade</h4>
+                            <p className="text-[10px] text-slate-400">Integração, celebrações e novos cadastros</p>
+                          </div>
+                        </div>
+
+                        <div className="space-y-3">
+                          {/* Novos Membros */}
+                          <div 
+                            onClick={() => !saving && setNotifyNewMembers(!notifyNewMembers)}
+                            className="flex items-start justify-between p-3.5 bg-slate-50 dark:bg-slate-950/40 rounded-2xl border border-slate-100 dark:border-slate-800/80 cursor-pointer hover:border-amber-500/20 dark:hover:border-amber-500/10 transition group"
+                          >
+                            <div className="flex gap-3">
+                              <div className="mt-0.5 w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-600 dark:text-amber-500 group-hover:scale-105 transition shrink-0">
+                                <Bell size={16} />
+                              </div>
+                              <div>
+                                <p className="text-xs font-bold text-slate-900 dark:text-white leading-tight">Novos Membros Cadastrados</p>
+                                <p className="text-[10px] text-slate-500 dark:text-slate-450 mt-1">Notificar toda vez que um novo membro se registrar ou for incluído</p>
+                              </div>
+                            </div>
+                            <div className={`relative inline-block w-10 h-5 shrink-0 transition-colors duration-200 ease-in-out ${notifyNewMembers ? 'bg-primary' : 'bg-slate-200 dark:bg-slate-700'} rounded-full mt-1`}>
+                              <div className={`absolute top-0.5 w-4 h-4 transition-all duration-200 ease-in-out bg-white rounded-full ${notifyNewMembers ? 'left-5.5' : 'left-0.5'}`}></div>
+                            </div>
+                          </div>
+
+                          {/* Aniversariantes */}
+                          <div 
+                            onClick={() => !saving && setNotifyBirthdays(!notifyBirthdays)}
+                            className="flex items-start justify-between p-3.5 bg-slate-50 dark:bg-slate-950/40 rounded-2xl border border-slate-100 dark:border-slate-800/80 cursor-pointer hover:border-amber-500/20 dark:hover:border-amber-500/10 transition group"
+                          >
+                            <div className="flex gap-3">
+                              <div className="mt-0.5 w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-600 dark:text-amber-500 group-hover:scale-105 transition shrink-0">
+                                <Cake size={16} />
+                              </div>
+                              <div>
+                                <p className="text-xs font-bold text-slate-900 dark:text-white leading-tight">Aniversariantes do Dia</p>
+                                <p className="text-[10px] text-slate-500 dark:text-slate-450 mt-1">Exibir lembretes e comemorar os aniversariantes do dia</p>
+                              </div>
+                            </div>
+                            <div className={`relative inline-block w-10 h-5 shrink-0 transition-colors duration-200 ease-in-out ${notifyBirthdays ? 'bg-primary' : 'bg-slate-200 dark:bg-slate-700'} rounded-full mt-1`}>
+                              <div className={`absolute top-0.5 w-4 h-4 transition-all duration-200 ease-in-out bg-white rounded-full ${notifyBirthdays ? 'left-5.5' : 'left-0.5'}`}></div>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                    <div className={`relative inline-block w-12 h-6 transition-colors duration-200 ease-in-out ${notifyNewMembers ? 'bg-primary' : 'bg-slate-200 dark:bg-slate-700'} rounded-full`}>
-                      <div className={`absolute top-1 w-4 h-4 transition-all duration-200 ease-in-out bg-white rounded-full ${notifyNewMembers ? 'left-7' : 'left-1'}`}></div>
+
+                    {/* Category: Ensino & Fluxo Financeiro */}
+                    <div className="space-y-4 bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 p-6 rounded-[2rem] shadow-sm flex flex-col justify-between">
+                      <div>
+                        <div className="flex items-center gap-3 pb-3 border-b border-slate-100 dark:border-slate-800 mb-4">
+                          <div className="p-2.5 bg-amber-500/10 text-amber-500 rounded-xl">
+                            <BookOpen size={18} />
+                          </div>
+                          <div>
+                            <h4 className="text-xs font-black uppercase text-slate-900 dark:text-white tracking-widest">Atividades & Finanças</h4>
+                            <p className="text-[10px] text-slate-400">Escola bíblica, controle e auditoria de caixa</p>
+                          </div>
+                        </div>
+
+                        <div className="space-y-3">
+                          {/* Aulas/Escola Bíblica */}
+                          <div 
+                            onClick={() => !saving && setNotifyLessons(!notifyLessons)}
+                            className="flex items-start justify-between p-3.5 bg-slate-50 dark:bg-slate-950/40 rounded-2xl border border-slate-100 dark:border-slate-800/80 cursor-pointer hover:border-amber-500/20 dark:hover:border-amber-500/10 transition group"
+                          >
+                            <div className="flex gap-3">
+                              <div className="mt-0.5 w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-600 dark:text-amber-500 group-hover:scale-105 transition shrink-0">
+                                <Globe size={16} />
+                              </div>
+                              <div>
+                                <p className="text-xs font-bold text-slate-900 dark:text-white leading-tight">Lembretes de Escola Bíblica</p>
+                                <p className="text-[10px] text-slate-500 dark:text-slate-450 mt-1">Avisar sobre novas programações, lições e estudos bíblicos</p>
+                              </div>
+                            </div>
+                            <div className={`relative inline-block w-10 h-5 shrink-0 transition-colors duration-200 ease-in-out ${notifyLessons ? 'bg-primary' : 'bg-slate-200 dark:bg-slate-700'} rounded-full mt-1`}>
+                              <div className={`absolute top-0.5 w-4 h-4 transition-all duration-200 ease-in-out bg-white rounded-full ${notifyLessons ? 'left-5.5' : 'left-0.5'}`}></div>
+                            </div>
+                          </div>
+
+                          {/* Saldo Financeiro Baixo */}
+                          <div 
+                            onClick={() => !saving && setNotifyLowBalance(!notifyLowBalance)}
+                            className="flex items-start justify-between p-3.5 bg-slate-50 dark:bg-slate-950/40 rounded-2xl border border-slate-100 dark:border-slate-800/80 cursor-pointer hover:border-amber-500/20 dark:hover:border-amber-500/10 transition group"
+                          >
+                            <div className="flex gap-3">
+                              <div className="mt-0.5 w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-600 dark:text-amber-500 group-hover:scale-105 transition shrink-0">
+                                <Shield size={16} />
+                              </div>
+                              <div>
+                                <p className="text-xs font-bold text-slate-900 dark:text-white leading-tight">Alerta de Fluxo de Caixa</p>
+                                <p className="text-[10px] text-slate-500 dark:text-slate-450 mt-1">Alertar a tesouraria se o caixa disponível estiver abaixo do limite mínimo</p>
+                              </div>
+                            </div>
+                            <div className={`relative inline-block w-10 h-5 shrink-0 transition-colors duration-200 ease-in-out ${notifyLowBalance ? 'bg-primary' : 'bg-slate-200 dark:bg-slate-700'} rounded-full mt-1`}>
+                              <div className={`absolute top-0.5 w-4 h-4 transition-all duration-200 ease-in-out bg-white rounded-full ${notifyLowBalance ? 'left-5.5' : 'left-0.5'}`}></div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
-                  {/* Aulas/Escola Bíblica */}
-                  <div 
-                    onClick={() => !saving && setNotifyLessons(!notifyLessons)}
-                    className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 cursor-pointer hover:border-primary transition-all group"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 bg-white dark:bg-slate-800 rounded-xl flex items-center justify-center text-slate-400 border border-slate-100 dark:border-slate-700 group-hover:text-primary transition-colors">
-                         <Globe size={20} />
+                  {/* Lembretes de Eventos - Destaque em largura total */}
+                  <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 p-6 rounded-[2rem] shadow-sm space-y-6">
+                    <div className="flex items-center gap-4 pb-4 border-b border-slate-100 dark:border-slate-800">
+                      <div className="w-10 h-10 bg-amber-500/10 rounded-xl flex items-center justify-center text-amber-500">
+                        <Clock size={20} />
                       </div>
                       <div>
-                         <p className="font-bold text-slate-900 dark:text-white">Lembretes de Escola Bíblica / Lições</p>
-                         <p className="text-xs text-slate-500 dark:text-slate-400">Enviar lembretes e programações de novas lições e estudos</p>
+                        <h4 className="text-xs font-black uppercase text-slate-900 dark:text-white tracking-widest">Lembretes de Eventos da Agenda</h4>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">Defina o tempo de antecedência padrão para os lembretes de eventos e programações da agenda</p>
                       </div>
                     </div>
-                    <div className={`relative inline-block w-12 h-6 transition-colors duration-200 ease-in-out ${notifyLessons ? 'bg-primary' : 'bg-slate-200 dark:bg-slate-700'} rounded-full`}>
-                      <div className={`absolute top-1 w-4 h-4 transition-all duration-200 ease-in-out bg-white rounded-full ${notifyLessons ? 'left-7' : 'left-1'}`}></div>
-                    </div>
-                  </div>
 
-                  {/* Saldo Financeiro Baixo */}
-                  <div 
-                    onClick={() => !saving && setNotifyLowBalance(!notifyLowBalance)}
-                    className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 cursor-pointer hover:border-primary transition-all group"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 bg-white dark:bg-slate-800 rounded-xl flex items-center justify-center text-slate-400 border border-slate-100 dark:border-slate-700 group-hover:text-primary transition-colors">
-                         <Shield size={20} />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+                      <div className="space-y-2">
+                        <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                          Tempo de Antecedência
+                        </label>
+                        <div className="flex gap-3">
+                          <input
+                            type="number"
+                            min="1"
+                            value={reminderValue}
+                            onChange={(e) => setReminderValue(e.target.value)}
+                            className="w-1/2 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-750 bg-slate-50 dark:bg-slate-950/60 text-slate-900 dark:text-white font-bold text-sm focus:border-primary focus:bg-white dark:focus:bg-slate-900 transition outline-none"
+                            disabled={saving}
+                          />
+                          <select
+                            value={reminderUnit}
+                            onChange={(e) => setReminderUnit(e.target.value)}
+                            className="w-1/2 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-750 bg-slate-50 dark:bg-slate-950/60 text-slate-900 dark:text-white font-bold text-sm focus:border-primary focus:bg-white dark:focus:bg-slate-900 transition outline-none cursor-pointer"
+                            disabled={saving}
+                          >
+                            <option value="minutos">Minutos</option>
+                            <option value="horas">Horas</option>
+                          </select>
+                        </div>
                       </div>
-                      <div>
-                         <p className="font-bold text-slate-900 dark:text-white">Alerta de Fluxo de Caixa / Saldo Baixo</p>
-                         <p className="text-xs text-slate-500 dark:text-slate-400">Alertar a tesouraria se o caixa disponível estiver abaixo do limite mínimo</p>
-                      </div>
-                    </div>
-                    <div className={`relative inline-block w-12 h-6 transition-colors duration-200 ease-in-out ${notifyLowBalance ? 'bg-primary' : 'bg-slate-200 dark:bg-slate-700'} rounded-full`}>
-                      <div className={`absolute top-1 w-4 h-4 transition-all duration-200 ease-in-out bg-white rounded-full ${notifyLowBalance ? 'left-7' : 'left-1'}`}></div>
-                    </div>
-                  </div>
 
-                  {/* Aniversariantes */}
-                  <div 
-                    onClick={() => !saving && setNotifyBirthdays(!notifyBirthdays)}
-                    className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 cursor-pointer hover:border-primary transition-all group"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 bg-white dark:bg-slate-800 rounded-xl flex items-center justify-center text-slate-400 border border-slate-100 dark:border-slate-700 group-hover:text-primary transition-colors">
-                         <Clock size={20} />
+                      <div className="flex items-center bg-slate-50 dark:bg-slate-950/40 p-4 rounded-2xl border border-dashed border-slate-200 dark:border-slate-850">
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                          💡 <span className="font-bold text-slate-700 dark:text-slate-300">Como funciona:</span> O painel gerará alertas visuais e lembretes para cada evento registrado com exatos <span className="font-bold text-[#E4A232]">{reminderValue} {reminderUnit}</span> de antecedência do seu horário agendado de início.
+                        </p>
                       </div>
-                      <div>
-                         <p className="font-bold text-slate-900 dark:text-white">Alertas de Aniversário dos Membros</p>
-                         <p className="text-xs text-slate-500 dark:text-slate-400">Mostrar avisos e notificações nos aniversários dos membros ativos</p>
-                      </div>
-                    </div>
-                    <div className={`relative inline-block w-12 h-6 transition-colors duration-200 ease-in-out ${notifyBirthdays ? 'bg-primary' : 'bg-slate-200 dark:bg-slate-700'} rounded-full`}>
-                      <div className={`absolute top-1 w-4 h-4 transition-all duration-200 ease-in-out bg-white rounded-full ${notifyBirthdays ? 'left-7' : 'left-1'}`}></div>
                     </div>
                   </div>
                 </div>
@@ -541,7 +681,7 @@ export default function ConfiguracoesPage() {
               <div className="pt-8 flex justify-end">
                 <button 
                   onClick={handleSave}
-                  disabled={saving || loading}
+                  disabled={saving || loading || !canEdit}
                   className="flex items-center gap-2 bg-slate-900 dark:bg-white dark:text-slate-900 text-white px-8 py-3 rounded-xl font-bold transition-all shadow-lg hover:opacity-90 active:scale-95 disabled:opacity-50"
                 >
                   {saving ? <RefreshCw size={18} className="animate-spin" /> : <Save size={18} />}
