@@ -99,7 +99,7 @@ export default function UsuariosPage() {
       nome: currentUser.nome || '',
       email: currentUser.email,
       id_perfil: currentUser.is_admin ? null : currentUser.id_perfil,
-      id_igreja: currentUser.is_admin ? null : selectedIgreja?.id,
+      id_igreja: selectedIgreja?.id || null,
       is_admin: currentUser.is_admin || false,
       ativo: currentUser.ativo !== false,
       foto_url: currentUser.foto_url || ''
@@ -159,7 +159,7 @@ export default function UsuariosPage() {
     });
   };
 
-  if (!user?.is_admin && !hasPermission('/usuarios')) {
+  if (!user?.id_master && !user?.is_admin && !hasPermission('/usuarios')) {
     return <div className="p-8 text-center text-slate-500">Acesso negado.</div>;
   }
 
@@ -335,7 +335,8 @@ export default function UsuariosPage() {
                           </span>
                           <span className="text-xs text-slate-500 font-normal">{u.email}</span>
                         </div>
-                        {u.is_admin && <span className="px-2 py-0.5 bg-red-100 text-red-700 text-[10px] uppercase tracking-wider font-black rounded">Admin</span>}
+                        {(u as any).id_master && <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-[10px] uppercase tracking-wider font-black rounded">Master</span>}
+                        {u.is_admin && !(u as any).id_master && <span className="px-2 py-0.5 bg-red-100 text-red-700 text-[10px] uppercase tracking-wider font-black rounded">Admin</span>}
                         {u.ativo === false ? (
                           <span className="px-2 py-0.5 bg-red-500/10 text-red-600 text-[10px] uppercase tracking-wider font-black rounded">Desabilitado</span>
                         ) : (
@@ -343,10 +344,10 @@ export default function UsuariosPage() {
                         )}
                       </td>
                       <td className="p-4 text-slate-600 dark:text-slate-400">
-                        {u.is_admin ? 'Acesso Total' : (u.perfil?.nome || '-')}
+                        {(u as any).id_master || u.is_admin ? 'Acesso Total' : (u.perfil?.nome || '-')}
                       </td>
                       <td className="p-4 text-slate-600 dark:text-slate-400">
-                        {u.is_admin ? 'Todas' : (u.igreja?.nome || '-')}
+                        {(u as any).id_master ? 'Todas' : (u.igreja?.nome || '-')}
                       </td>
                       <td className="p-4 text-right">
                         <div className="flex justify-end gap-2">

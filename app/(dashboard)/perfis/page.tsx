@@ -27,10 +27,6 @@ const MENU_OPTIONS = [
   { id: '/financeiro/contas', label: 'Submódulo Financeiro: Contas' },
   { id: '/financeiro/categorias', label: 'Submódulo Financeiro: Categorias' },
   { id: '/financeiro/formas_pagamento', label: 'Submódulo Financeiro: Formas de Pagamento' },
-  { id: '/igrejas', label: 'Gestão de Igrejas' },
-  { id: '/perfis', label: 'Gestão de Perfis' },
-  { id: '/usuarios', label: 'Gestão de Usuários' },
-  { id: '/configuracoes', label: 'Configurações do Sistema' },
 ];
 
 export default function PerfisPage() {
@@ -119,7 +115,7 @@ export default function PerfisPage() {
     }
   };
 
-  if (!user?.is_admin && !hasPermission('/perfis')) {
+  if (!user?.id_master && !user?.is_admin && !hasPermission('/perfis')) {
     return <div className="p-8 text-center text-slate-500">Acesso negado.</div>;
   }
 

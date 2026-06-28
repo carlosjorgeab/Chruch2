@@ -158,7 +158,7 @@ export default function FornecedoresPage() {
     );
   });
 
-  if (!user?.is_admin && !hasPermission('/fornecedores')) {
+  if (!user?.id_master && !user?.is_admin && !hasPermission('/fornecedores')) {
     return (
       <div className="p-6 max-w-4xl mx-auto text-center py-20">
         <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded-3xl p-12 shadow-sm space-y-4 max-w-xl mx-auto">

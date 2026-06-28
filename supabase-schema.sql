@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
   id_perfil UUID REFERENCES perfis(id),
   id_igreja UUID REFERENCES igrejas(id),
   is_admin BOOLEAN DEFAULT false,
+  id_master BOOLEAN DEFAULT false,
   last_activity_at TIMESTAMP WITH TIME ZONE,
   current_session_id TEXT,
   theme_preference TEXT DEFAULT 'light',

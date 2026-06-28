@@ -40,8 +40,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return null; // Will redirect in AuthContext
   }
 
-  // If NOT admin and NO selected igreja (meaning inactive or not assigned)
-  if (!user.is_admin && !selectedIgreja) {
+  // If NOT master, NOT admin and NO selected igreja (meaning inactive or not assigned)
+  if (!user.id_master && !user.is_admin && !selectedIgreja) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
         <div className="max-w-md w-full bg-white p-10 rounded-[3rem] shadow-2xl text-center space-y-8 border border-slate-100">

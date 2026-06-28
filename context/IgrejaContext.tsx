@@ -57,9 +57,12 @@ export function IgrejaProvider({ children }: { children: ReactNode }) {
 
       let query = supabase.from('igrejas').select('*');
       
-      if (!user?.is_admin && user?.id_igreja) {
+      if (user?.id_master) {
+        // id_master has access to all churches
+      } else if (user?.id_igreja) {
+        // is_admin and regular users are restricted to their specific church
         query = query.eq('id', user.id_igreja).eq('ativo', true);
-      } else if (!user?.is_admin) {
+      } else {
         query = query.eq('ativo', true);
       }
 

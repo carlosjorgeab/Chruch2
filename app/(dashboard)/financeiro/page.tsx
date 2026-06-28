@@ -1310,7 +1310,7 @@ export default function FinanceiroPage() {
     .reverse()
     .slice(-8); // Get latest 8 active days;
 
-  if (!user?.is_admin && !hasPermission('/financeiro')) {
+  if (!user?.id_master && !user?.is_admin && !hasPermission('/financeiro')) {
     return (
       <div className="p-8 max-w-4xl mx-auto text-center py-20">
         <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded-3xl p-12 shadow-sm space-y-4 max-w-xl mx-auto">
@@ -1405,7 +1405,7 @@ export default function FinanceiroPage() {
             >
               Lançamentos
             </button>
-            {(user?.is_admin || hasPermission('/financeiro') || hasPermission('/financeiro/fluxo_caixa')) && (
+            {(user?.id_master || user?.is_admin || hasPermission('/financeiro') || hasPermission('/financeiro/fluxo_caixa')) && (
               <button
                 onClick={() => setActiveTab('fluxo_caixa')}
                 className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${
@@ -1415,7 +1415,7 @@ export default function FinanceiroPage() {
                 Fluxo de Caixa
               </button>
             )}
-            {(user?.is_admin || hasPermission('/financeiro/contas')) && (
+            {(user?.id_master || user?.is_admin || hasPermission('/financeiro/contas')) && (
               <button
                 onClick={() => setActiveTab('contas')}
                 className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${
@@ -1425,7 +1425,7 @@ export default function FinanceiroPage() {
                 Contas
               </button>
             )}
-            {(user?.is_admin || hasPermission('/financeiro/categorias')) && (
+            {(user?.id_master || user?.is_admin || hasPermission('/financeiro/categorias')) && (
               <button
                 onClick={() => setActiveTab('categorias')}
                 className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${
@@ -1435,7 +1435,7 @@ export default function FinanceiroPage() {
                 Categorias
               </button>
             )}
-            {(user?.is_admin || hasPermission('/financeiro/formas_pagamento')) && (
+            {(user?.id_master || user?.is_admin || hasPermission('/financeiro/formas_pagamento')) && (
                <button
                  onClick={() => setActiveTab('formas_pagamento')}
                  className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${

@@ -340,7 +340,7 @@ export default function IgrejasPage() {
     }
   };
 
-  if (!user?.is_admin) {
+  if (!user?.id_master) {
     return (
       <div className="p-8 flex items-center justify-center min-h-[60vh]">
         <div className="max-w-md w-full bg-white dark:bg-slate-800 p-8 rounded-2xl shadow-md border border-slate-200 dark:border-slate-700 text-center space-y-4">

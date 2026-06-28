@@ -10,6 +10,7 @@ export type User = {
   id_perfil: string | null;
   id_igreja: string | null;
   is_admin: boolean;
+  id_master: boolean;
   foto_url?: string;
   perfil?: {
     nome: string;
@@ -87,6 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               id_perfil: data.id_perfil,
               id_igreja: data.id_igreja,
               is_admin: data.is_admin,
+              id_master: data.id_master || false,
               foto_url: data.foto_url,
               perfil: data.perfil
             };
@@ -255,6 +257,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         id_perfil: data.id_perfil,
         id_igreja: data.id_igreja,
         is_admin: data.is_admin,
+        id_master: data.id_master || false,
         foto_url: data.foto_url,
         perfil: data.perfil
       };
@@ -296,7 +299,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return menu === '/' || menu === '/mapa' || menu === '/formularios';
     }
     if (!user) return false;
-    if (user.is_admin) return true;
+    
+    // 1) id_master always has full access to all modules and system
+    if (user.id_master) {
+      return true;
+    }
+    
+    // 2) is_admin (but not id_master) has full access EXCEPT for /igrejas and /configuracoes
+    if (user.is_admin) {
+      if (menu === '/igrejas' || menu === '/configuracoes') {
+        return false;
+      }
+      return true;
+    }
+    
+    // 3) Regular users cannot access churches, system configurations, profiles, or users modules
+    if (menu === '/igrejas' || menu === '/configuracoes' || menu === '/perfis' || menu === '/usuarios') {
+      return false;
+    }
+    
     if (menu === '/' || menu === '/mapa' || menu === '/formularios' || menu === '/mural') return true; // Always allowed
     if (!user.perfil) return false;
     const perms = Array.isArray(user.perfil.permissoes) ? user.perfil.permissoes : [];

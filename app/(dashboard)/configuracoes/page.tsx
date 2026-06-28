@@ -11,7 +11,7 @@ export default function ConfiguracoesPage() {
   const { user, hasPermission } = useAuth();
   const { selectedIgreja } = useIgreja();
   
-  const canEdit = user?.is_admin || (hasPermission('/usuarios') && hasPermission('/perfis'));
+  const canEdit = user?.id_master || false;
 
   const [activeTab, setActiveTab] = useState('geral');
   const [darkMode, setDarkMode] = useState(false);
@@ -239,6 +239,22 @@ export default function ConfiguracoesPage() {
   ];
 
   if (!mounted) return null;
+
+  if (!user?.id_master) {
+    return (
+      <div className="p-8 flex items-center justify-center min-h-[60vh]">
+        <div className="max-w-md w-full bg-white dark:bg-slate-800 p-8 rounded-2xl shadow-md border border-slate-200 dark:border-slate-700 text-center space-y-4">
+          <div className="w-16 h-16 bg-transparent text-red-650 dark:text-red-400 rounded-2xl flex items-center justify-center mx-auto">
+            <Settings size={36} />
+          </div>
+          <h2 className="text-xl font-bold text-slate-900 dark:text-white">Acesso Restrito</h2>
+          <p className="text-slate-500 dark:text-slate-400 text-sm">
+            Somente o usuário Master do sistema tem acesso a este módulo.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="configuracoes-page p-8 space-y-8 max-w-5xl mx-auto">

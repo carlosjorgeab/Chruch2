@@ -97,6 +97,7 @@ export async function GET(req: NextRequest) {
 
     -- 6. Add col to 'usuarios'
     ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS foto_url TEXT;
+    ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS id_master BOOLEAN DEFAULT false;
 
     -- Add subscription expiration date to 'igrejas'
     ALTER TABLE igrejas ADD COLUMN IF NOT EXISTS assinatura_vigencia DATE;
