@@ -179,18 +179,103 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.3), inset 0 1px 1px rgba(255, 255, 255, 0.05) !important;
             }
             
-            /* Soft glassmorphism in topbar and sidebar as well! */
+            /* Sidebar and Topbar backgrounds and borders */
             header {
-              background-color: color-mix(in srgb, var(--church-panel) 78%, transparent) !important;
-              backdrop-filter: blur(14px) !important;
-              -webkit-backdrop-filter: blur(14px) !important;
-              border-bottom: 1px solid color-mix(in srgb, var(--church-border) 40%, transparent) !important;
+              background-color: #88B0BF !important;
+              backdrop-filter: none !important;
+              -webkit-backdrop-filter: none !important;
+              border-bottom: 1px solid rgba(255, 255, 255, 0.2) !important;
             }
             aside {
-              background-color: color-mix(in srgb, var(--church-panel) 84%, transparent) !important;
-              backdrop-filter: blur(14px) !important;
-              -webkit-backdrop-filter: blur(14px) !important;
-              border-right: 1px solid color-mix(in srgb, var(--church-border) 40%, transparent) !important;
+              background-color: #88B0BF !important;
+              backdrop-filter: none !important;
+              -webkit-backdrop-filter: none !important;
+              border-right: 1px solid rgba(255, 255, 255, 0.2) !important;
+            }
+            .dark header {
+              background-color: #3B758C !important;
+              border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+            }
+            .dark aside {
+              background-color: #3B758C !important;
+              border-right: 1px solid rgba(255, 255, 255, 0.1) !important;
+            }
+
+            /* Enforce bold and white fonts in topbar and sidebar */
+            header p,
+            header span,
+            header h2,
+            header select,
+            header input,
+            aside p,
+            aside span,
+            aside h2,
+            aside h3,
+            aside button,
+            aside a {
+              color: #ffffff !important;
+              font-weight: 700 !important;
+            }
+
+            /* Active menu item should keep white font and look elegant */
+            aside a.bg-\[\#E4A232\],
+            aside a.bg-primary {
+              background-color: rgba(255, 255, 255, 0.25) !important;
+              color: #ffffff !important;
+            }
+
+            /* Custom hover backgrounds for links/buttons inside sidebar and topbar */
+            aside a:hover,
+            aside button:hover {
+              background-color: rgba(255, 255, 255, 0.15) !important;
+              color: #ffffff !important;
+            }
+
+            /* Enforce white icons */
+            header svg,
+            aside svg {
+              color: #ffffff !important;
+              stroke: #ffffff !important;
+            }
+
+            /* Search input placeholder style */
+            header input::placeholder {
+              color: rgba(255, 255, 255, 0.75) !important;
+              font-weight: 500 !important;
+            }
+
+            /* Dropdowns and popovers inside header should keep their standard readable styling */
+            header [class*="absolute"] p,
+            header [class*="absolute"] span,
+            header [class*="absolute"] a,
+            header [class*="absolute"] button {
+              color: var(--church-font) !important;
+              font-weight: 500 !important;
+            }
+            .dark header [class*="absolute"] p,
+            .dark header [class*="absolute"] span,
+            .dark header [class*="absolute"] a,
+            .dark header [class*="absolute"] button {
+              color: #f3f4f6 !important;
+              font-weight: 500 !important;
+            }
+            header [class*="absolute"] svg {
+              color: var(--church-font) !important;
+              stroke: var(--church-font) !important;
+            }
+            .dark header [class*="absolute"] svg {
+              color: #f3f4f6 !important;
+              stroke: #f3f4f6 !important;
+            }
+            header select option {
+              background-color: var(--church-panel) !important;
+              color: var(--church-font) !important;
+              font-weight: 500 !important;
+            }
+            .dark header select option {
+              background-color: #0f172a !important;
+              color: #f8fafc !important;
+              font-weight: 500 !important;
             }
             
             /* Borders overrides */
