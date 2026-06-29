@@ -27,6 +27,10 @@ export default function LoginPage() {
   const [confirmarNovaSenha, setConfirmarNovaSenha] = useState('');
   const [recoveryLoading, setRecoveryLoading] = useState(false);
   const [sentViaSmtp, setSentViaSmtp] = useState(false);
+  const [searchBy, setSearchBy] = useState<'email' | 'nome'>('email');
+  const [recoveryName, setRecoveryName] = useState('');
+  const [customEmail, setCustomEmail] = useState('');
+  const [targetUserId, setTargetUserId] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,34 +53,70 @@ export default function LoginPage() {
     setError('');
     setSuccess('');
     setSentViaSmtp(false);
+    setTargetUserId(null);
 
-    if (!recoveryEmail) {
-      setError('Por favor, informe seu e-mail.');
-      return;
-    }
+    let targetEmail = '';
+    let userName = 'Membro';
+    let userId = '';
+    let userIgrejaId = '';
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(recoveryEmail.trim())) {
-      setError('O e-mail informado não possui um formato correto para recuperação de senha.');
-      return;
+    if (searchBy === 'email') {
+      if (!recoveryEmail) {
+        setError('Por favor, informe seu e-mail.');
+        return;
+      }
+
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(recoveryEmail.trim())) {
+        setError('O e-mail informado não possui um formato correto para recuperação de senha.');
+        return;
+      }
+      targetEmail = recoveryEmail.trim();
+    } else {
+      if (!recoveryName) {
+        setError('Por favor, informe o nome completo cadastrado.');
+        return;
+      }
+      if (!customEmail) {
+        setError('Por favor, informe o e-mail correto para recebimento.');
+        return;
+      }
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(customEmail.trim())) {
+        setError('O e-mail informado não possui um formato correto para recuperação de senha.');
+        return;
+      }
+      targetEmail = customEmail.trim();
     }
 
     setRecoveryLoading(true);
     try {
-      // Check if user email exists and retrieve id_igreja
-      const { data, error: fetchErr } = await supabase
-        .from('usuarios')
-        .select('id, nome, email, id_igreja')
-        .eq('email', recoveryEmail.trim())
-        .maybeSingle();
+      let query = supabase.from('usuarios').select('id, nome, email, id_igreja');
+
+      if (searchBy === 'email') {
+        query = query.eq('email', recoveryEmail.trim());
+      } else {
+        query = query.ilike('nome', `%${recoveryName.trim()}%`);
+      }
+
+      const { data, error: fetchErr } = await query.limit(1).maybeSingle();
 
       if (fetchErr) throw fetchErr;
 
       if (!data) {
-        setError('E-mail não encontrado no sistema.');
+        if (searchBy === 'email') {
+          setError('E-mail não encontrado no sistema.');
+        } else {
+          setError('Nenhum usuário cadastrado encontrado com este Nome.');
+        }
         setRecoveryLoading(false);
         return;
       }
+
+      userId = data.id;
+      userName = data.nome || 'Membro';
+      userIgrejaId = data.id_igreja || '';
+      setTargetUserId(userId);
 
       // Generate a 6-digit numeric recovery code
       const code = Math.floor(100000 + Math.random() * 900000).toString();
@@ -107,14 +147,14 @@ export default function LoginPage() {
         });
 
         // Church-specific overrides if the user is linked to an igreja
-        if (data.id_igreja) {
+        if (userIgrejaId) {
           configs.forEach((config: any) => {
-            if (config.chave === `smtp_host_${data.id_igreja}`) smtpHost = config.valor;
-            if (config.chave === `smtp_port_${data.id_igreja}`) smtpPort = config.valor;
-            if (config.chave === `smtp_user_${data.id_igreja}`) smtpUser = config.valor;
-            if (config.chave === `smtp_pass_${data.id_igreja}`) smtpPass = config.valor;
-            if (config.chave === `smtp_from_${data.id_igreja}`) smtpFrom = config.valor;
-            if (config.chave === `smtp_ssl_${data.id_igreja}`) smtpSSL = config.valor;
+            if (config.chave === `smtp_host_${userIgrejaId}`) smtpHost = config.valor;
+            if (config.chave === `smtp_port_${userIgrejaId}`) smtpPort = config.valor;
+            if (config.chave === `smtp_user_${userIgrejaId}`) smtpUser = config.valor;
+            if (config.chave === `smtp_pass_${userIgrejaId}`) smtpPass = config.valor;
+            if (config.chave === `smtp_from_${userIgrejaId}`) smtpFrom = config.valor;
+            if (config.chave === `smtp_ssl_${userIgrejaId}`) smtpSSL = config.valor;
           });
         }
       }
@@ -133,9 +173,9 @@ export default function LoginPage() {
             pass: smtpPass,
             from: smtpFrom,
             secure: smtpSSL === 'true',
-            to: recoveryEmail.trim(),
+            to: targetEmail,
             code,
-            userName: data.nome || 'Membro',
+            userName,
           }),
         });
 
@@ -145,7 +185,7 @@ export default function LoginPage() {
         }
 
         setSentViaSmtp(true);
-        setSuccess(`Código de recuperação enviado para o e-mail: ${recoveryEmail.trim()}`);
+        setSuccess(`Código de recuperação enviado para o e-mail: ${targetEmail}`);
       } else {
         // SMTP not configured, fallback gracefully so preview environment is always testable
         setSentViaSmtp(false);
@@ -201,15 +241,23 @@ export default function LoginPage() {
 
     setRecoveryLoading(true);
     try {
-      const { error: updateErr } = await supabase
-        .from('usuarios')
-        .update({ senha: novaSenha })
-        .eq('email', recoveryEmail.trim());
+      const updateData: any = { senha: novaSenha };
+      
+      // If search was by name and custom email was provided, also update email in user row
+      if (searchBy === 'nome' && customEmail && targetUserId) {
+        updateData.email = customEmail.trim();
+      }
+
+      const query = supabase.from('usuarios').update(updateData);
+      
+      const { error: updateErr } = targetUserId
+        ? await query.eq('id', targetUserId)
+        : await query.eq('email', recoveryEmail.trim());
 
       if (updateErr) throw updateErr;
 
       setSuccess('Sua senha foi redefinida com sucesso! Use a nova senha para entrar.');
-      setEmail(recoveryEmail); // Autofill email for login convenience
+      setEmail(searchBy === 'nome' ? customEmail : recoveryEmail); // Autofill email for login convenience
       setSenha('');
       setView('login');
       // Clear recovery state
@@ -218,6 +266,9 @@ export default function LoginPage() {
       setEnteredCode('');
       setNovaSenha('');
       setConfirmarNovaSenha('');
+      setRecoveryName('');
+      setCustomEmail('');
+      setTargetUserId(null);
     } catch (err: any) {
       setError('Erro ao redefinir a senha. Tente novamente.');
       console.error(err);
@@ -344,9 +395,45 @@ export default function LoginPage() {
                   Recuperar Senha
                 </h2>
                 <p className="text-slate-500 dark:text-slate-400 text-xs font-semibold leading-relaxed mt-1">
-                  Informe o e-mail cadastrado na sua conta para enviarmos o código de recuperação de acesso.
+                  {searchBy === 'email' 
+                    ? 'Informe o e-mail cadastrado na sua conta para enviarmos o código de recuperação.'
+                    : 'Busque sua conta pelo nome e informe um e-mail correto para receber o código.'}
                 </p>
               </div>
+            </div>
+
+            {/* Tab Selector */}
+            <div className="flex bg-slate-100 dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchBy('email');
+                  setError('');
+                  setSuccess('');
+                }}
+                className={`flex-1 py-2 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all ${
+                  searchBy === 'email'
+                    ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm'
+                    : 'text-slate-550 dark:text-slate-450 hover:text-slate-700 dark:hover:text-slate-300'
+                }`}
+              >
+                Por E-mail
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchBy('nome');
+                  setError('');
+                  setSuccess('');
+                }}
+                className={`flex-1 py-2 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all ${
+                  searchBy === 'nome'
+                    ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm'
+                    : 'text-slate-550 dark:text-slate-450 hover:text-slate-700 dark:hover:text-slate-300'
+                }`}
+              >
+                Por Nome
+              </button>
             </div>
 
             {error && (
@@ -356,25 +443,69 @@ export default function LoginPage() {
             )}
 
             <form onSubmit={handleSendRecoveryCode} className="space-y-6">
-              <div>
-                <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 ml-1">
-                  E-mail Cadastrado
-                </label>
-                <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
-                    <Mail size={18} />
-                  </span>
-                  <input
-                    type="email"
-                    required
-                    value={recoveryEmail}
-                    onChange={(e) => setRecoveryEmail(e.target.value)}
-                    className="w-full pl-11 pr-4 py-3.5 rounded-xl border-2 border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-secondary transition-all outline-none font-bold text-sm"
-                    placeholder="exemplo@igreja.com"
-                    disabled={recoveryLoading}
-                  />
+              {searchBy === 'email' ? (
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 ml-1">
+                    E-mail Cadastrado
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+                      <Mail size={18} />
+                    </span>
+                    <input
+                      type="email"
+                      required
+                      value={recoveryEmail}
+                      onChange={(e) => setRecoveryEmail(e.target.value)}
+                      className="w-full pl-11 pr-4 py-3.5 rounded-xl border-2 border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-secondary transition-all outline-none font-bold text-sm"
+                      placeholder="exemplo@igreja.com"
+                      disabled={recoveryLoading}
+                    />
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="space-y-4 animate-fade-in">
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 ml-1">
+                      Seu Nome Completo (Conforme Cadastro)
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        required
+                        value={recoveryName}
+                        onChange={(e) => setRecoveryName(e.target.value)}
+                        className="w-full px-4 py-3.5 rounded-xl border-2 border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-secondary transition-all outline-none font-bold text-sm"
+                        placeholder="Insira seu nome completo"
+                        disabled={recoveryLoading}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 ml-1">
+                      E-mail Correto para Recebimento do Código
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+                        <Mail size={18} />
+                      </span>
+                      <input
+                        type="email"
+                        required
+                        value={customEmail}
+                        onChange={(e) => setCustomEmail(e.target.value)}
+                        className="w-full pl-11 pr-4 py-3.5 rounded-xl border-2 border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-secondary transition-all outline-none font-bold text-sm"
+                        placeholder="seu-email-correto@exemplo.com"
+                        disabled={recoveryLoading}
+                      />
+                    </div>
+                    <p className="text-[10px] text-slate-400 font-bold mt-1.5 ml-1 leading-relaxed">
+                      * Se o e-mail em seu cadastro do sistema estiver desatualizado ou incorreto, informe um e-mail válido neste campo para receber o código de segurança.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               <button
                 type="submit"

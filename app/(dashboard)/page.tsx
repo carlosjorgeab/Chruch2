@@ -574,16 +574,8 @@ export default function Home() {
 
         {/* MURAL DE AVISOS MULTIMÍDIA */}
         <div 
-          className="shadow-sm overflow-hidden flex flex-col" 
+          className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col" 
           id="dashboard-mural-avisos"
-          style={{
-            backdropFilter: 'blur(15px)',
-            WebkitBackdropFilter: 'blur(15px)',
-            background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0.1) 100%)',
-            backgroundColor: 'rgba(255, 255, 255, 0.2)',
-            borderRadius: '2rem',
-            border: '1px solid rgba(255, 255, 255, 0.3)'
-          }}
         >
           <div className="p-6 sm:p-8 space-y-6 flex-1 flex flex-col justify-between">
             <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-5">
