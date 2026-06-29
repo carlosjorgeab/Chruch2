@@ -29,8 +29,16 @@ export function Sidebar({ isOpen = false, setIsOpen }: { isOpen?: boolean, setIs
     { href: '/usuarios', icon: Users, label: t('menu_usuarios'), disabled: false, id: '/usuarios' },
     { href: '/configuracoes', icon: Settings, label: t('menu_configuracoes'), disabled: false, id: '/configuracoes' },
   ].filter(item => {
-    if (item.id === '/perfis' || item.id === '/usuarios' || item.id === '/configuracoes' || item.id === '/igrejas' || item.id === '/fornecedores') {
-      return user?.is_admin || hasPermission(item.id);
+    if (user?.id_master) return true;
+    if (user?.is_admin) {
+      if (item.id === '/igrejas' || item.id === '/configuracoes') {
+        return false;
+      }
+      return true;
+    }
+    // Regular users cannot access these system/admin modules
+    if (item.id === '/igrejas' || item.id === '/configuracoes' || item.id === '/perfis' || item.id === '/usuarios') {
+      return false;
     }
     return hasPermission(item.id);
   });

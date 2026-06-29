@@ -84,10 +84,30 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <ConfirmProvider>
+      {/* Premium ambient cloud/sky background */}
+      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden bg-gradient-to-tr from-sky-150 via-slate-50 to-indigo-100/60 dark:from-slate-950 dark:via-slate-900/40 dark:to-slate-950">
+        {/* Soft, floating visual sky cloud layers */}
+        <div className="absolute top-[5%] left-[10%] w-[35rem] h-[35rem] bg-sky-200/50 dark:bg-sky-900/10 rounded-full filter blur-[120px] animate-pulse" style={{ animationDuration: '18s' }} />
+        <div className="absolute bottom-[10%] right-[10%] w-[45rem] h-[45rem] bg-indigo-150/40 dark:bg-indigo-950/5 rounded-full filter blur-[140px] animate-pulse" style={{ animationDuration: '24s' }} />
+        <div className="absolute top-[40%] left-[45%] w-[25rem] h-[25rem] bg-pink-100/30 dark:bg-purple-950/5 rounded-full filter blur-[100px] animate-pulse" style={{ animationDuration: '14s' }} />
+
+        {/* CSS Subtle Cloud Shapes */}
+        <div className="absolute top-[8%] right-[20%] opacity-20 dark:opacity-5 text-sky-300">
+          <svg className="w-96 h-auto" viewBox="0 0 100 60" fill="currentColor">
+            <path d="M10 40a15 15 0 0 1 30 0a12 12 0 0 1 24 0a15 15 0 0 1 26-3a15 15 0 0 1 -4 23h-76a15 15 0 0 1 -10-20z" opacity="0.4" />
+          </svg>
+        </div>
+        <div className="absolute bottom-[15%] left-[5%] opacity-15 dark:opacity-5 text-indigo-200">
+          <svg className="w-[30rem] h-auto" viewBox="0 0 100 60" fill="currentColor">
+            <path d="M10 40a15 15 0 0 1 30 0a12 12 0 0 1 24 0a15 15 0 0 1 26-3a15 15 0 0 1 -4 23h-76a15 15 0 0 1 -10-20z" opacity="0.3" />
+          </svg>
+        </div>
+      </div>
+
       {/* Mobile Menu Toggle */}
       <button 
         onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-        className="md:hidden fixed top-3 left-4 z-[60] p-2 bg-white rounded-md shadow-sm border border-slate-200 text-slate-700"
+        className="md:hidden fixed top-3 left-4 z-[60] p-2 bg-white/80 backdrop-blur-md rounded-xl shadow-sm border border-slate-200 text-slate-700"
       >
         {isSidebarOpen ? <X size={24} /> : <Menu size={24} />}
       </button>
@@ -95,7 +115,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Overlay for mobile */}
       {isSidebarOpen && (
         <div 
-          className="md:hidden fixed inset-0 bg-black/50 z-40"
+          className="md:hidden fixed inset-0 bg-black/40 backdrop-blur-sm z-40"
           onClick={() => setIsSidebarOpen(false)}
         />
       )}
@@ -110,22 +130,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         const corFontes = (selectedIgreja as any)?.cor_fontes;
         const corBotoes = (selectedIgreja as any)?.cor_botoes;
 
-        if (!corFundo && !corPaineis && !corBordas && !corFontes && !corBotoes) return null;
-
         return (
           <style dangerouslySetInnerHTML={{ __html: `
             :root {
-              --church-bg: ${corFundo || '#f8fafc'};
+              --church-bg: ${corFundo || 'transparent'};
               --church-panel: ${corPaineis || '#ffffff'};
               --church-border: ${corBordas || '#e2e8f0'};
               --church-font: ${corFontes || '#0f172a'};
               --church-button: ${corBotoes || '#E4A232'};
             }
             .dark {
-              --church-bg: #090d16;
-              --church-panel: #111625;
-              --church-border: #1f2937;
-              --church-font: #f3f4f6;
+              --church-bg: ${corFundo ? `color-mix(in srgb, ${corFundo} 30%, #030712)` : 'transparent'};
+              --church-panel: ${corPaineis || '#0f172a'};
+              --church-border: ${corBordas || '#1e293b'};
+              --church-font: ${corFontes || '#f8fafc'};
               --church-button: ${corBotoes || '#E4A232'};
             }
             
@@ -135,14 +153,44 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               color: var(--church-font) !important;
             }
             
-            /* Panels/Cards overrides */
+            /* High-end Glassmorphic Panels/Cards overrides with custom curves */
             main .bg-white,
             main [class*="bg-white/"],
             main .bg-slate-50,
             main .dark\\:bg-slate-800,
             main .dark\\:bg-slate-900,
             main .bg-slate-100 {
-              background-color: var(--church-panel) !important;
+              background-color: color-mix(in srgb, var(--church-panel) 82%, transparent) !important;
+              backdrop-filter: blur(20px) !important;
+              -webkit-backdrop-filter: blur(20px) !important;
+              border-radius: 1.75rem !important; /* Premium rounded-3xl/2xl look */
+              box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.03), inset 0 1px 1px rgba(255, 255, 255, 0.4) !important;
+            }
+
+            .dark main .bg-white,
+            .dark main [class*="bg-white/"],
+            .dark main .bg-slate-50,
+            .dark main .dark\\:bg-slate-800,
+            .dark main .dark\\:bg-slate-900,
+            .dark main .bg-slate-100 {
+              background-color: color-mix(in srgb, var(--church-panel) 72%, transparent) !important;
+              backdrop-filter: blur(20px) !important;
+              -webkit-backdrop-filter: blur(20px) !important;
+              box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.3), inset 0 1px 1px rgba(255, 255, 255, 0.05) !important;
+            }
+            
+            /* Soft glassmorphism in topbar and sidebar as well! */
+            header {
+              background-color: color-mix(in srgb, var(--church-panel) 78%, transparent) !important;
+              backdrop-filter: blur(14px) !important;
+              -webkit-backdrop-filter: blur(14px) !important;
+              border-bottom: 1px solid color-mix(in srgb, var(--church-border) 40%, transparent) !important;
+            }
+            aside {
+              background-color: color-mix(in srgb, var(--church-panel) 84%, transparent) !important;
+              backdrop-filter: blur(14px) !important;
+              -webkit-backdrop-filter: blur(14px) !important;
+              border-right: 1px solid color-mix(in srgb, var(--church-border) 40%, transparent) !important;
             }
             
             /* Borders overrides */
@@ -151,7 +199,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             main .border-slate-200,
             main .dark\\:border-slate-700,
             main .dark\\:border-slate-800 {
-              border-color: var(--church-border) !important;
+              border-color: color-mix(in srgb, var(--church-border) 45%, transparent) !important;
             }
             
             /* Fonts overrides */
@@ -184,6 +232,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             main .bg-primary {
               background-color: var(--church-button) !important;
               color: #ffffff !important;
+              border-radius: 1rem !important;
             }
 
             main .text-amber-500,
@@ -203,7 +252,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         );
       })()}
 
-      <main className="md:ml-64 pt-16 min-h-screen transition-all duration-300">
+      <main className="md:ml-64 pt-16 min-h-screen transition-all duration-300 relative z-10">
         {children}
       </main>
     </ConfirmProvider>

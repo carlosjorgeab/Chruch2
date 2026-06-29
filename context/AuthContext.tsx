@@ -36,6 +36,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
 
   useEffect(() => {
+    // Prevent ResizeObserver loop limit errors from propagating globally,
+    // which can trigger serialization crashes (circular structure JSON stringify) in the preview iframe.
+    const handleResizeError = (e: ErrorEvent) => {
+      if (
+        e.message && (
+          e.message.toLowerCase().includes('resizeobserver') ||
+          e.message.toLowerCase().includes('loop completed with undelivered notifications') ||
+          e.message.toLowerCase().includes('loop limit exceeded')
+        )
+      ) {
+        e.stopImmediatePropagation();
+        e.preventDefault();
+      }
+    };
+
+    const handleRejection = (e: PromiseRejectionEvent) => {
+      if (
+        e.reason && e.reason.message && (
+          e.reason.message.toLowerCase().includes('resizeobserver') ||
+          e.reason.message.toLowerCase().includes('loop completed with undelivered notifications') ||
+          e.reason.message.toLowerCase().includes('loop limit exceeded')
+        )
+      ) {
+        e.stopImmediatePropagation();
+        e.preventDefault();
+      }
+    };
+
+    window.addEventListener('error', handleResizeError);
+    window.addEventListener('unhandledrejection', handleRejection);
+
     const initConfigs = async () => {
       try {
         const { data: configs } = await supabase.from('configuracoes_sistema').select('*');
@@ -101,6 +132,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })();
     }
     setLoading(false);
+
+    return () => {
+      window.removeEventListener('error', handleResizeError);
+      window.removeEventListener('unhandledrejection', handleRejection);
+    };
   }, []);
 
   // Periodic check for multi-login and session status

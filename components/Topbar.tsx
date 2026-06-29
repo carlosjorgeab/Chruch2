@@ -398,27 +398,23 @@ export function Topbar() {
               <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{user?.email}</p>
             </div>
             
-            {(user?.is_admin || hasPermission('/perfis') || hasPermission('/usuarios') || hasPermission('/configuracoes')) && (
+            {(user?.id_master || user?.is_admin) && (
               <>
-                {(user?.is_admin || hasPermission('/perfis')) && (
-                  <Link 
-                    href="/perfis" 
-                    className="flex items-center gap-3 px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50 hover:text-amber-500 transition-colors"
-                  >
-                    <UserCircle size={16} />
-                    <span>{t('menu_perfis') || 'Perfis'}</span>
-                  </Link>
-                )}
-                {(user?.is_admin || hasPermission('/usuarios')) && (
-                  <Link 
-                    href="/usuarios" 
-                    className="flex items-center gap-3 px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50 hover:text-amber-500 transition-colors"
-                  >
-                    <Users size={16} />
-                    <span>{t('menu_usuarios') || 'Usuários'}</span>
-                  </Link>
-                )}
-                {(user?.is_admin || hasPermission('/configuracoes')) && (
+                <Link 
+                  href="/perfis" 
+                  className="flex items-center gap-3 px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50 hover:text-amber-500 transition-colors"
+                >
+                  <UserCircle size={16} />
+                  <span>{t('menu_perfis') || 'Perfis'}</span>
+                </Link>
+                <Link 
+                  href="/usuarios" 
+                  className="flex items-center gap-3 px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50 hover:text-amber-500 transition-colors"
+                >
+                  <Users size={16} />
+                  <span>{t('menu_usuarios') || 'Usuários'}</span>
+                </Link>
+                {user?.id_master && (
                   <Link 
                     href="/configuracoes" 
                     className="flex items-center gap-3 px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50 hover:text-amber-500 transition-colors"

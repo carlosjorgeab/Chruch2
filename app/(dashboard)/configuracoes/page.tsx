@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { Settings, Save, Bell, Shield, Globe, Moon, Clock, Lock, MonitorStop, RefreshCw, CheckCircle, AlertTriangle, Database, FileText, Copy, Check, UserPlus, Cake, BookOpen } from 'lucide-react';
+import { Settings, Save, Bell, Shield, Globe, Moon, Clock, Lock, MonitorStop, RefreshCw, CheckCircle, AlertTriangle, Database, FileText, Copy, Check, UserPlus, Cake, BookOpen, Mail } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useLanguage } from '@/context/LanguageContext';
 import { defaultTranslations } from '@/lib/translations';
@@ -28,6 +28,14 @@ export default function ConfiguracoesPage() {
   const [notifyBirthdays, setNotifyBirthdays] = useState(true);
   const [reminderValue, setReminderValue] = useState('60');
   const [reminderUnit, setReminderUnit] = useState('minutos');
+
+  // SMTP configuration states
+  const [smtpHost, setSmtpHost] = useState('');
+  const [smtpPort, setSmtpPort] = useState('587');
+  const [smtpUser, setSmtpUser] = useState('');
+  const [smtpPass, setSmtpPass] = useState('');
+  const [smtpFrom, setSmtpFrom] = useState('');
+  const [smtpSSL, setSmtpSSL] = useState(true);
 
   const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -119,6 +127,12 @@ export default function ConfiguracoesPage() {
       if (data) {
         let val = '60';
         let unit = 'minutos';
+        let sHost = '';
+        let sPort = '587';
+        let sUser = '';
+        let sPass = '';
+        let sFrom = '';
+        let sSSL = 'true';
         data.forEach((config: any) => {
           if (config.chave === 'session_timeout') setSessionTimeout(config.valor);
           if (config.chave === 'disable_multi_login') setDisableMultiLogin(config.valor === 'true');
@@ -129,16 +143,36 @@ export default function ConfiguracoesPage() {
           if (config.chave === 'notify_birthdays') setNotifyBirthdays(config.valor === 'true');
           if (config.chave === 'event_reminder_value') val = config.valor;
           if (config.chave === 'event_reminder_unit') unit = config.valor;
+          if (config.chave === 'smtp_host') sHost = config.valor;
+          if (config.chave === 'smtp_port') sPort = config.valor;
+          if (config.chave === 'smtp_user') sUser = config.valor;
+          if (config.chave === 'smtp_pass') sPass = config.valor;
+          if (config.chave === 'smtp_from') sFrom = config.valor;
+          if (config.chave === 'smtp_ssl') sSSL = config.valor;
         });
 
         // Church specific overrides
         data.forEach((config: any) => {
-          if (selectedIgreja?.id && config.chave === `event_reminder_value_${selectedIgreja.id}`) val = config.valor;
-          if (selectedIgreja?.id && config.chave === `event_reminder_unit_${selectedIgreja.id}`) unit = config.valor;
+          if (selectedIgreja?.id) {
+            if (config.chave === `event_reminder_value_${selectedIgreja.id}`) val = config.valor;
+            if (config.chave === `event_reminder_unit_${selectedIgreja.id}`) unit = config.valor;
+            if (config.chave === `smtp_host_${selectedIgreja.id}`) sHost = config.valor;
+            if (config.chave === `smtp_port_${selectedIgreja.id}`) sPort = config.valor;
+            if (config.chave === `smtp_user_${selectedIgreja.id}`) sUser = config.valor;
+            if (config.chave === `smtp_pass_${selectedIgreja.id}`) sPass = config.valor;
+            if (config.chave === `smtp_from_${selectedIgreja.id}`) sFrom = config.valor;
+            if (config.chave === `smtp_ssl_${selectedIgreja.id}`) sSSL = config.valor;
+          }
         });
 
         setReminderValue(val);
         setReminderUnit(unit);
+        setSmtpHost(sHost);
+        setSmtpPort(sPort);
+        setSmtpUser(sUser);
+        setSmtpPass(sPass);
+        setSmtpFrom(sFrom);
+        setSmtpSSL(sSSL === 'true');
       }
     } catch (error) {
       console.error('Error fetching configs:', error);
@@ -195,12 +229,24 @@ export default function ConfiguracoesPage() {
       if (selectedIgreja?.id) {
         updates.push(
           { chave: `event_reminder_value_${selectedIgreja.id}`, valor: String(reminderValue) },
-          { chave: `event_reminder_unit_${selectedIgreja.id}`, valor: reminderUnit }
+          { chave: `event_reminder_unit_${selectedIgreja.id}`, valor: reminderUnit },
+          { chave: `smtp_host_${selectedIgreja.id}`, valor: smtpHost },
+          { chave: `smtp_port_${selectedIgreja.id}`, valor: smtpPort },
+          { chave: `smtp_user_${selectedIgreja.id}`, valor: smtpUser },
+          { chave: `smtp_pass_${selectedIgreja.id}`, valor: smtpPass },
+          { chave: `smtp_from_${selectedIgreja.id}`, valor: smtpFrom },
+          { chave: `smtp_ssl_${selectedIgreja.id}`, valor: String(smtpSSL) }
         );
       } else {
         updates.push(
           { chave: 'event_reminder_value', valor: String(reminderValue) },
-          { chave: 'event_reminder_unit', valor: reminderUnit }
+          { chave: 'event_reminder_unit', valor: reminderUnit },
+          { chave: 'smtp_host', valor: smtpHost },
+          { chave: 'smtp_port', valor: smtpPort },
+          { chave: 'smtp_user', valor: smtpUser },
+          { chave: 'smtp_pass', valor: smtpPass },
+          { chave: 'smtp_from', valor: smtpFrom },
+          { chave: 'smtp_ssl', valor: String(smtpSSL) }
         );
       }
 
@@ -688,6 +734,111 @@ export default function ConfiguracoesPage() {
                         <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
                           💡 <span className="font-bold text-slate-700 dark:text-slate-300">Como funciona:</span> O painel gerará alertas visuais e lembretes para cada evento registrado com exatos <span className="font-bold text-[#E4A232]">{reminderValue} {reminderUnit}</span> de antecedência do seu horário agendado de início.
                         </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* SMTP Custom Server Configuration - Beautiful Glassmorphic layout */}
+                  <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 p-6 rounded-[2rem] shadow-sm space-y-6">
+                    <div className="flex items-center gap-4 pb-4 border-b border-slate-100 dark:border-slate-800">
+                      <div className="w-10 h-10 bg-amber-500/10 rounded-xl flex items-center justify-center text-amber-500">
+                        <Mail size={20} />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-black uppercase text-slate-900 dark:text-white tracking-widest">Servidor SMTP Customizado</h4>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">Configure um servidor SMTP personalizado para o envio de e-mails, alertas e relatórios da igreja</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                          Host SMTP
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="ex: smtp.gmail.com"
+                          value={smtpHost}
+                          onChange={(e) => setSmtpHost(e.target.value)}
+                          className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-750 bg-slate-50 dark:bg-slate-950/60 text-slate-900 dark:text-white font-bold text-sm focus:border-primary focus:bg-white dark:focus:bg-slate-900 transition outline-none"
+                          disabled={saving}
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                          Porta SMTP
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="ex: 587"
+                          value={smtpPort}
+                          onChange={(e) => setSmtpPort(e.target.value)}
+                          className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-750 bg-slate-50 dark:bg-slate-950/60 text-slate-900 dark:text-white font-bold text-sm focus:border-primary focus:bg-white dark:focus:bg-slate-900 transition outline-none"
+                          disabled={saving}
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                          Usuário SMTP
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="ex: email@igreja.com"
+                          value={smtpUser}
+                          onChange={(e) => setSmtpUser(e.target.value)}
+                          className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-750 bg-slate-50 dark:bg-slate-950/60 text-slate-900 dark:text-white font-bold text-sm focus:border-primary focus:bg-white dark:focus:bg-slate-900 transition outline-none"
+                          disabled={saving}
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                          Senha SMTP
+                        </label>
+                        <input
+                          type="password"
+                          placeholder="••••••••••••"
+                          value={smtpPass}
+                          onChange={(e) => setSmtpPass(e.target.value)}
+                          className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-750 bg-slate-50 dark:bg-slate-950/60 text-slate-900 dark:text-white font-bold text-sm focus:border-primary focus:bg-white dark:focus:bg-slate-900 transition outline-none"
+                          disabled={saving}
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                          Remetente (E-mail de Origem)
+                        </label>
+                        <input
+                          type="email"
+                          placeholder="ex: nao-responder@igreja.com"
+                          value={smtpFrom}
+                          onChange={(e) => setSmtpFrom(e.target.value)}
+                          className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-750 bg-slate-50 dark:bg-slate-950/60 text-slate-900 dark:text-white font-bold text-sm focus:border-primary focus:bg-white dark:focus:bg-slate-900 transition outline-none"
+                          disabled={saving}
+                        />
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <div 
+                          onClick={() => !saving && setSmtpSSL(!smtpSSL)}
+                          className="flex items-start justify-between p-3.5 bg-slate-50 dark:bg-slate-950/40 rounded-2xl border border-slate-100 dark:border-slate-800/80 cursor-pointer hover:border-amber-500/20 dark:hover:border-amber-500/10 transition group w-full"
+                        >
+                          <div className="flex gap-3">
+                            <div className="mt-0.5 w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-600 dark:text-amber-500 group-hover:scale-105 transition shrink-0">
+                              <Shield size={16} />
+                            </div>
+                            <div>
+                              <p className="text-xs font-bold text-slate-900 dark:text-white leading-tight">Requer conexão segura (SSL/TLS)</p>
+                              <p className="text-[10px] text-slate-500 mt-1">Habilitar criptografia segura no canal</p>
+                            </div>
+                          </div>
+                          <div className={`relative inline-block w-10 h-5 shrink-0 transition-colors duration-200 ease-in-out ${smtpSSL ? 'bg-primary' : 'bg-slate-200 dark:bg-slate-700'} rounded-full mt-1`}>
+                            <div className={`absolute top-0.5 w-4 h-4 transition-all duration-200 ease-in-out bg-white rounded-full ${smtpSSL ? 'left-5.5' : 'left-0.5'}`}></div>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>

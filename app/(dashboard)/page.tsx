@@ -573,7 +573,7 @@ export default function Home() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8" id="dashboard-charts-grid">
 
         {/* MURAL DE AVISOS MULTIMÍDIA */}
-        <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col" id="dashboard-mural-avisos">
+        <div className="bg-gradient-to-br from-sky-400/10 via-white/40 to-indigo-500/10 dark:from-sky-950/20 dark:via-slate-900/60 dark:to-indigo-950/20 backdrop-blur-2xl rounded-3xl border border-white/50 dark:border-white/10 shadow-xl shadow-sky-500/5 overflow-hidden flex flex-col" id="dashboard-mural-avisos">
           <div className="p-6 sm:p-8 space-y-6 flex-1 flex flex-col justify-between">
             <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-5">
               <div>
