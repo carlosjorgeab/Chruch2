@@ -205,8 +205,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             header p,
             header span,
             header h2,
-            header select,
-            header input,
             aside p,
             aside span,
             aside h2,
@@ -215,6 +213,28 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             aside a {
               color: #ffffff !important;
               font-weight: 700 !important;
+            }
+
+            /* Enforce black and bold font for Church combo and Search input */
+            header select,
+            header input {
+              color: #000000 !important;
+              font-weight: 700 !important;
+              background-color: transparent !important;
+            }
+            
+            /* Enforce white background for Church combo container and Search bar in both themes */
+            header div.relative.flex.items-center,
+            header form.hidden.lg\\:flex {
+              background-color: #ffffff !important;
+              border-color: rgba(0, 0, 0, 0.15) !important;
+            }
+            
+            /* Icons inside these white containers should be dark gray for legibility */
+            header div.relative.flex.items-center svg,
+            header form.hidden.lg\\:flex svg {
+              color: #475569 !important;
+              stroke: #475569 !important;
             }
 
             /* Active menu item should keep white font and look elegant */
@@ -240,8 +260,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
             /* Search input placeholder style */
             header input::placeholder {
-              color: rgba(255, 255, 255, 0.75) !important;
-              font-weight: 500 !important;
+              color: rgba(0, 0, 0, 0.5) !important;
+              font-weight: 700 !important;
             }
 
             /* Dropdowns and popovers inside header should keep their standard readable styling */
@@ -268,14 +288,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               stroke: #f3f4f6 !important;
             }
             header select option {
-              background-color: var(--church-panel) !important;
-              color: var(--church-font) !important;
-              font-weight: 500 !important;
+              background-color: #ffffff !important;
+              color: #000000 !important;
+              font-weight: 700 !important;
             }
             .dark header select option {
-              background-color: #0f172a !important;
-              color: #f8fafc !important;
-              font-weight: 500 !important;
+              background-color: #1e293b !important;
+              color: #ffffff !important;
+              font-weight: 700 !important;
             }
             
             /* Borders overrides */

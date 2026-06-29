@@ -26,6 +26,7 @@ export default function LoginPage() {
   const [novaSenha, setNovaSenha] = useState('');
   const [confirmarNovaSenha, setConfirmarNovaSenha] = useState('');
   const [recoveryLoading, setRecoveryLoading] = useState(false);
+  const [sentViaSmtp, setSentViaSmtp] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,18 +48,25 @@ export default function LoginPage() {
     e.preventDefault();
     setError('');
     setSuccess('');
+    setSentViaSmtp(false);
 
     if (!recoveryEmail) {
       setError('Por favor, informe seu e-mail.');
       return;
     }
 
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(recoveryEmail.trim())) {
+      setError('O e-mail informado não possui um formato correto para recuperação de senha.');
+      return;
+    }
+
     setRecoveryLoading(true);
     try {
-      // Check if user email exists
+      // Check if user email exists and retrieve id_igreja
       const { data, error: fetchErr } = await supabase
         .from('usuarios')
-        .select('id, nome, email')
+        .select('id, nome, email, id_igreja')
         .eq('email', recoveryEmail.trim())
         .maybeSingle();
 
@@ -73,11 +81,79 @@ export default function LoginPage() {
       // Generate a 6-digit numeric recovery code
       const code = Math.floor(100000 + Math.random() * 900000).toString();
       setRecoveryCode(code);
-      
-      setSuccess('Código de recuperação gerado com sucesso!');
+
+      // Fetch SMTP configuration from database
+      const { data: configs, error: configErr } = await supabase
+        .from('configuracoes_sistema')
+        .select('*');
+
+      if (configErr) throw configErr;
+
+      let smtpHost = '';
+      let smtpPort = '587';
+      let smtpUser = '';
+      let smtpPass = '';
+      let smtpFrom = '';
+      let smtpSSL = 'true';
+
+      if (configs) {
+        configs.forEach((config: any) => {
+          if (config.chave === 'smtp_host') smtpHost = config.valor;
+          if (config.chave === 'smtp_port') smtpPort = config.valor;
+          if (config.chave === 'smtp_user') smtpUser = config.valor;
+          if (config.chave === 'smtp_pass') smtpPass = config.valor;
+          if (config.chave === 'smtp_from') smtpFrom = config.valor;
+          if (config.chave === 'smtp_ssl') smtpSSL = config.valor;
+        });
+
+        // Church-specific overrides if the user is linked to an igreja
+        if (data.id_igreja) {
+          configs.forEach((config: any) => {
+            if (config.chave === `smtp_host_${data.id_igreja}`) smtpHost = config.valor;
+            if (config.chave === `smtp_port_${data.id_igreja}`) smtpPort = config.valor;
+            if (config.chave === `smtp_user_${data.id_igreja}`) smtpUser = config.valor;
+            if (config.chave === `smtp_pass_${data.id_igreja}`) smtpPass = config.valor;
+            if (config.chave === `smtp_from_${data.id_igreja}`) smtpFrom = config.valor;
+            if (config.chave === `smtp_ssl_${data.id_igreja}`) smtpSSL = config.valor;
+          });
+        }
+      }
+
+      if (smtpHost && smtpUser && smtpPass && smtpFrom) {
+        // Send email via our custom SMTP API route
+        const response = await fetch('/api/send-recovery-email', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            host: smtpHost,
+            port: smtpPort,
+            user: smtpUser,
+            pass: smtpPass,
+            from: smtpFrom,
+            secure: smtpSSL === 'true',
+            to: recoveryEmail.trim(),
+            code,
+            userName: data.nome || 'Membro',
+          }),
+        });
+
+        const resData = await response.json();
+        if (!response.ok) {
+          throw new Error(resData.error || 'Erro desconhecido ao enviar e-mail.');
+        }
+
+        setSentViaSmtp(true);
+        setSuccess(`Código de recuperação enviado para o e-mail: ${recoveryEmail.trim()}`);
+      } else {
+        // SMTP not configured, fallback gracefully so preview environment is always testable
+        setSentViaSmtp(false);
+        setSuccess(`[Demonstração] O SMTP não está configurado. O código de recuperação foi gerado.`);
+      }
       setView('verify');
     } catch (err: any) {
-      setError('Erro ao processar a solicitação de recuperação.');
+      setError(`Erro ao processar recuperação de senha: ${err.message || err}`);
       console.error(err);
     } finally {
       setRecoveryLoading(false);
@@ -341,19 +417,30 @@ export default function LoginPage() {
               </div>
             )}
 
-            <div className="p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-250 dark:border-amber-900/40 rounded-2xl">
-              <p className="text-[10px] font-black uppercase text-amber-800 dark:text-amber-400 tracking-wider">
-                Código Enviado (Demonstração)
-              </p>
-              <p className="text-xs font-bold text-slate-700 dark:text-slate-300 mt-1 leading-relaxed">
-                Utilize o código gerado abaixo para prosseguir com a redefinição de <strong className="text-secondary">{recoveryEmail}</strong>:
-              </p>
-              <div className="mt-2.5 flex justify-center">
-                <span className="bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-800 text-lg font-black tracking-[0.4em] pl-2.5 py-1.5 rounded-xl text-center shadow-sm select-all">
-                  {recoveryCode}
-                </span>
+            {sentViaSmtp ? (
+              <div className="p-4 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-250 dark:border-emerald-900/40 rounded-2xl">
+                <p className="text-[10px] font-black uppercase text-emerald-800 dark:text-emerald-400 tracking-wider">
+                  E-mail Enviado com Sucesso
+                </p>
+                <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 mt-1 leading-relaxed">
+                  O código de recuperação foi enviado para o e-mail cadastrado <strong className="text-secondary">{recoveryEmail}</strong> utilizando o Servidor SMTP Customizado. Por favor, verifique sua caixa de entrada e de spam.
+                </p>
               </div>
-            </div>
+            ) : (
+              <div className="p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-250 dark:border-amber-900/40 rounded-2xl">
+                <p className="text-[10px] font-black uppercase text-amber-800 dark:text-amber-400 tracking-wider">
+                  Código Gerado (Demonstração / Sem SMTP)
+                </p>
+                <p className="text-xs font-bold text-slate-700 dark:text-slate-300 mt-1 leading-relaxed">
+                  Como as configurações de SMTP Customizado não foram totalmente preenchidas no sistema, o código foi gerado abaixo para fins de demonstração:
+                </p>
+                <div className="mt-2.5 flex justify-center">
+                  <span className="bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-800 text-lg font-black tracking-[0.4em] pl-2.5 py-1.5 rounded-xl text-center shadow-sm select-all">
+                    {recoveryCode}
+                  </span>
+                </div>
+              </div>
+            )}
 
             <form onSubmit={handleVerifyCode} className="space-y-6">
               <div>
