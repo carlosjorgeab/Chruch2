@@ -341,9 +341,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return true;
     }
     
-    // 2) is_admin (but not id_master) has full access EXCEPT for /igrejas and /configuracoes
+    // 2) is_admin (but not id_master) has full access EXCEPT for /igrejas
     if (user.is_admin) {
-      if (menu === '/igrejas' || menu === '/configuracoes') {
+      if (menu === '/igrejas') {
         return false;
       }
       return true;

@@ -11,7 +11,7 @@ export default function ConfiguracoesPage() {
   const { user, hasPermission } = useAuth();
   const { selectedIgreja } = useIgreja();
   
-  const canEdit = user?.id_master || false;
+  const canEdit = user?.id_master || user?.is_admin || false;
 
   const [activeTab, setActiveTab] = useState('geral');
   const [darkMode, setDarkMode] = useState(false);
@@ -281,12 +281,21 @@ export default function ConfiguracoesPage() {
     { id: 'traducoes', label: 'Idiomas & Traduções', icon: Globe },
     { id: 'seguranca', label: 'Segurança', icon: Shield },
     { id: 'notificacoes', label: 'Notificações', icon: Bell },
+    { id: 'servidores', label: 'Servidores', icon: Mail },
     { id: 'database', label: 'Banco de Dados', icon: Database },
   ];
 
+  const allowedTabs = tabs.filter(tab => {
+    if (user?.id_master) return true;
+    if (user?.is_admin) {
+      return tab.id === 'geral' || tab.id === 'notificacoes';
+    }
+    return false;
+  });
+
   if (!mounted) return null;
 
-  if (!user?.id_master) {
+  if (!user?.id_master && !user?.is_admin) {
     return (
       <div className="p-8 flex items-center justify-center min-h-[60vh]">
         <div className="max-w-md w-full bg-white dark:bg-slate-800 p-8 rounded-2xl shadow-md border border-slate-200 dark:border-slate-700 text-center space-y-4">
@@ -295,7 +304,7 @@ export default function ConfiguracoesPage() {
           </div>
           <h2 className="text-xl font-bold text-slate-900 dark:text-white">Acesso Restrito</h2>
           <p className="text-slate-500 dark:text-slate-400 text-sm">
-            Somente o usuário Master do sistema tem acesso a este módulo.
+            Somente usuários Administradores ou Master do sistema têm acesso a este módulo.
           </p>
         </div>
       </div>
@@ -330,7 +339,7 @@ export default function ConfiguracoesPage() {
       <div className="flex flex-col md:flex-row gap-8">
         {/* Sidebar de Configurações */}
         <div className="w-full md:w-64 space-y-2">
-          {tabs.map(tab => {
+          {allowedTabs.map(tab => {
             const Icon = tab.icon;
             return (
               <button
@@ -738,6 +747,36 @@ export default function ConfiguracoesPage() {
                     </div>
                   </div>
 
+                </div>
+              )}
+
+              <div className="pt-8 flex justify-end">
+                <button 
+                  onClick={handleSave}
+                  disabled={saving || loading || !canEdit}
+                  className="flex items-center gap-2 bg-slate-900 dark:bg-white dark:text-slate-900 text-white px-8 py-3 rounded-xl font-bold transition-all shadow-lg hover:opacity-90 active:scale-95 disabled:opacity-50"
+                >
+                  {saving ? <RefreshCw size={18} className="animate-spin" /> : <Save size={18} />}
+                  {saving ? 'Salvando...' : 'Salvar Alterações'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'servidores' && (
+            <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
+              <div className="border-b border-slate-100 dark:border-slate-700 pb-4">
+                <h3 className="text-xl font-black font-headline text-slate-900 dark:text-white uppercase">Servidores & Integrações</h3>
+                <p className="text-slate-500 dark:text-slate-400 text-sm">Configure as conexões de servidores e SMTP do sistema</p>
+              </div>
+
+              {loading ? (
+                <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+                  <RefreshCw size={32} className="animate-spin mb-4" />
+                  <p className="font-bold uppercase tracking-widest text-xs">Carregando...</p>
+                </div>
+              ) : (
+                <div className="space-y-6">
                   {/* SMTP Custom Server Configuration - Beautiful Glassmorphic layout */}
                   <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 p-6 rounded-[2rem] shadow-sm space-y-6">
                     <div className="flex items-center gap-4 pb-4 border-b border-slate-100 dark:border-slate-800">

@@ -31,7 +31,7 @@ export function Sidebar({ isOpen = false, setIsOpen }: { isOpen?: boolean, setIs
   ].filter(item => {
     if (user?.id_master) return true;
     if (user?.is_admin) {
-      if (item.id === '/igrejas' || item.id === '/configuracoes') {
+      if (item.id === '/igrejas') {
         return false;
       }
       return true;
