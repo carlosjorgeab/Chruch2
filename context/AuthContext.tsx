@@ -354,7 +354,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return false;
     }
     
-    if (menu === '/' || menu === '/mapa' || menu === '/formularios' || menu === '/mural') return true; // Always allowed
+    if (menu === '/' || menu === '/mapa' || menu === '/formularios') return true; // Always allowed
     if (!user.perfil) return false;
     const perms = Array.isArray(user.perfil.permissoes) ? user.perfil.permissoes : [];
     return perms.includes(menu);
