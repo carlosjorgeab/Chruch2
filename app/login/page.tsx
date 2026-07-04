@@ -146,16 +146,35 @@ export default function LoginPage() {
           if (config.chave === 'smtp_ssl') smtpSSL = config.valor;
         });
 
-        // Church-specific overrides if the user is linked to an igreja
+        // Church-specific overrides if the user is linked to an igreja and it has a configured host
         if (userIgrejaId) {
-          configs.forEach((config: any) => {
-            if (config.chave === `smtp_host_${userIgrejaId}`) smtpHost = config.valor;
-            if (config.chave === `smtp_port_${userIgrejaId}`) smtpPort = config.valor;
-            if (config.chave === `smtp_user_${userIgrejaId}`) smtpUser = config.valor;
-            if (config.chave === `smtp_pass_${userIgrejaId}`) smtpPass = config.valor;
-            if (config.chave === `smtp_from_${userIgrejaId}`) smtpFrom = config.valor;
-            if (config.chave === `smtp_ssl_${userIgrejaId}`) smtpSSL = config.valor;
-          });
+          const hasChurchSmtp = configs.some((config: any) => config.chave === `smtp_host_${userIgrejaId}` && config.valor);
+          if (hasChurchSmtp) {
+            configs.forEach((config: any) => {
+              if (config.chave === `smtp_host_${userIgrejaId}`) smtpHost = config.valor;
+              if (config.chave === `smtp_port_${userIgrejaId}`) smtpPort = config.valor;
+              if (config.chave === `smtp_user_${userIgrejaId}`) smtpUser = config.valor;
+              if (config.chave === `smtp_pass_${userIgrejaId}`) smtpPass = config.valor;
+              if (config.chave === `smtp_from_${userIgrejaId}`) smtpFrom = config.valor;
+              if (config.chave === `smtp_ssl_${userIgrejaId}`) smtpSSL = config.valor;
+            });
+          }
+        }
+
+        // System-wide fallback: if smtpHost is still empty, find ANY other church's SMTP settings in the database to use
+        if (!smtpHost) {
+          const anySmtpConfig = configs.find((config: any) => config.chave.startsWith('smtp_host_') && config.valor);
+          if (anySmtpConfig) {
+            const churchIdSuffix = anySmtpConfig.chave.replace('smtp_host_', '');
+            configs.forEach((config: any) => {
+              if (config.chave === `smtp_host_${churchIdSuffix}`) smtpHost = config.valor;
+              if (config.chave === `smtp_port_${churchIdSuffix}`) smtpPort = config.valor;
+              if (config.chave === `smtp_user_${churchIdSuffix}`) smtpUser = config.valor;
+              if (config.chave === `smtp_pass_${churchIdSuffix}`) smtpPass = config.valor;
+              if (config.chave === `smtp_from_${churchIdSuffix}`) smtpFrom = config.valor;
+              if (config.chave === `smtp_ssl_${churchIdSuffix}`) smtpSSL = config.valor;
+            });
+          }
         }
       }
 
