@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { useIgreja } from '@/context/IgrejaContext';
 import { useConfirm } from '@/context/ConfirmContext';
-import { Plus, Edit2, Trash2, Save, Users } from 'lucide-react';
+import { Plus, Edit2, Trash2, Save, Users, Upload, X, RefreshCw } from 'lucide-react';
 
 type Usuario = {
   id: string;
@@ -39,6 +39,47 @@ export default function UsuariosPage() {
     foto_url: ''
   });
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  const [isDragging, setIsDragging] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+
+  const handleFileSelection = async (selectedFiles: File[]) => {
+    if (selectedFiles.length === 0) return;
+    const file = selectedFiles[0]; // ONLY ONE foto de perfil
+    
+    setIsUploading(true);
+    setError('');
+    setSuccess('');
+    
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const response = await fetch('/api/financeiro/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Erro inesperado no servidor de carregamento.');
+      }
+      
+      if (result.success && result.url) {
+        setCurrentUser(prev => ({ ...prev, foto_url: result.url }));
+        setSuccess(`Sucesso: "${file.name}" foi salvo com segurança e definido como foto de perfil!`);
+      } else {
+        throw new Error('Formato de resposta inválido do servidor ao carregar.');
+      }
+    } catch (err: any) {
+      console.error('Erro de upload ao MEGA:', err);
+      setError(`Erro no upload de "${file.name}": ${err.message || err}`);
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   async function fetchData() {
     if (!selectedIgreja?.id) {
@@ -177,6 +218,8 @@ export default function UsuariosPage() {
           <button 
             onClick={() => { 
               setCurrentUser({ nome: '', email: '', senha: '', id_perfil: '', id_igreja: selectedIgreja?.id || '', is_admin: false }); 
+              setError('');
+              setSuccess('');
               setIsEditing(true); 
             }}
             className="flex items-center gap-2 bg-amber-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-amber-700 transition-colors"
@@ -192,6 +235,7 @@ export default function UsuariosPage() {
           <h2 className="text-lg font-bold mb-4">{currentUser.id ? 'Editar Usuário' : 'Novo Usuário'}</h2>
           
           {error && <div className="mb-4 p-3 bg-red-50 text-red-600 rounded-lg text-sm">{error}</div>}
+          {success && <div className="mb-4 p-3 bg-green-50 text-green-600 rounded-lg text-sm">{success}</div>}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="md:col-span-2">
@@ -230,14 +274,104 @@ export default function UsuariosPage() {
             </div>
 
             <div className="md:col-span-2">
-              <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">URL da Imagem de Perfil</label>
-              <input 
-                type="text" 
-                value={currentUser.foto_url || ''} 
-                onChange={(e) => setCurrentUser({...currentUser, foto_url: e.target.value})}
-                className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500 outline-none"
-                placeholder="https://exemplo.com/foto.jpg"
-              />
+              <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Foto de Perfil (URL ou Upload)</label>
+              <div className="space-y-3">
+                <input 
+                  type="text" 
+                  value={currentUser.foto_url || ''} 
+                  onChange={(e) => setCurrentUser({...currentUser, foto_url: e.target.value})}
+                  className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500 outline-none"
+                  placeholder="https://exemplo.com/foto.jpg"
+                />
+
+                {/* If foto_url is empty, show the Drag & Drop area */}
+                {!(currentUser.foto_url && currentUser.foto_url.trim() !== '') && (
+                  <div
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      if (!isUploading) setIsDragging(true);
+                    }}
+                    onDragLeave={() => {
+                      setIsDragging(false);
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setIsDragging(false);
+                      if (isUploading) return;
+                      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                        handleFileSelection(Array.from(e.dataTransfer.files));
+                      }
+                    }}
+                    onClick={() => {
+                      if (!isUploading) {
+                        document.getElementById('usuario-photo-upload-input')?.click();
+                      }
+                    }}
+                    className={`p-4 rounded-xl border-2 border-dashed transition-all duration-200 text-center flex flex-col items-center justify-center gap-2 ${
+                      isDragging
+                        ? 'border-amber-500 bg-amber-50/20 dark:bg-amber-955/20 cursor-pointer'
+                        : isUploading
+                          ? 'border-amber-500/50 bg-amber-50/5 dark:bg-amber-955/5 cursor-wait opacity-80'
+                          : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 hover:border-amber-500/55 cursor-pointer'
+                    }`}
+                  >
+                    <input
+                      type="file"
+                      id="usuario-photo-upload-input"
+                      className="hidden"
+                      accept="image/*"
+                      disabled={isUploading}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files.length > 0) {
+                          handleFileSelection(Array.from(e.target.files));
+                        }
+                      }}
+                    />
+                    
+                    {isUploading ? (
+                      <>
+                        <div className="w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+                        <span className="text-[11px] font-bold text-amber-500 animate-pulse">Enviando foto...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Upload size={20} className="text-amber-500" />
+                        <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                          Arraste e solte a foto aqui, ou <span className="text-amber-600 dark:text-amber-400 font-bold underline">clique para selecionar</span>.
+                        </span>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {/* If foto_url has value, show a tiny preview with a clear option */}
+                {currentUser.foto_url && currentUser.foto_url.trim() !== '' && (
+                  <div className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-700">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={currentUser.foto_url}
+                      alt="Prévia"
+                      className="w-12 h-12 rounded-lg object-cover border border-slate-200"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop';
+                      }}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Foto Selecionada</p>
+                      <p className="text-xs text-slate-600 dark:text-slate-350 truncate">{currentUser.foto_url}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setCurrentUser(prev => ({ ...prev, foto_url: '' }))}
+                      className="p-1 text-red-500 hover:bg-red-50 dark:hover:bg-red-955/20 rounded transition-colors"
+                      title="Remover foto"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="md:col-span-2 flex flex-col sm:flex-row gap-4 p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
@@ -352,7 +486,7 @@ export default function UsuariosPage() {
                       <td className="p-4 text-right">
                         <div className="flex justify-end gap-2">
                           <button 
-                            onClick={() => { setCurrentUser(u); setIsEditing(true); }}
+                            onClick={() => { setCurrentUser(u); setError(''); setSuccess(''); setIsEditing(true); }}
                             className="p-2 text-slate-400 hover:text-amber-500 transition-colors rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
                           >
                             <Edit2 size={18} />

@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { useIgreja } from '@/context/IgrejaContext';
 import { useAuth } from '@/context/AuthContext';
 import { useConfirm } from '@/context/ConfirmContext';
-import { Plus, Edit2, Trash2, Save, X, Search, Check, RefreshCw, UserCheck, FileText, Calendar, Printer } from 'lucide-react';
+import { Plus, Edit2, Trash2, Save, X, Search, Check, RefreshCw, UserCheck, FileText, Calendar, Printer, Upload } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { formatCPF, formatTelefone, formatCEP, validateCPF } from '@/lib/masks';
@@ -83,6 +83,46 @@ export default function MembrosPage() {
 
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+
+  const [isDragging, setIsDragging] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+
+  const handleFileSelection = async (selectedFiles: File[]) => {
+    if (selectedFiles.length === 0) return;
+    const file = selectedFiles[0]; // ONLY ONE foto de perfil
+    
+    setIsUploading(true);
+    setError('');
+    setSuccess('');
+    
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const response = await fetch('/api/financeiro/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Erro inesperado no servidor de carregamento.');
+      }
+      
+      if (result.success && result.url) {
+        setCurrentMembro(prev => ({ ...prev, foto_url: result.url }));
+        setSuccess(`Sucesso: "${file.name}" foi salvo com segurança e definido como foto de perfil!`);
+      } else {
+        throw new Error('Formato de resposta inválido do servidor ao carregar.');
+      }
+    } catch (err: any) {
+      console.error('Erro de upload ao MEGA:', err);
+      setError(`Erro no upload de "${file.name}": ${err.message || err}`);
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   // Report Modal states
   const [isReportOpen, setIsReportOpen] = useState(false);
@@ -812,15 +852,105 @@ export default function MembrosPage() {
 
             <div>
               <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
-                Foto de Perfil (URL Opcional)
+                Foto de Perfil (URL ou Upload)
               </label>
-              <input
-                type="text"
-                value={currentMembro.foto_url || ''}
-                onChange={(e) => setCurrentMembro({ ...currentMembro, foto_url: e.target.value })}
-                className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-semibold"
-                placeholder="Link da imagem para foto"
-              />
+              <div className="space-y-3">
+                <input
+                  type="text"
+                  value={currentMembro.foto_url || ''}
+                  onChange={(e) => setCurrentMembro({ ...currentMembro, foto_url: e.target.value })}
+                  className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-semibold text-xs"
+                  placeholder="Link da imagem para foto"
+                />
+
+                {/* If foto_url is empty, show the Drag & Drop area */}
+                {!(currentMembro.foto_url && currentMembro.foto_url.trim() !== '') && (
+                  <div
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      if (!isUploading) setIsDragging(true);
+                    }}
+                    onDragLeave={() => {
+                      setIsDragging(false);
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setIsDragging(false);
+                      if (isUploading) return;
+                      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                        handleFileSelection(Array.from(e.dataTransfer.files));
+                      }
+                    }}
+                    onClick={() => {
+                      if (!isUploading) {
+                        document.getElementById('membro-photo-upload-input')?.click();
+                      }
+                    }}
+                    className={`p-4 rounded-xl border-2 border-dashed transition-all duration-200 text-center flex flex-col items-center justify-center gap-2 ${
+                      isDragging
+                        ? 'border-amber-500 bg-amber-50/20 dark:bg-amber-955/20 cursor-pointer'
+                        : isUploading
+                          ? 'border-amber-500/50 bg-amber-50/5 dark:bg-amber-955/5 cursor-wait opacity-80'
+                          : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 hover:border-amber-500/55 cursor-pointer'
+                    }`}
+                  >
+                    <input
+                      type="file"
+                      id="membro-photo-upload-input"
+                      className="hidden"
+                      accept="image/*"
+                      disabled={isUploading}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files.length > 0) {
+                          handleFileSelection(Array.from(e.target.files));
+                        }
+                      }}
+                    />
+                    
+                    {isUploading ? (
+                      <>
+                        <div className="w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+                        <span className="text-[11px] font-bold text-amber-500 animate-pulse">Enviando foto...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Upload size={20} className="text-amber-500" />
+                        <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                          Arraste e solte a foto aqui, ou <span className="text-amber-600 dark:text-amber-400 font-bold underline">clique para selecionar</span>.
+                        </span>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {/* If foto_url has value, show a tiny preview with a clear option */}
+                {currentMembro.foto_url && currentMembro.foto_url.trim() !== '' && (
+                  <div className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-700">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={currentMembro.foto_url}
+                      alt="Prévia"
+                      className="w-12 h-12 rounded-lg object-cover border border-slate-200"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop';
+                      }}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Foto Selecionada</p>
+                      <p className="text-xs text-slate-600 dark:text-slate-350 truncate">{currentMembro.foto_url}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setCurrentMembro(prev => ({ ...prev, foto_url: '' }))}
+                      className="p-1 text-red-500 hover:bg-red-50 dark:hover:bg-red-955/20 rounded transition-colors"
+                      title="Remover foto"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
 
             <div>
