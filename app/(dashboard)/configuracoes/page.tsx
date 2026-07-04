@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { Settings, Save, Bell, Shield, Globe, Moon, Clock, Lock, MonitorStop, RefreshCw, CheckCircle, AlertTriangle, Database, FileText, Copy, Check, UserPlus, Cake, BookOpen, Mail } from 'lucide-react';
+import { Settings, Save, Bell, Shield, Globe, Moon, Clock, Lock, MonitorStop, RefreshCw, CheckCircle, AlertTriangle, Database, FileText, Copy, Check, UserPlus, Cake, BookOpen, Mail, Send } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useLanguage } from '@/context/LanguageContext';
 import { defaultTranslations } from '@/lib/translations';
@@ -36,6 +36,11 @@ export default function ConfiguracoesPage() {
   const [smtpPass, setSmtpPass] = useState('');
   const [smtpFrom, setSmtpFrom] = useState('');
   const [smtpSSL, setSmtpSSL] = useState(true);
+
+  // SMTP Testing states
+  const [testEmailDest, setTestEmailDest] = useState('');
+  const [testingSMTP, setTestingSMTP] = useState(false);
+  const [testSmtpResult, setTestSmtpResult] = useState<{ success: boolean; message: string } | null>(null);
 
   const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -273,6 +278,44 @@ export default function ConfiguracoesPage() {
       setStatusMessage({ type: 'error', text: 'Erro ao salvar as configurações: ' + (error.message || error) });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleTestSMTP = async () => {
+    if (!testEmailDest || !testEmailDest.trim()) {
+      setTestSmtpResult({ success: false, message: 'Digite um e-mail de destino válido para o teste.' });
+      return;
+    }
+    setTestingSMTP(true);
+    setTestSmtpResult(null);
+    try {
+      const response = await fetch('/api/send-test-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          host: smtpHost,
+          port: smtpPort,
+          user: smtpUser,
+          pass: smtpPass,
+          from: smtpFrom,
+          secure: smtpSSL,
+          to: testEmailDest,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Falha ao processar teste de e-mail no servidor.');
+      }
+
+      setTestSmtpResult({ success: true, message: data.message || 'E-mail de teste enviado com sucesso!' });
+    } catch (error: any) {
+      console.error('Test SMTP Error:', error);
+      setTestSmtpResult({ success: false, message: error.message || 'Erro ao tentar enviar o e-mail de teste.' });
+    } finally {
+      setTestingSMTP(false);
     }
   };
 
@@ -879,6 +922,77 @@ export default function ConfiguracoesPage() {
                           </div>
                         </div>
                       </div>
+                    </div>
+                  </div>
+
+                  {/* SMTP Test Card */}
+                  <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 p-6 rounded-[2rem] shadow-sm space-y-6">
+                    <div className="flex items-center gap-4 pb-4 border-b border-slate-100 dark:border-slate-800">
+                      <div className="w-10 h-10 bg-[#E4A232]/10 rounded-xl flex items-center justify-center text-[#E4A232]">
+                        <Mail size={20} />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-black uppercase text-slate-900 dark:text-white tracking-widest">Testar Envio de E-mail</h4>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">Verifique se as configurações acima estão corretas realizando um disparo de teste</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+                        <div className="space-y-2">
+                          <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                            E-mail de Destino do Teste
+                          </label>
+                          <input
+                            type="email"
+                            placeholder="exemplo@igreja.com"
+                            value={testEmailDest}
+                            onChange={(e) => setTestEmailDest(e.target.value)}
+                            className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-750 bg-slate-50 dark:bg-slate-950/60 text-slate-900 dark:text-white font-bold text-sm focus:border-primary focus:bg-white dark:focus:bg-slate-900 transition outline-none"
+                            disabled={testingSMTP}
+                          />
+                        </div>
+                        <div>
+                          <button
+                            type="button"
+                            onClick={handleTestSMTP}
+                            disabled={testingSMTP || !canEdit}
+                            className="w-full flex items-center justify-center gap-2 bg-amber-600 hover:bg-amber-700 text-white px-6 py-3 rounded-xl font-bold transition-all shadow-md active:scale-95 disabled:opacity-50 cursor-pointer text-sm"
+                          >
+                            {testingSMTP ? (
+                              <>
+                                <RefreshCw size={16} className="animate-spin" />
+                                <span>Enviando Teste...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Send size={16} />
+                                <span>Enviar E-mail de Teste</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+
+                      {testSmtpResult && (
+                        <div className={`p-4 rounded-xl border flex items-start gap-3 ${
+                          testSmtpResult.success 
+                            ? 'bg-emerald-50/80 border-emerald-200 text-emerald-800 dark:bg-emerald-950/30 dark:border-emerald-900/50 dark:text-emerald-400' 
+                            : 'bg-red-50/80 border-red-200 text-red-800 dark:bg-red-950/30 dark:border-red-900/50 dark:text-red-400'
+                        }`}>
+                          <div className="mt-0.5 shrink-0">
+                            {testSmtpResult.success ? (
+                              <CheckCircle size={18} className="text-emerald-600 dark:text-emerald-400" />
+                            ) : (
+                              <AlertTriangle size={18} className="text-red-600 dark:text-red-400" />
+                            )}
+                          </div>
+                          <div>
+                            <p className="text-xs font-bold">{testSmtpResult.success ? 'Conexão Bem Sucedida!' : 'Falha na Conexão SMTP'}</p>
+                            <p className="text-[11px] mt-1 font-semibold leading-relaxed">{testSmtpResult.message}</p>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

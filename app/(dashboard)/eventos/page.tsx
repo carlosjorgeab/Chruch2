@@ -29,6 +29,8 @@ import {
   Users
 } from 'lucide-react';
 import { motion } from 'motion/react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 // Type definitions matching DB and requested features
 type Evento = {
@@ -354,6 +356,111 @@ export default function EventosPage() {
     setIsModalOpen(true);
     setError('');
     setSuccess('');
+  };
+
+  const generateParticipantsReport = async (evt: Evento) => {
+    try {
+      const { data, error: err } = await supabase
+        .from('eventos_inscricoes')
+        .select(`
+          id,
+          tipo_participante,
+          nome_visitante,
+          valor_pago,
+          pago,
+          created_at,
+          membro:membros (
+            nome
+          )
+        `)
+        .eq('id_evento', evt.id)
+        .order('created_at', { ascending: true });
+
+      if (err) throw err;
+
+      if (!data || data.length === 0) {
+        alert('Este evento ainda não possui participantes inscritos para gerar o relatório.');
+        return;
+      }
+
+      const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+      });
+
+      const churchName = selectedIgreja?.nome || 'Minha Congregação';
+      const docTitle = `RELATÓRIO DE INSCRITOS - ${evt.titulo.toUpperCase()}`;
+      const generationDate = new Date().toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+
+      // Style PDF Brand Header Card (all lines in black style)
+      doc.setFillColor(255, 255, 255);
+      doc.setDrawColor(0, 0, 0);
+      doc.setLineWidth(0.4);
+      doc.rect(10, 10, 190, 24, 'FD');
+
+      doc.setTextColor(0, 0, 0);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.text(churchName.toUpperCase(), 15, 17);
+
+      doc.setFontSize(9);
+      doc.text(docTitle, 15, 23);
+
+      doc.setTextColor(80, 80, 80);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.text(`Gerado em: ${generationDate}  |  Total de Inscritos: ${data.length}`, 15, 29);
+
+      const tableHeaders = ['Nome do Participante', 'Categoria', 'Valor de Inscrição', 'Situação do Pagamento', 'Data Inscrição'];
+      const tableRows = data.map((item: any) => {
+        const nome = item.tipo_participante === 'Membro' ? (item.membro?.nome || 'Membro Não Encontrado') : (item.nome_visitante || 'Visitante');
+        const categoria = item.tipo_participante === 'Membro' ? 'Membro' : 'Visitante';
+        const valor = item.valor_pago ? `R$ ${Number(item.valor_pago).toFixed(2)}` : 'R$ 0,00';
+        const status = item.pago ? 'Pago' : 'Pendente';
+        const dataInsc = item.created_at ? new Date(item.created_at).toLocaleDateString('pt-BR') : '-';
+        return [nome, categoria, valor, status, dataInsc];
+      });
+
+      autoTable(doc, {
+        startY: 38,
+        head: [tableHeaders],
+        body: tableRows,
+        theme: 'striped',
+        headStyles: {
+          fillColor: [0, 0, 0],
+          textColor: [255, 255, 255],
+          fontStyle: 'bold',
+          fontSize: 9,
+          valign: 'middle',
+          lineColor: [0, 0, 0],
+          lineWidth: 0.1,
+        },
+        bodyStyles: {
+          fontSize: 8.5,
+          valign: 'middle',
+          textColor: [0, 0, 0],
+          lineColor: [0, 0, 0],
+          lineWidth: 0.1,
+        },
+        styles: {
+          font: 'helvetica',
+          cellPadding: 4,
+          overflow: 'linebreak',
+        }
+      });
+
+      doc.save(`relatorio-inscritos-${evt.titulo.toLowerCase().replace(/\s+/g, '-')}.pdf`);
+    } catch (e: any) {
+      console.error('Error generating PDF:', e);
+      alert('Não foi possível gerar o relatório de participantes.');
+    }
   };
 
   const handleOpenEditEvent = (evt: Evento) => {
@@ -1121,9 +1228,9 @@ export default function EventosPage() {
 
                       {evt.qtd_vagas ? (
                         <div className={`text-[10px] font-black uppercase ${
-                          isEsgotado ? 'text-red-550' : 'text-slate-450'
+                          isEsgotado ? 'text-red-600 dark:text-red-400 font-black animate-pulse' : 'text-slate-600 dark:text-slate-350'
                         }`}>
-                          {isEsgotado ? 'Esgotado' : `${vagasDisponiveis} / ${evt.qtd_vagas} Vagas`}
+                          {isEsgotado ? 'Esgotado (0 vagas restantes)' : `${vagasDisponiveis} vagas restantes`}
                         </div>
                       ) : (
                         <div className="text-[10px] text-slate-450 font-bold uppercase">
@@ -1134,18 +1241,29 @@ export default function EventosPage() {
                   </div>
 
                   {/* Operational Footer action bar */}
-                  <div className="bg-slate-50 dark:bg-slate-900/40 border-t border-slate-100 dark:border-slate-850 px-6 py-4 flex justify-between items-center">
-                    <button
-                      onClick={() => handleOpenEditEvent(evt)}
-                      className="text-[10px] font-black text-[#E4A232] hover:underline uppercase tracking-wider flex items-center gap-1 cursor-pointer"
-                    >
-                      Gerenciar Detalhes
-                      <ChevronRight size={12} className="group-hover:translate-x-0.5 transition" />
-                    </button>
+                  <div className="bg-slate-50 dark:bg-slate-900/40 border-t border-slate-100 dark:border-slate-850 px-6 py-4 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+                    <div className="flex flex-wrap items-center gap-4">
+                      <button
+                        onClick={() => handleOpenEditEvent(evt)}
+                        className="text-[10px] font-black text-[#E4A232] hover:underline uppercase tracking-wider flex items-center gap-1 cursor-pointer"
+                      >
+                        Gerenciar Detalhes
+                        <ChevronRight size={12} className="group-hover:translate-x-0.5 transition" />
+                      </button>
+
+                      <button
+                        onClick={() => generateParticipantsReport(evt)}
+                        className="text-[10px] font-black text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300 hover:underline uppercase tracking-wider flex items-center gap-1 cursor-pointer"
+                        title="Gerar Relatório de Participantes em PDF"
+                      >
+                        <Download size={12} />
+                        Gerar Relatório
+                      </button>
+                    </div>
 
                     <button
                       onClick={() => handleDeleteEvent(evt.id, evt.titulo)}
-                      className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50/50 dark:hover:bg-red-950/20 rounded-xl transition cursor-pointer"
+                      className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50/50 dark:hover:bg-red-950/20 rounded-xl transition cursor-pointer self-end sm:self-auto"
                       title="Excluir Evento"
                     >
                       <Trash2 size={14} />

@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
 
     // Check credentials inside environment variables
     const email = process.env.MEGA_EMAIL || 'app.chruch.management@gmail.com';
-    const password = process.env.MEGA_PASSWORD || 'Cjl@j232608';
+    const password = process.env.MEGA_PASSWORD || 'CJL@J232608';
 
     if (!email || !password) {
       return NextResponse.json({ 
@@ -54,10 +54,12 @@ export async function POST(req: NextRequest) {
       console.warn('Erro ao fechar sessão MEGA:', closeErr);
     }
 
+    const proxiedUrl = `/api/view-image?url=${encodeURIComponent(shareableLink)}`;
+
     return NextResponse.json({
       success: true,
       name: file.name,
-      url: shareableLink
+      url: proxiedUrl
     });
 
   } catch (err: any) {
