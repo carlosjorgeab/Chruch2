@@ -642,8 +642,8 @@ export default function Home() {
                   }
                 };
 
-                const isPdf = !hasVideoLink && item.arquivo_base64 && item.arquivo_base64.startsWith('data:application/pdf');
-                const isImage = !hasVideoLink && item.arquivo_base64 && item.arquivo_base64.startsWith('data:image/');
+                const isPdf = !hasVideoLink && item.arquivo_base64 && (item.arquivo_base64.startsWith('data:application/pdf') || (item.arquivo_base64.startsWith('http') && (/\.pdf/i.test(item.arquivo_base64) || (item.arquivo_nome && /\.pdf$/i.test(item.arquivo_nome)))));
+                const isImage = !hasVideoLink && item.arquivo_base64 && (item.arquivo_base64.startsWith('data:image/') || (item.arquivo_base64.startsWith('http') && (!/\.pdf/i.test(item.arquivo_base64) && !(item.arquivo_nome && /\.pdf$/i.test(item.arquivo_nome)))));
 
                 let frameHeightClass = "h-[180px] md:h-[220px]";
                 if (isPdf) {
@@ -701,7 +701,7 @@ export default function Home() {
                         )}
 
                         {/* 4. Image base64 Uploaded file (with link overlay if present) */}
-                        {!hasVideoLink && item.arquivo_base64 && item.arquivo_base64.startsWith('data:image/') && (
+                        {!hasVideoLink && item.arquivo_base64 && isImage && (
                           item.url_midia ? (
                             <a
                               href={item.url_midia}
@@ -737,10 +737,10 @@ export default function Home() {
                         )}
 
                         {/* 5. PDF Uploaded file - Shows the PDF embedded directly, showing only the first page */}
-                        {!hasVideoLink && item.arquivo_base64 && item.arquivo_base64.startsWith('data:application/pdf') && (
+                        {!hasVideoLink && item.arquivo_base64 && isPdf && (
                           <div className="w-full h-full relative overflow-hidden rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-150 dark:border-slate-800 flex flex-col">
                             <iframe
-                              src={`${item.arquivo_base64.split('#')[0]}#page=1&toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
+                              src={item.arquivo_base64.startsWith('data:') ? `${item.arquivo_base64.split('#')[0]}#page=1&toolbar=0&navpanes=0&scrollbar=0&view=FitH` : `${item.arquivo_base64}#page=1&toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
                               className="w-full h-full object-cover pointer-events-none select-none overflow-hidden"
                               style={{ border: 0, overflow: 'hidden' }}
                               title={item.titulo}
@@ -752,10 +752,7 @@ export default function Home() {
                                   e.stopPropagation();
                                   const win = window.open();
                                   if (win) {
-                                    const basePdf = item.arquivo_base64 || '';
-                                    const pdfWithPageLimit = basePdf.includes('#') 
-                                      ? basePdf.split('#')[0] + '#page=1&toolbar=0&navpanes=0'
-                                      : basePdf + '#page=1&toolbar=0&navpanes=0';
+                                    const basePdf = item.arquivo_base64 || ''; const pdfUrl = basePdf.startsWith('data:') ? (basePdf.includes('#') ? basePdf.split('#')[0] : basePdf) : basePdf; const pdfWithPageLimit = `${pdfUrl}#page=1&toolbar=0&navpanes=0`;
                                     win.document.write(
                                       `<title>Visualização de PDF - ${item.arquivo_nome || 'Mural'}</title>` +
                                       `<iframe src="${pdfWithPageLimit}" frameborder="0" style="border:0; position:fixed; top:0; left:0; bottom:0; right:0; width:100%; height:100%;" allowfullscreen></iframe>`

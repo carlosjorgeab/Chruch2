@@ -297,6 +297,68 @@ export async function GET(req: NextRequest) {
     ALTER TABLE membros ADD COLUMN IF NOT EXISTS categoria VARCHAR(100);
     ALTER TABLE perfis ADD COLUMN IF NOT EXISTS id_igreja UUID REFERENCES igrejas(id) ON DELETE CASCADE;
 
+    -- 13. Create table mural_avisos
+    CREATE TABLE IF NOT EXISTS public.mural_avisos (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      id_igreja UUID REFERENCES public.igrejas(id) ON DELETE CASCADE,
+      titulo VARCHAR(255) NOT NULL,
+      url_midia TEXT,
+      arquivo_nome VARCHAR(255),
+      arquivo_base64 TEXT,
+      data_inicio DATE,
+      data_fim DATE,
+      status VARCHAR(20) DEFAULT 'Publicado' CHECK (status IN ('Publicado', 'Desativado')),
+      notificar_automatico BOOLEAN DEFAULT TRUE,
+      tempo_transicao INT DEFAULT 10,
+      ordem INT DEFAULT 0,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+    );
+
+    ALTER TABLE public.mural_avisos ADD COLUMN IF NOT EXISTS notificar_automatico BOOLEAN DEFAULT TRUE;
+    ALTER TABLE public.mural_avisos ADD COLUMN IF NOT EXISTS tempo_transicao INT DEFAULT 10;
+    ALTER TABLE public.mural_avisos ADD COLUMN IF NOT EXISTS ordem INT DEFAULT 0;
+
+    -- Setup storage bucket for mural_avisos
+    INSERT INTO storage.buckets (id, name, public)
+    VALUES ('mural_avisos', 'mural_avisos', true)
+    ON CONFLICT (id) DO NOTHING;
+
+    -- Create SELECT and write policies safely if not exist
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE tablename = 'objects' AND schemaname = 'storage' AND policyname = 'Public Access Mural'
+      ) THEN
+        CREATE POLICY "Public Access Mural" ON storage.objects
+        FOR SELECT USING (bucket_id = 'mural_avisos');
+      END IF;
+
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE tablename = 'objects' AND schemaname = 'storage' AND policyname = 'Allow Public Uploads Mural'
+      ) THEN
+        CREATE POLICY "Allow Public Uploads Mural" ON storage.objects
+        FOR INSERT WITH CHECK (bucket_id = 'mural_avisos');
+      END IF;
+
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE tablename = 'objects' AND schemaname = 'storage' AND policyname = 'Allow Public Updates Mural'
+      ) THEN
+        CREATE POLICY "Allow Public Updates Mural" ON storage.objects
+        FOR UPDATE USING (bucket_id = 'mural_avisos');
+      END IF;
+
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE tablename = 'objects' AND schemaname = 'storage' AND policyname = 'Allow Public Deletes Mural'
+      ) THEN
+        CREATE POLICY "Allow Public Deletes Mural" ON storage.objects
+        FOR DELETE USING (bucket_id = 'mural_avisos');
+      END IF;
+    END $$;
+
     -- Force reload schema cache for PostgREST
     NOTIFY pgrst, 'reload schema';
     `;

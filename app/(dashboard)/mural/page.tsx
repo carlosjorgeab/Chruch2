@@ -54,6 +54,8 @@ export default function MuralPage() {
   const [search, setSearch] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   const [currentMural, setCurrentMural] = useState<Partial<MuralAviso>>({
     titulo: '',
@@ -261,6 +263,7 @@ export default function MuralPage() {
   };
 
   const handleEdit = (mural: MuralAviso) => {
+    setSelectedFile(null);
     setCurrentMural({
       ...mural,
       notificar_automatico: mural.notificar_automatico !== false,
@@ -278,6 +281,7 @@ export default function MuralPage() {
       return;
     }
 
+    setSelectedFile(null);
     const todayStr = new Date().toISOString().split('T')[0];
     const nextWeek = new Date();
     nextWeek.setDate(nextWeek.getDate() + 7);
@@ -329,12 +333,13 @@ export default function MuralPage() {
     }
     const reader = new FileReader();
     reader.onloadend = () => {
+      setSelectedFile(file);
       setCurrentMural((prev) => ({
         ...prev,
         arquivo_nome: file.name,
         arquivo_base64: reader.result as string
       }));
-      setSuccess('Arquivo anexado com sucesso!');
+      setSuccess('Arquivo selecionado com sucesso! Clique em salvar para enviá-lo para o servidor.');
     };
     reader.onerror = () => {
       setError('Erro ao processar o arquivo.');
@@ -381,6 +386,7 @@ export default function MuralPage() {
   };
 
   const clearFile = () => {
+    setSelectedFile(null);
     setCurrentMural({
       ...currentMural,
       arquivo_nome: '',
@@ -395,32 +401,60 @@ export default function MuralPage() {
     e.preventDefault();
     setError('');
     setSuccess('');
+    setIsSaving(true);
 
     if (!selectedIgreja) {
       setError('Selecione uma congregação.');
+      setIsSaving(false);
       return;
     }
 
     if (!currentMural.titulo) {
       setError('O título do aviso é obrigatório.');
+      setIsSaving(false);
       return;
     }
 
-    const payload: any = {
-      id_igreja: selectedIgreja.id,
-      titulo: currentMural.titulo,
-      url_midia: currentMural.url_midia || null,
-      arquivo_nome: currentMural.arquivo_nome || null,
-      arquivo_base64: currentMural.arquivo_base64 || null,
-      data_inicio: currentMural.data_inicio || null,
-      data_fim: currentMural.data_fim || null,
-      status: currentMural.status || 'Publicado',
-      notificar_automatico: currentMural.notificar_automatico !== false,
-      tempo_transicao: currentMural.tempo_transicao || 10,
-      ordem: currentMural.ordem ?? 0
-    };
-
     try {
+      let finalFileUrl = currentMural.arquivo_base64 || null;
+
+      // Upload file to Supabase Storage if a new one was selected
+      if (selectedFile) {
+        const fileExt = selectedFile.name.split('.').pop();
+        const uniqueFileName = `${selectedIgreja.id}/${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
+
+        const { data: uploadData, error: uploadErr } = await supabase.storage
+          .from('mural_avisos')
+          .upload(uniqueFileName, selectedFile, {
+            cacheControl: '3600',
+            upsert: true
+          });
+
+        if (uploadErr) {
+          throw new Error('Erro no upload para o Storage do Supabase: ' + uploadErr.message);
+        }
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('mural_avisos')
+          .getPublicUrl(uniqueFileName);
+
+        finalFileUrl = publicUrl;
+      }
+
+      const payload: any = {
+        id_igreja: selectedIgreja.id,
+        titulo: currentMural.titulo,
+        url_midia: currentMural.url_midia || null,
+        arquivo_nome: currentMural.arquivo_nome || null,
+        arquivo_base64: finalFileUrl,
+        data_inicio: currentMural.data_inicio || null,
+        data_fim: currentMural.data_fim || null,
+        status: currentMural.status || 'Publicado',
+        notificar_automatico: currentMural.notificar_automatico !== false,
+        tempo_transicao: currentMural.tempo_transicao || 10,
+        ordem: currentMural.ordem ?? 0
+      };
+
       if (currentMural.id) {
         const { error: err } = await supabase
           .from('mural_avisos')
@@ -440,9 +474,12 @@ export default function MuralPage() {
 
       setSuccess('Aviso salvo e publicado com sucesso!');
       setIsEditing(false);
+      setSelectedFile(null);
       fetchMurais();
     } catch (e: any) {
       setError('Erro ao salvar aviso: ' + (e.message || e));
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -836,16 +873,27 @@ NOTIFY pgrst, 'reload schema';`}
             <button
               type="button"
               onClick={() => setIsEditing(false)}
-              className="px-6 py-3 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-bold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-950 transition-all uppercase text-xs tracking-wider cursor-pointer"
+              disabled={isSaving}
+              className="px-6 py-3 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-bold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-950 transition-all uppercase text-xs tracking-wider cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="flex items-center gap-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-8 py-3 rounded-xl font-bold transition-all shadow-md hover:opacity-90 uppercase text-xs tracking-widest cursor-pointer"
+              disabled={isSaving}
+              className="flex items-center gap-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-8 py-3 rounded-xl font-bold transition-all shadow-md hover:opacity-90 uppercase text-xs tracking-widest cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Save size={16} />
-              Salvar Aviso
+              {isSaving ? (
+                <>
+                  <RefreshCw size={16} className="animate-spin" />
+                  Enviando...
+                </>
+              ) : (
+                <>
+                  <Save size={16} />
+                  Salvar Aviso
+                </>
+              )}
             </button>
           </div>
         </form>
@@ -885,6 +933,10 @@ NOTIFY pgrst, 'reload schema';`}
                 const originalIndex = murais.findIndex(item => item.id === m.id);
                 const isImageFile = m.arquivo_base64 && (
                   m.arquivo_base64.startsWith('data:image/') ||
+                  (m.arquivo_base64.startsWith('http') && (
+                    /\.(png|jpe?g|gif|webp|svg)/i.test(m.arquivo_base64) ||
+                    (m.arquivo_nome && /\.(png|jpe?g|gif|webp|svg)$/i.test(m.arquivo_nome))
+                  )) ||
                   (m.arquivo_nome && /\.(png|jpe?g|gif|webp|svg)$/i.test(m.arquivo_nome))
                 );
 
@@ -1063,7 +1115,7 @@ NOTIFY pgrst, 'reload schema';`}
                       )}
 
                       {/* 4. Image base64 Uploaded file (with link overlay if present) */}
-                      {!(currentMural.url_midia && (isYouTube(currentMural.url_midia) || isVimeo(currentMural.url_midia) || isDirectVideo(currentMural.url_midia))) && currentMural.arquivo_base64 && currentMural.arquivo_base64.startsWith('data:image/') && (
+                      {!(currentMural.url_midia && (isYouTube(currentMural.url_midia) || isVimeo(currentMural.url_midia) || isDirectVideo(currentMural.url_midia))) && currentMural.arquivo_base64 && (currentMural.arquivo_base64.startsWith('data:image/') || (currentMural.arquivo_base64.startsWith('http') && (!/\.pdf/i.test(currentMural.arquivo_base64) && !(currentMural.arquivo_nome && /\.pdf$/i.test(currentMural.arquivo_nome))))) && (
                         currentMural.url_midia ? (
                           <a
                             href={currentMural.url_midia}
@@ -1099,7 +1151,7 @@ NOTIFY pgrst, 'reload schema';`}
                       )}
 
                       {/* 5. PDF Uploaded file */}
-                      {!(currentMural.url_midia && (isYouTube(currentMural.url_midia) || isVimeo(currentMural.url_midia) || isDirectVideo(currentMural.url_midia))) && currentMural.arquivo_base64 && currentMural.arquivo_base64.startsWith('data:application/pdf') && (
+                      {!(currentMural.url_midia && (isYouTube(currentMural.url_midia) || isVimeo(currentMural.url_midia) || isDirectVideo(currentMural.url_midia))) && currentMural.arquivo_base64 && (currentMural.arquivo_base64.startsWith('data:application/pdf') || (currentMural.arquivo_base64.startsWith('http') && (/\.pdf/i.test(currentMural.arquivo_base64) || (currentMural.arquivo_nome && /\.pdf$/i.test(currentMural.arquivo_nome))))) && (
                         <div className="p-8 text-center space-y-4 flex flex-col justify-center items-center h-full w-full">
                           <div className="p-4 bg-amber-50 dark:bg-amber-955/20 text-amber-600 rounded-2xl">
                             <FileText size={36} />
