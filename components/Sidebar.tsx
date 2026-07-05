@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Users, UsersRound, BookOpen, ClipboardCheck, Wallet, Settings, LogOut, Shield, Building, Briefcase, Megaphone, Calendar, Ticket } from 'lucide-react';
+import { LayoutDashboard, Users, UsersRound, BookOpen, ClipboardCheck, Wallet, Settings, LogOut, Shield, Building, Briefcase, Megaphone, Calendar, Ticket, Baby } from 'lucide-react';
 import { useIgreja } from '@/context/IgrejaContext';
 import { useAuth } from '@/context/AuthContext';
 import { Logo } from '@/components/Logo';
@@ -17,6 +17,7 @@ export function Sidebar({ isOpen = false, setIsOpen }: { isOpen?: boolean, setIs
     { href: '/', icon: LayoutDashboard, label: t('menu_dashboard'), disabled: false, id: '/' },
     { href: '/membros', icon: Users, label: t('menu_membros'), disabled: false, id: '/membros' },
     { href: '/comunidades', icon: UsersRound, label: t('menu_comunidades'), disabled: false, id: '/comunidades' },
+    { href: '/kids', icon: Baby, label: 'Kids', disabled: false, id: '/kids' },
     { href: '/agenda', icon: Calendar, label: 'Agenda da Igreja', disabled: false, id: '/agenda' },
     { href: '/eventos', icon: Ticket, label: 'Eventos', disabled: false, id: '/eventos' },
     { href: '/mural', icon: Megaphone, label: t('menu_mural'), disabled: false, id: '/mural' },
