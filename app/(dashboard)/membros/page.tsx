@@ -117,7 +117,7 @@ export default function MembrosPage() {
         throw new Error('Formato de resposta inválido do servidor ao carregar.');
       }
     } catch (err: any) {
-      console.error('Erro de upload ao MEGA:', err);
+      console.error('Erro de upload ao Supabase:', err);
       setError(`Erro no upload de "${file.name}": ${err.message || err}`);
     } finally {
       setIsUploading(false);

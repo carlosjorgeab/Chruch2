@@ -1038,12 +1038,12 @@ export default function FinanceiroPage() {
             nome_arquivo: file.name,
             url_arquivo: result.url
           }]);
-          setSuccess(`Sucesso: "${file.name}" foi salvo com segurança no MEGA.nz!`);
+          setSuccess(`Sucesso: "${file.name}" foi salvo com segurança no Supabase Storage!`);
         } else {
           throw new Error('Formato de resposta inválido do servidor ao carregar .');
         }
       } catch (err: any) {
-        console.error('Erro de upload ao MEGA:', err);
+        console.error('Erro de upload ao Supabase:', err);
         setError(`Erro no upload de "${file.name}": ${err.message || err}`);
       }
     }
@@ -1762,11 +1762,11 @@ export default function FinanceiroPage() {
                          ) : (
                            <Upload size={14} className="text-amber-500" />
                          )}
-                         Comprovantes & Anexos Financeiros {isUploading && <span className="text-amber-500 font-bold ml-1 animate-pulse">(Enviando para o MEGA...)</span>}
+                         Comprovantes & Anexos Financeiros {isUploading && <span className="text-amber-500 font-bold ml-1 animate-pulse">(Enviando para o Supabase...)</span>}
                        </h4>
                        {isUploading ? (
                          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-                           Enviando anexo de forma segura para os servidores do **MEGA.nz**, por favor aguarde...
+                           Enviando anexo de forma segura para os servidores do **Supabase Storage**, por favor aguarde...
                          </p>
                        ) : (
                          <p className="text-[11px] text-slate-450 mt-0.5">

@@ -12,6 +12,11 @@ export async function GET(req: NextRequest) {
       return new Response('Parâmetro "url" é obrigatório.', { status: 400 });
     }
 
+    // If it's not a MEGA URL, redirect the client to the direct public URL (e.g., Supabase)
+    if (!fileUrl.includes('mega.nz')) {
+      return NextResponse.redirect(fileUrl);
+    }
+
     // Load file attributes from the shareable URL
     const file = MegaFile.fromURL(fileUrl);
     await file.loadAttributes();
