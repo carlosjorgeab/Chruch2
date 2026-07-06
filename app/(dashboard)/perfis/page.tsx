@@ -27,6 +27,9 @@ const MENU_OPTIONS = [
   { id: '/financeiro/contas', label: 'Submódulo Financeiro: Contas' },
   { id: '/financeiro/categorias', label: 'Submódulo Financeiro: Categorias' },
   { id: '/financeiro/formas_pagamento', label: 'Submódulo Financeiro: Formas de Pagamento' },
+  { id: '/kids', label: 'Módulo Kids: Painel Operacional / Check-in' },
+  { id: '/kids/turmas', label: 'Módulo Kids: Turmas' },
+  { id: '/kids/salas', label: 'Módulo Kids: Salas' },
 ];
 
 export default function PerfisPage() {

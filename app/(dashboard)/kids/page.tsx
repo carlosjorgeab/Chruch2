@@ -55,7 +55,14 @@ interface SalaCrianca {
 
 export default function KidsModule() {
   const { selectedIgreja } = useIgreja();
-  const { user } = useAuth();
+  const { user, hasPermission } = useAuth();
+
+  // Core authorization checks
+  const isMasterOrAdmin = user?.id_master || user?.is_admin;
+  const userPerms = user?.perfil?.permissoes || [];
+  const canAccessPainel = isMasterOrAdmin || userPerms.includes('/kids');
+  const canAccessTurmas = isMasterOrAdmin || userPerms.includes('/kids/turmas');
+  const canAccessSalas = isMasterOrAdmin || userPerms.includes('/kids/salas');
 
   // Active Tab: 'painel' | 'turmas' | 'salas'
   const [activeTab, setActiveTab] = useState<'painel' | 'turmas' | 'salas'>('painel');
@@ -114,16 +121,31 @@ export default function KidsModule() {
   const [addChildMembroId, setAddChildMembroId] = useState<string>('');
   const [addChildNomeVisitante, setAddChildNomeVisitante] = useState<string>('');
 
+  // Child Search Autocomplete state
+  const [searchChildQuery, setSearchChildQuery] = useState<string>('');
+  const [showSearchSuggestions, setShowSearchSuggestions] = useState<boolean>(false);
+
   // Alert/Notification State
   const [errorMsg, setErrorMsg] = useState<string>('');
   const [successMsg, setSuccessMsg] = useState<string>('');
 
+  // Auto-redirect active tab based on permissions
+  useEffect(() => {
+    if (!canAccessPainel) {
+      if (canAccessTurmas) {
+        setActiveTab('turmas');
+      } else if (canAccessSalas) {
+        setActiveTab('salas');
+      }
+    }
+  }, [canAccessPainel, canAccessTurmas, canAccessSalas]);
+
   // Load database items on start or when church changes
   useEffect(() => {
-    if (selectedIgreja?.id) {
+    if (selectedIgreja?.id && (canAccessPainel || canAccessTurmas || canAccessSalas)) {
       loadAllData();
     }
-  }, [selectedIgreja]);
+  }, [selectedIgreja, canAccessPainel, canAccessTurmas, canAccessSalas]);
 
   // Load data from DB via configuracoes_sistema
   const loadAllData = async () => {
@@ -790,6 +812,8 @@ export default function KidsModule() {
 
     // Reset fields
     setAddChildMembroId('');
+    setSearchChildQuery('');
+    setShowSearchSuggestions(false);
     setAddChildNomeVisitante('');
     showNotification('Criança adicionada com sucesso!', 'success');
   };
@@ -814,6 +838,15 @@ export default function KidsModule() {
     const qrText = `SALA_KIDS|Igreja: ${churchName}|Sala: ${activeSalaObj.nome}|Turma: ${associatedTurma?.nome || 'Não definida'}|Idades: ${activeSalaObj.idade_minima}-${activeSalaObj.idade_maxima} anos|Capacidade: ${activeSalaObj.capacidade}|Status: ${activeSalaObj.status}`;
     return `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(qrText)}&color=0f172a&bgcolor=ffffff`;
   };
+
+  if (!canAccessPainel && !canAccessTurmas && !canAccessSalas) {
+    return (
+      <div className="p-8 text-center flex flex-col items-center justify-center min-h-[60vh] gap-4 bg-white/50 dark:bg-slate-800/50 rounded-[2.5rem] border border-slate-200 dark:border-slate-800">
+        <p className="text-red-500 font-bold uppercase tracking-widest text-sm">Acesso Negado</p>
+        <p className="text-slate-500 dark:text-slate-400 text-sm">Você não tem permissão de acesso para o Módulo Kids no seu perfil de usuário.</p>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -856,39 +889,45 @@ export default function KidsModule() {
 
         {/* Tab Navigation buttons */}
         <div className="flex items-center gap-2 p-1.5 bg-slate-100 dark:bg-slate-900/60 rounded-2xl border border-slate-200/50 dark:border-slate-800">
-          <button 
-            onClick={() => setActiveTab('painel')}
-            className={`px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider font-bold transition-all flex items-center gap-2 ${
-              activeTab === 'painel' 
-                ? 'bg-[#E4A232] text-white shadow-md' 
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-            }`}
-          >
-            <Smile size={16} />
-            Painel Operacional
-          </button>
-          <button 
-            onClick={() => setActiveTab('turmas')}
-            className={`px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider font-bold transition-all flex items-center gap-2 ${
-              activeTab === 'turmas' 
-                ? 'bg-[#E4A232] text-white shadow-md' 
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-            }`}
-          >
-            <Users size={16} />
-            Turmas (Categorias)
-          </button>
-          <button 
-            onClick={() => setActiveTab('salas')}
-            className={`px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider font-bold transition-all flex items-center gap-2 ${
-              activeTab === 'salas' 
-                ? 'bg-[#E4A232] text-white shadow-md' 
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-            }`}
-          >
-            <DoorOpen size={16} />
-            Salas
-          </button>
+          {canAccessPainel && (
+            <button 
+              onClick={() => setActiveTab('painel')}
+              className={`px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider font-bold transition-all flex items-center gap-2 ${
+                activeTab === 'painel' 
+                  ? 'bg-[#E4A232] text-white shadow-md' 
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+              }`}
+            >
+              <Smile size={16} />
+              Painel Operacional
+            </button>
+          )}
+          {canAccessTurmas && (
+            <button 
+              onClick={() => setActiveTab('turmas')}
+              className={`px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider font-bold transition-all flex items-center gap-2 ${
+                activeTab === 'turmas' 
+                  ? 'bg-[#E4A232] text-white shadow-md' 
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+              }`}
+            >
+              <Users size={16} />
+              Turmas (Categorias)
+            </button>
+          )}
+          {canAccessSalas && (
+            <button 
+              onClick={() => setActiveTab('salas')}
+              className={`px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider font-bold transition-all flex items-center gap-2 ${
+                activeTab === 'salas' 
+                  ? 'bg-[#E4A232] text-white shadow-md' 
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+              }`}
+            >
+              <DoorOpen size={16} />
+              Salas
+            </button>
+          )}
         </div>
       </div>
 
@@ -1048,31 +1087,98 @@ export default function KidsModule() {
                     </div>
                   </div>
 
-                  {/* Membro Selector (Filtered or general children list) */}
+                  {/* Membro Selector (Filtered to children only with Search query autocomplete) */}
                   {addChildTipo === 'Membro' ? (
                     <div>
                       <label className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">Buscar Criança Cadastrada</label>
-                      <select 
-                        value={addChildMembroId}
-                        onChange={(e) => setAddChildMembroId(e.target.value)}
-                        className="w-full mt-2 p-3.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm font-bold text-slate-900 dark:text-slate-200"
-                      >
-                        <option value="">-- Selecione a Criança --</option>
-                        {membrosIgreja
-                          .filter(m => m.categoria === 'Criança' || m.categoria === 'criança' || !m.categoria)
-                          .map(m => (
-                            <option key={m.id} value={m.id}>{m.nome}</option>
-                          ))
-                        }
-                        {/* Fallback to all members if none filtered */}
-                        <option disabled className="font-normal text-slate-400">-- Outros Membros --</option>
-                        {membrosIgreja
-                          .filter(m => m.categoria !== 'Criança' && m.categoria !== 'criança')
-                          .map(m => (
-                            <option key={m.id} value={m.id}>{m.nome} ({m.categoria || 'Sem categoria'})</option>
-                          ))
-                        }
-                      </select>
+                      <div className="relative mt-2">
+                        <input 
+                          type="text"
+                          placeholder="Digite o nome da criança para buscar..."
+                          value={searchChildQuery}
+                          onChange={(e) => {
+                            setSearchChildQuery(e.target.value);
+                            setShowSearchSuggestions(true);
+                            if (addChildMembroId) {
+                              setAddChildMembroId('');
+                            }
+                          }}
+                          onFocus={() => setShowSearchSuggestions(true)}
+                          className="w-full p-3.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm font-bold text-slate-900 dark:text-slate-200 outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                        />
+                        
+                        {showSearchSuggestions && (
+                          <div className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl max-h-60 overflow-y-auto">
+                            {(() => {
+                              const filteredKids = membrosIgreja.filter(m => {
+                                const isChild = m.categoria === 'Criança' || m.categoria === 'criança';
+                                if (!isChild) return false;
+                                if (!searchChildQuery) return true;
+                                return m.nome?.toLowerCase().includes(searchChildQuery.toLowerCase());
+                              });
+
+                              if (filteredKids.length === 0) {
+                                return (
+                                  <div className="p-4 text-center text-slate-500 text-xs">
+                                    Nenhuma criança encontrada com este nome.
+                                  </div>
+                                );
+                              }
+
+                              return filteredKids.map(m => (
+                                <button
+                                  key={m.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setAddChildMembroId(m.id);
+                                    setSearchChildQuery(m.nome);
+                                    setShowSearchSuggestions(false);
+                                  }}
+                                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800 text-left border-b border-slate-100 dark:border-slate-800/50 last:border-0"
+                                >
+                                  {m.foto_url ? (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img src={m.foto_url} alt={m.nome} className="w-8 h-8 rounded-full object-cover" />
+                                  ) : (
+                                    <div className="w-8 h-8 rounded-full bg-amber-500/10 text-amber-600 flex items-center justify-center font-bold text-sm">
+                                      {m.nome?.charAt(0).toUpperCase()}
+                                    </div>
+                                  )}
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{m.nome}</p>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400">Membro Criança</p>
+                                  </div>
+                                  {addChildMembroId === m.id && (
+                                    <Check size={16} className="text-green-500" />
+                                  )}
+                                </button>
+                              ));
+                            })()}
+                          </div>
+                        )}
+                      </div>
+                      
+                      {addChildMembroId && (
+                        <div className="mt-2 flex items-center justify-between p-3 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800/30 rounded-xl">
+                          <div className="flex items-center gap-2">
+                            <Check size={16} className="text-green-500" />
+                            <span className="text-xs font-bold text-green-700 dark:text-green-400">
+                              Criança selecionada: <span className="underline">{searchChildQuery}</span>
+                            </span>
+                          </div>
+                          <button 
+                            type="button" 
+                            onClick={() => {
+                              setAddChildMembroId('');
+                              setSearchChildQuery('');
+                            }}
+                            className="p-1 text-slate-400 hover:text-red-500"
+                            title="Limpar seleção"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     /* Visitante inputs */

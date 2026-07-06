@@ -353,6 +353,40 @@ export async function GET(req: NextRequest) {
       created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
     );
 
+    -- 15. Create storage 'files' bucket and its security policies
+    INSERT INTO storage.buckets (id, name, public)
+    VALUES ('files', 'files', true)
+    ON CONFLICT (id) DO NOTHING;
+
+    ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
+
+    DO $$
+    BEGIN
+        DROP POLICY IF EXISTS "Allow public read on files" ON storage.objects;
+        DROP POLICY IF EXISTS "Allow authenticated inserts on files" ON storage.objects;
+        DROP POLICY IF EXISTS "Allow authenticated updates on files" ON storage.objects;
+        DROP POLICY IF EXISTS "Allow authenticated deletes on files" ON storage.objects;
+    EXCEPTION
+        WHEN OTHERS THEN
+            NULL;
+    END $$;
+
+    CREATE POLICY "Allow public read on files" ON storage.objects 
+      FOR SELECT 
+      USING (bucket_id = 'files');
+
+    CREATE POLICY "Allow authenticated inserts on files" ON storage.objects 
+      FOR INSERT 
+      WITH CHECK (bucket_id = 'files' AND auth.role() = 'authenticated');
+
+    CREATE POLICY "Allow authenticated updates on files" ON storage.objects 
+      FOR UPDATE 
+      USING (bucket_id = 'files' AND auth.role() = 'authenticated');
+
+    CREATE POLICY "Allow authenticated deletes on files" ON storage.objects 
+      FOR DELETE 
+      USING (bucket_id = 'files' AND auth.role() = 'authenticated');
+
     -- Force reload schema cache for PostgREST
     NOTIFY pgrst, 'reload schema';
     `;

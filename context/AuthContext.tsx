@@ -357,6 +357,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (menu === '/' || menu === '/mapa' || menu === '/formularios') return true; // Always allowed
     if (!user.perfil) return false;
     const perms = Array.isArray(user.perfil.permissoes) ? user.perfil.permissoes : [];
+    
+    // If checking the base /kids route, allow access if any of the kids sub-permissions are set
+    if (menu === '/kids') {
+      return perms.includes('/kids') || perms.includes('/kids/turmas') || perms.includes('/kids/salas');
+    }
+    
     return perms.includes(menu);
   };
 
