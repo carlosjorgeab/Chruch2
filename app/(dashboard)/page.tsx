@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Users, UsersRound, Wallet, BookOpen, RefreshCw, BarChart2, PieChart, TrendingUp, TrendingDown, DollarSign, Calendar, Megaphone, FileText, Video, ChevronLeft, ChevronRight, ExternalLink, Download } from 'lucide-react';
+import { Users, UsersRound, Wallet, BookOpen, RefreshCw, BarChart2, PieChart, TrendingUp, TrendingDown, DollarSign, Calendar, Megaphone, FileText, Video, ChevronLeft, ChevronRight, ExternalLink, Download, QrCode } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useIgreja } from '@/context/IgrejaContext';
 
@@ -499,7 +499,7 @@ export default function Home() {
       </div>
 
       {/* STATS HIGHLIGHT GRID */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6" id="dashboard-stats-grid">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6" id="dashboard-stats-grid">
         {/* Panel 1: Membros Ativos */}
         <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800 flex items-center gap-5 hover:scale-102 transition-all duration-250 group cursor-default" id="stat-card-membros">
           <div className="w-14 h-14 rounded-2xl bg-transparent flex items-center justify-center text-blue-600 dark:text-blue-400 transition-colors">
@@ -567,6 +567,22 @@ export default function Home() {
             )}
           </div>
         </div>
+
+        {/* Panel 5: Quick Link to Kids QR Check-in */}
+        <Link 
+          href="/kids"
+          className="bg-gradient-to-br from-amber-500 to-amber-600 p-6 rounded-3xl shadow-md text-white flex items-center gap-5 hover:scale-102 hover:shadow-lg transition-all duration-250 group cursor-pointer"
+          id="stat-card-qr-checkin"
+        >
+          <div className="w-14 h-14 rounded-2xl bg-white/10 flex items-center justify-center text-white transition-colors group-hover:bg-white/20">
+            <QrCode size={26} className="animate-pulse" />
+          </div>
+          <div className="space-y-0.5">
+            <p className="text-[10px] sm:text-xs font-black text-amber-100 uppercase tracking-wider">Módulo Kids</p>
+            <p className="text-base sm:text-lg font-black mt-0.5 leading-none">Gerar QR Check-in</p>
+            <p className="text-[9px] text-amber-50/80 font-medium tracking-wide">Acessar salas e turmas</p>
+          </div>
+        </Link>
       </div>
 
       {/* CHARTS CONTAINER GRID */}

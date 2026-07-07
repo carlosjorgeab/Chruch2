@@ -5,7 +5,9 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { useIgreja } from '@/context/IgrejaContext';
 import { useConfirm } from '@/context/ConfirmContext';
-import { Plus, Edit2, Trash2, Save, X, Search, Users, Calendar, MapPin, RefreshCw, ClipboardCheck, Globe, Lock } from 'lucide-react';
+import { Plus, Edit2, Trash2, Save, X, Search, Users, Calendar, MapPin, RefreshCw, ClipboardCheck, Globe, Lock, Printer } from 'lucide-react';
+import { motion } from 'motion/react';
+import { jsPDF } from 'jspdf';
 
 type Comunidade = {
   id: string;
@@ -334,6 +336,136 @@ export default function ComunidadesPage() {
     } finally {
       setLoadingPresence(false);
     }
+  };
+
+  const generatePresencePDF = () => {
+    const doc = new jsPDF();
+    
+    // Header section
+    doc.setFont("Helvetica", "bold");
+    doc.setFontSize(22);
+    doc.setTextColor(228, 162, 50); // Amber brand color #E4A232
+    doc.text("LISTA DE PRESENÇA", 14, 22);
+    
+    doc.setFont("Helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(100, 116, 139); // Slate-500
+    
+    doc.text(`Célula / Comunidade: ${selectedComunidadeForMeetings?.nome || 'Não informada'}`, 14, 30);
+    doc.text(`Reunião: ${currentPresMeetingTitle || 'Não informada'}`, 14, 36);
+    doc.text(`Data de Emissão: ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`, 14, 42);
+    
+    if (selectedComunidadeForMeetings?.descricao) {
+      doc.text(`Descrição: ${selectedComunidadeForMeetings.descricao}`, 14, 48);
+    }
+    
+    // Draw a horizontal line
+    doc.setDrawColor(226, 232, 240); // Slate-200
+    doc.setLineWidth(0.5);
+    doc.line(14, 53, 196, 53);
+    
+    // Table headers
+    doc.setFont("Helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(51, 65, 85); // Slate-700
+    doc.text("Nome do Participante", 14, 62);
+    doc.text("Status de Presença", 155, 62);
+    
+    // Table header line
+    doc.setDrawColor(148, 163, 184); // Slate-400
+    doc.line(14, 65, 196, 65);
+    
+    doc.setFont("Helvetica", "normal");
+    let yPosition = 74;
+    
+    meetingPresenceList.forEach((m, index) => {
+      // Page breaking logic
+      if (yPosition > 270) {
+        doc.addPage();
+        yPosition = 22;
+        doc.setFont("Helvetica", "bold");
+        doc.setFontSize(11);
+        doc.setTextColor(51, 65, 85);
+        doc.text("Nome do Participante", 14, yPosition);
+        doc.text("Status de Presença", 155, yPosition);
+        doc.line(14, yPosition + 3, 196, yPosition + 3);
+        yPosition += 12;
+        doc.setFont("Helvetica", "normal");
+      }
+      
+      // Draw row content
+      doc.setFontSize(10);
+      doc.setTextColor(15, 23, 42); // Slate-900
+      doc.text(m.nome || 'Membro sem nome', 14, yPosition);
+      
+      const isPresent = m.presente;
+      if (isPresent) {
+        doc.setTextColor(16, 185, 129); // Emerald-500
+        doc.setFont("Helvetica", "bold");
+        doc.text("PRESENTE", 155, yPosition);
+      } else {
+        doc.setTextColor(239, 68, 68); // Red-500
+        doc.setFont("Helvetica", "bold");
+        doc.text("FALTA", 155, yPosition);
+      }
+      
+      doc.setFont("Helvetica", "normal");
+      
+      // Light grey divider line
+      doc.setDrawColor(241, 245, 249); // Slate-100
+      doc.line(14, yPosition + 3, 196, yPosition + 3);
+      
+      yPosition += 10;
+    });
+    
+    // Calculate attendance statistics
+    const total = meetingPresenceList.length;
+    const presentes = meetingPresenceList.filter(m => m.presente).length;
+    const percentual = total > 0 ? Math.round((presentes / total) * 100) : 0;
+    
+    if (yPosition > 250) {
+      doc.addPage();
+      yPosition = 22;
+    } else {
+      yPosition += 4;
+    }
+    
+    // Statistics box background
+    doc.setFillColor(248, 250, 252); // Slate-50
+    doc.rect(14, yPosition, 182, 26, "F");
+    
+    doc.setFont("Helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(100, 116, 139); // Slate-500
+    doc.text(`Total de Participantes: ${total}`, 20, yPosition + 10);
+    doc.text(`Presentes: ${presentes}`, 90, yPosition + 10);
+    doc.text(`Faltas: ${total - presentes}`, 150, yPosition + 10);
+    
+    doc.setFontSize(10);
+    doc.setTextColor(228, 162, 50); // Amber brand
+    doc.text(`Percentual de Frequência Geral da Reunião: ${percentual}%`, 20, yPosition + 19);
+    
+    // Footer signature spaces
+    yPosition += 36;
+    if (yPosition > 270) {
+      doc.addPage();
+      yPosition = 50;
+    }
+    doc.setDrawColor(203, 213, 225); // Slate-300
+    doc.line(14, yPosition, 90, yPosition);
+    doc.line(120, yPosition, 196, yPosition);
+    
+    doc.setFont("Helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(148, 163, 184); // Slate-400
+    doc.text("Assinatura do Líder / Coordenador", 14, yPosition + 4);
+    doc.text("Assinatura do Secretário / Apoio", 120, yPosition + 4);
+    
+    // Save PDF file
+    const safeComName = (selectedComunidadeForMeetings?.nome || 'Celula').replace(/[^a-zA-Z0-0]+/g, '_');
+    const safeMeetingName = (currentPresMeetingTitle || '').replace(/[^a-zA-Z0-0]+/g, '_');
+    const filename = `Frequencia_${safeComName}_${safeMeetingName}.pdf`;
+    doc.save(filename);
   };
 
   const saveCommunityPresence = async () => {
@@ -1177,16 +1309,30 @@ export default function ComunidadesPage() {
               <X size={18} />
             </button>
 
-            <div className="flex items-center gap-3 border-b border-slate-100 dark:border-slate-800 pb-5 mb-6">
-              <ClipboardCheck className="text-[#E4A232]" size={24} />
-              <div>
-                <h2 className="text-sm font-black uppercase text-slate-900 dark:text-white leading-tight">
-                  Lista de Presença
-                </h2>
-                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">
-                  {currentPresMeetingTitle}
-                </p>
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-5 mb-6">
+              <div className="flex items-center gap-3">
+                <ClipboardCheck className="text-[#E4A232]" size={24} />
+                <div>
+                  <h2 className="text-sm font-black uppercase text-slate-900 dark:text-white leading-tight">
+                    Lista de Presença
+                  </h2>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">
+                    {currentPresMeetingTitle}
+                  </p>
+                </div>
               </div>
+
+              {meetingPresenceList.length > 0 && (
+                <button
+                  type="button"
+                  onClick={generatePresencePDF}
+                  className="px-3 py-2 text-[9px] font-black uppercase tracking-wider text-[#E4A232] border border-[#E4A232]/30 hover:bg-[#E4A232]/5 rounded-xl transition flex items-center gap-1 cursor-pointer"
+                  title="Gerar PDF para Impressão"
+                >
+                  <Printer size={12} />
+                  Imprimir
+                </button>
+              )}
             </div>
 
             {loadingPresence ? (
@@ -1230,7 +1376,13 @@ export default function ComunidadesPage() {
 
                     <div className="divide-y divide-slate-100 dark:divide-slate-800/60">
                       {meetingPresenceList.map((m, idx) => (
-                      <div key={m.id_membro} className="flex items-center justify-between py-3.5 first:pt-0 last:pb-0">
+                      <motion.div 
+                        key={`${m.id_membro}-${m.presente}`} 
+                        initial={{ opacity: 0.5, y: -2 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.25, ease: "easeOut" }}
+                        className="flex items-center justify-between py-3.5 first:pt-0 last:pb-0"
+                      >
                         <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
                           {m.nome}
                         </span>
@@ -1267,7 +1419,7 @@ export default function ComunidadesPage() {
                             Falta
                           </button>
                         </div>
-                      </div>
+                      </motion.div>
                     ))}
                   </div>
                 </div>
