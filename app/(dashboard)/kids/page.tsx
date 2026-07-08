@@ -6,7 +6,8 @@ import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { 
   Baby, Users, DoorOpen, Plus, Trash2, Calendar, Edit3, Check, X, 
-  UploadCloud, ArrowRight, UserCheck, Smile, HelpCircle, QrCode, AlertCircle
+  UploadCloud, ArrowRight, UserCheck, Smile, HelpCircle, QrCode, AlertCircle,
+  Activity, Heart, ShieldAlert, Phone, User, Info, FileText, Printer
 } from 'lucide-react';
 
 interface TurmaMembro {
@@ -51,6 +52,15 @@ interface SalaCrianca {
   id_membro: string | null;
   nome_visitante: string | null;
   created_at: string;
+  nome_responsavel: string;
+  telefone_responsavel: string;
+  data_nascimento: string;
+  sexo: 'Masculino' | 'Feminino';
+  necessidades_especiais?: string;
+  restricoes_alimentares?: string;
+  observacoes_medicas?: string;
+  autoriza_imagem: boolean;
+  foto_url?: string;
 }
 
 export default function KidsModule() {
@@ -120,6 +130,33 @@ export default function KidsModule() {
   const [addChildTipo, setAddChildTipo] = useState<'Membro' | 'Visitante'>('Membro');
   const [addChildMembroId, setAddChildMembroId] = useState<string>('');
   const [addChildNomeVisitante, setAddChildNomeVisitante] = useState<string>('');
+  
+  // New Kids Module form fields
+  const [addChildNomeResponsavel, setAddChildNomeResponsavel] = useState<string>('');
+  const [addChildTelefoneResponsavel, setAddChildTelefoneResponsavel] = useState<string>('');
+  const [addChildDataNascimento, setAddChildDataNascimento] = useState<string>('');
+  const [addChildSexo, setAddChildSexo] = useState<'Masculino' | 'Feminino'>('Masculino');
+  const [addChildNecessidades, setAddChildNecessidades] = useState<string>('');
+  const [addChildRestricoes, setAddChildRestricoes] = useState<string>('');
+  const [addChildObservacoesMedicas, setAddChildObservacoesMedicas] = useState<string>('');
+  const [addChildAutorizaImagem, setAddChildAutorizaImagem] = useState<boolean>(false);
+  const [addChildFotoUrl, setAddChildFotoUrl] = useState<string>('');
+
+  // Badges and QR code previews for children in room
+  const [selectedChildForBadge, setSelectedChildForBadge] = useState<SalaCrianca | null>(null);
+  const [selectedChildForQr, setSelectedChildForQr] = useState<SalaCrianca | null>(null);
+
+  // Auto populate member child details
+  useEffect(() => {
+    if (addChildTipo === 'Membro' && addChildMembroId) {
+      const found = membrosIgreja.find(m => m.id === addChildMembroId);
+      if (found) {
+        setAddChildDataNascimento(found.data_nascimento || '');
+        setAddChildSexo(found.sexo === 'Masculino' || found.sexo === 'Feminino' ? found.sexo : 'Masculino');
+        setAddChildFotoUrl(found.foto_url || '');
+      }
+    }
+  }, [addChildMembroId, addChildTipo, membrosIgreja]);
 
   // Child Search Autocomplete state
   const [searchChildQuery, setSearchChildQuery] = useState<string>('');
@@ -155,7 +192,7 @@ export default function KidsModule() {
       // 1. Load Membros list for selectors
       const { data: members, error: memError } = await supabase
         .from('membros')
-        .select('id, nome, categoria, foto_url')
+        .select('id, nome, categoria, foto_url, data_nascimento, sexo')
         .eq('id_igreja', selectedIgreja.id)
         .order('nome', { ascending: true });
 
@@ -754,9 +791,70 @@ export default function KidsModule() {
     }
   };
 
-  // Add child to the currently open Room
+  const handleChangeSalaStatus = async (salaId: string, newStatus: 'Aberto' | 'Fechado' | 'Encerrado') => {
+    const updatedSalas = salas.map(s => {
+      if (s.id === salaId) {
+        return { ...s, status: newStatus };
+      }
+      return s;
+    });
+
+    try {
+      await saveSalasToDb(updatedSalas);
+      showNotification(`Status da sala alterado para "${newStatus}" com sucesso!`, 'success');
+    } catch (err: any) {
+      console.error(err);
+      showNotification('Erro ao alterar status da sala.', 'error');
+    }
+  };
+
+  // Helper to calculate age from birth date dynamically
+  const getAgeFromBirthDate = (birthDateStr: string): string => {
+    if (!birthDateStr) return '0';
+    const birthDate = new Date(birthDateStr + 'T00:00:00');
+    if (isNaN(birthDate.getTime())) return '0';
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const m = today.getMonth() - birthDate.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    return age < 0 ? '0' : String(age);
+  };
+
+  // Upload handler specifically for Child Photo (using existing api route)
+  const handleChildPhotoUpload = async (file: File) => {
+    setUploading(true);
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const response = await fetch('/api/financeiro/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Erro inesperado no servidor de upload.');
+      }
+
+      setAddChildFotoUrl(result.url);
+      showNotification('Foto da criança carregada com sucesso!', 'success');
+    } catch (err: any) {
+      console.error(err);
+      showNotification(`Erro no upload da foto: ${err.message}`, 'error');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // Add child to the currently open Room with all detailed fields
   const handleAddCriancaToSala = async () => {
-    if (!selectedSalaId) return;
+    if (!selectedSalaId) {
+      showNotification('Selecione ou abra uma sala primeiro.', 'error');
+      return;
+    }
 
     const currentSala = salas.find(s => s.id === selectedSalaId);
     if (!currentSala) return;
@@ -769,6 +867,20 @@ export default function KidsModule() {
       }
     }
 
+    // Common and specific validations
+    if (!addChildNomeResponsavel.trim()) {
+      showNotification('Informe o Nome do Responsável.', 'error');
+      return;
+    }
+    if (!addChildTelefoneResponsavel.trim()) {
+      showNotification('Informe o Telefone de Contato do Responsável.', 'error');
+      return;
+    }
+    if (!addChildDataNascimento) {
+      showNotification('Informe a Data de Nascimento da criança.', 'error');
+      return;
+    }
+
     let newCheckIn: SalaCrianca;
 
     if (addChildTipo === 'Membro') {
@@ -777,7 +889,7 @@ export default function KidsModule() {
         return;
       }
 
-      // Check if child is already checked in to ANY active room
+      // Check if child is already checked in to this active room
       if (criancasSala.some(c => c.id_membro === addChildMembroId && c.id_sala === selectedSalaId)) {
         showNotification('Esta criança já está adicionada nesta sala.', 'error');
         return;
@@ -789,7 +901,16 @@ export default function KidsModule() {
         tipo_crianca: 'Membro',
         id_membro: addChildMembroId,
         nome_visitante: null,
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
+        nome_responsavel: addChildNomeResponsavel.trim(),
+        telefone_responsavel: addChildTelefoneResponsavel.trim(),
+        data_nascimento: addChildDataNascimento,
+        sexo: addChildSexo,
+        necessidades_especiais: addChildNecessidades.trim() || undefined,
+        restricoes_alimentares: addChildRestricoes.trim() || undefined,
+        observacoes_medicas: addChildObservacoesMedicas.trim() || undefined,
+        autoriza_imagem: addChildAutorizaImagem,
+        foto_url: addChildAutorizaImagem && addChildFotoUrl ? addChildFotoUrl : undefined
       };
     } else {
       if (!addChildNomeVisitante.trim()) {
@@ -803,7 +924,16 @@ export default function KidsModule() {
         tipo_crianca: 'Visitante',
         id_membro: null,
         nome_visitante: addChildNomeVisitante.trim(),
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
+        nome_responsavel: addChildNomeResponsavel.trim(),
+        telefone_responsavel: addChildTelefoneResponsavel.trim(),
+        data_nascimento: addChildDataNascimento,
+        sexo: addChildSexo,
+        necessidades_especiais: addChildNecessidades.trim() || undefined,
+        restricoes_alimentares: addChildRestricoes.trim() || undefined,
+        observacoes_medicas: addChildObservacoesMedicas.trim() || undefined,
+        autoriza_imagem: addChildAutorizaImagem,
+        foto_url: addChildAutorizaImagem && addChildFotoUrl ? addChildFotoUrl : undefined
       };
     }
 
@@ -815,6 +945,17 @@ export default function KidsModule() {
     setSearchChildQuery('');
     setShowSearchSuggestions(false);
     setAddChildNomeVisitante('');
+    
+    setAddChildNomeResponsavel('');
+    setAddChildTelefoneResponsavel('');
+    setAddChildDataNascimento('');
+    setAddChildSexo('Masculino');
+    setAddChildNecessidades('');
+    setAddChildRestricoes('');
+    setAddChildObservacoesMedicas('');
+    setAddChildAutorizaImagem(false);
+    setAddChildFotoUrl('');
+
     showNotification('Criança adicionada com sucesso!', 'success');
   };
 
@@ -937,355 +1078,856 @@ export default function KidsModule() {
       {activeTab === 'painel' && (
         <div className="space-y-8 animate-fade-in">
           
-          {/* Top Banner QR Code (Only if Sala is Open) */}
-          {isSalaAbertaOperator && activeSalaObj && (
-            <div className="bg-gradient-to-r from-amber-500/10 via-orange-500/5 to-amber-500/10 dark:from-amber-550/10 border border-amber-500/30 rounded-[2.5rem] p-6 lg:p-8 shadow-xl flex flex-col md:flex-row items-center justify-between gap-8">
-              <div className="space-y-4 max-w-2xl text-center md:text-left">
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-500/20 text-amber-600 dark:text-amber-400 font-bold text-xs uppercase tracking-wider rounded-full">
-                  <Check size={12} /> Sala Ativa no Momento
-                </span>
-                <h2 className="text-3xl font-black uppercase text-slate-900 dark:text-white tracking-tight">
-                  SALA: <span className="text-amber-600">{activeSalaObj.nome}</span>
-                </h2>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  <div className="p-3 bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800">
-                    <p className="text-[10px] text-slate-400 font-normal">Turma Associada</p>
-                    <p className="text-sm font-black text-slate-800 dark:text-slate-200 mt-1">{activeTurmaObj?.nome || 'N/D'}</p>
-                  </div>
-                  <div className="p-3 bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800">
-                    <p className="text-[10px] text-slate-400 font-normal">Faixa Etária</p>
-                    <p className="text-sm font-black text-slate-800 dark:text-slate-200 mt-1">{activeSalaObj.idade_minima} a {activeSalaObj.idade_maxima} anos</p>
-                  </div>
-                  <div className="p-3 bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 col-span-2 sm:col-span-1">
-                    <p className="text-[10px] text-slate-400 font-normal">Capacidade / Presentes</p>
-                    <p className="text-sm font-black text-slate-800 dark:text-slate-200 mt-1">
-                      {childrenInActiveSala.length} / {activeSalaObj.capacidade}
-                    </p>
-                  </div>
-                </div>
-                <div className="pt-2">
+          {/* Active Check-in Management Interface (Only when Sala is Open & Operating) */}
+          {isSalaAbertaOperator && activeSalaObj ? (
+            <div className="space-y-8 animate-fade-in">
+              {/* Back button and title */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-3xl border border-slate-200/50 dark:border-slate-800/85 shadow-sm">
+                <div className="flex items-center gap-3">
                   <button 
-                    onClick={handleFecharSala}
-                    className="px-5 py-3 bg-rose-500 hover:bg-rose-600 text-white text-xs uppercase tracking-wider font-black rounded-xl shadow-md transition-all"
+                    onClick={() => setIsSalaAbertaOperator(false)}
+                    className="p-2 bg-slate-50 hover:bg-slate-100 dark:bg-slate-950 dark:hover:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-800 transition text-slate-600 dark:text-slate-350 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider"
                   >
-                    Encerrar Atendimento / Fechar Sala
+                    ← Voltar para Painel de Salas
                   </button>
-                </div>
-              </div>
-
-              {/* QR-CODE Container */}
-              <div className="bg-white dark:bg-slate-900 p-4 rounded-3xl shadow-lg border border-slate-100 dark:border-slate-800/80 flex flex-col items-center justify-center gap-3">
-                <div className="relative w-44 h-44 bg-white rounded-2xl overflow-hidden shadow-inner flex items-center justify-center">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={getQrCodeUrl()} alt="QR-CODE Sala Aberta" className="w-full h-full object-contain" />
-                </div>
-                <span className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest flex items-center gap-1">
-                  <QrCode size={12} /> Scan para Check-in
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* Setup Selection: If No Sala is currently active for the operator */}
-          {!isSalaAbertaOperator && (
-            <div className="bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-[2.5rem] border border-slate-200/60 dark:border-slate-800/80 shadow-md max-w-xl mx-auto space-y-6 text-center">
-              <div className="w-20 h-20 bg-amber-500/10 dark:bg-amber-500/5 text-amber-500 rounded-[2rem] flex items-center justify-center mx-auto shadow-inner">
-                <DoorOpen size={40} />
-              </div>
-              <div className="space-y-2">
-                <h2 className="text-2xl font-black uppercase tracking-tight text-slate-900 dark:text-white">Abrir Sala para Atendimento</h2>
-                <p className="text-sm text-slate-500 dark:text-slate-400">Escolha a Turma e a Sala abaixo para gerar o QR-CODE e iniciar os check-ins das crianças presentes.</p>
-              </div>
-
-              <div className="space-y-4 text-left">
-                <div>
-                  <label className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">1. Selecione a Turma</label>
-                  <select 
-                    value={selectedTurmaId}
-                    onChange={(e) => {
-                      setSelectedTurmaId(e.target.value);
-                      setSelectedSalaId('');
-                    }}
-                    className="w-full mt-1.5 p-4 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm font-bold text-slate-900 dark:text-slate-200"
-                  >
-                    <option value="">-- Escolha a Turma --</option>
-                    {turmas.map(t => (
-                      <option key={t.id} value={t.id}>{t.nome} (Faixa: {t.idade_minima}-{t.idade_maxima} anos)</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">2. Selecione a Sala</label>
-                  <select 
-                    value={selectedSalaId}
-                    disabled={!selectedTurmaId}
-                    onChange={(e) => setSelectedSalaId(e.target.value)}
-                    className="w-full mt-1.5 p-4 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm font-bold text-slate-900 dark:text-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <option value="">-- Escolha a Sala --</option>
-                    {filteredSalasForSelection.map(s => (
-                      <option key={s.id} value={s.id}>{s.nome} (Status: {s.status} / Cap: {s.capacidade})</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="pt-2">
-                <button 
-                  onClick={handleAbrirSala}
-                  disabled={!selectedSalaId}
-                  className="w-full py-4 bg-amber-500 hover:bg-[#E4A232] disabled:opacity-50 disabled:cursor-not-allowed text-white font-black uppercase text-xs tracking-widest rounded-2xl shadow-lg transition-all"
-                >
-                  Abrir Sala e Iniciar
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Active Check-in Management Interface (Only when Sala is Open) */}
-          {isSalaAbertaOperator && activeSalaObj && (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-              
-              {/* Left Column: Children Check-In controls */}
-              <div className="lg:col-span-4 bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-[2rem] border border-slate-200/50 dark:border-slate-800/80 shadow-sm space-y-6">
-                <div className="border-b border-slate-100 dark:border-slate-800 pb-4">
-                  <h3 className="text-lg font-black uppercase tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
-                    <UserCheck size={20} className="text-[#E4A232]" />
-                    Fazer Entrada (Check-In)
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-1">Adicione uma criança como membro oficial ou visitante.</p>
-                </div>
-
-                <div className="space-y-4">
-                  {/* Selector of entry type (Membro vs Visitante) */}
+                  <div className="h-5 w-[1px] bg-slate-200 dark:bg-slate-800"></div>
                   <div>
-                    <label className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">Tipo de Criança</label>
-                    <div className="grid grid-cols-2 gap-2 mt-2">
-                      <button 
-                        type="button"
-                        onClick={() => setAddChildTipo('Membro')}
-                        className={`py-3 rounded-xl text-xs uppercase tracking-wider font-bold border transition-all ${
-                          addChildTipo === 'Membro'
-                            ? 'bg-amber-500/10 border-amber-500/50 text-amber-600 dark:text-amber-400 font-black'
-                            : 'border-slate-200 dark:border-slate-800 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-950'
-                        }`}
-                      >
-                        Membro Oficial
-                      </button>
-                      <button 
-                        type="button"
-                        onClick={() => setAddChildTipo('Visitante')}
-                        className={`py-3 rounded-xl text-xs uppercase tracking-wider font-bold border transition-all ${
-                          addChildTipo === 'Visitante'
-                            ? 'bg-amber-500/10 border-amber-500/50 text-amber-600 dark:text-amber-400 font-black'
-                            : 'border-slate-200 dark:border-slate-800 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-950'
-                        }`}
-                      >
-                        Visitante
-                      </button>
+                    <h2 className="text-sm font-black uppercase text-slate-900 dark:text-white leading-tight">Painel de Atendimento</h2>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Operando Ativamente</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-green-500/10 text-green-600 dark:text-green-400 font-black text-[10px] uppercase tracking-wider rounded-full">
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span> Atendimento Aberto
+                  </span>
+                </div>
+              </div>
+
+              {/* Active Room Info Banner */}
+              <div className="bg-gradient-to-r from-amber-500/10 via-orange-500/5 to-amber-500/10 dark:from-amber-550/10 border border-amber-500/30 rounded-[2.5rem] p-6 lg:p-8 shadow-xl flex flex-col md:flex-row items-center justify-between gap-8">
+                <div className="space-y-4 max-w-2xl text-center md:text-left">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-500/20 text-amber-600 dark:text-amber-400 font-bold text-xs uppercase tracking-wider rounded-full">
+                    <Check size={12} /> Sala Ativa no Momento
+                  </span>
+                  <h2 className="text-3xl font-black uppercase text-slate-900 dark:text-white tracking-tight">
+                    SALA: <span className="text-amber-600">{activeSalaObj.nome}</span>
+                  </h2>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    <div className="p-3 bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800">
+                      <p className="text-[10px] text-slate-400 font-normal">Turma Associada</p>
+                      <p className="text-sm font-black text-slate-800 dark:text-slate-200 mt-1">{activeTurmaObj?.nome || 'N/D'}</p>
+                    </div>
+                    <div className="p-3 bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800">
+                      <p className="text-[10px] text-slate-400 font-normal">Faixa Etária</p>
+                      <p className="text-sm font-black text-slate-800 dark:text-slate-200 mt-1">{activeSalaObj.idade_minima} a {activeSalaObj.idade_maxima} anos</p>
+                    </div>
+                    <div className="p-3 bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 col-span-2 sm:col-span-1">
+                      <p className="text-[10px] text-slate-400 font-normal">Capacidade / Presentes</p>
+                      <p className="text-sm font-black text-slate-800 dark:text-slate-200 mt-1">
+                        {childrenInActiveSala.length} / {activeSalaObj.capacidade}
+                      </p>
                     </div>
                   </div>
+                  <div className="pt-2">
+                    <button 
+                      onClick={handleFecharSala}
+                      className="px-5 py-3 bg-rose-500 hover:bg-rose-600 text-white text-xs uppercase tracking-wider font-black rounded-xl shadow-md transition-all"
+                    >
+                      Encerrar Atendimento / Fechar Sala
+                    </button>
+                  </div>
+                </div>
 
-                  {/* Membro Selector (Filtered to children only with Search query autocomplete) */}
-                  {addChildTipo === 'Membro' ? (
+                {/* QR-CODE Container */}
+                <div className="bg-white dark:bg-slate-900 p-4 rounded-3xl shadow-lg border border-slate-100 dark:border-slate-800/80 flex flex-col items-center justify-center gap-3">
+                  <div className="relative w-44 h-44 bg-white rounded-2xl overflow-hidden shadow-inner flex items-center justify-center">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={getQrCodeUrl()} alt="QR-CODE Sala Aberta" className="w-full h-full object-contain" />
+                  </div>
+                  <span className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest flex items-center gap-1">
+                    <QrCode size={12} /> Scan para Check-in
+                  </span>
+                </div>
+              </div>
+
+              {/* Main workspace splits */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                
+                {/* Left Column: Children Check-In controls */}
+                <div className="lg:col-span-5 bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-[2rem] border border-slate-200/50 dark:border-slate-800/80 shadow-sm space-y-6">
+                  <div className="border-b border-slate-100 dark:border-slate-800 pb-4">
+                    <h3 className="text-lg font-black uppercase tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
+                      <UserCheck size={20} className="text-[#E4A232]" />
+                      Fazer Entrada (Check-In)
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-1">Insira os dados completos da criança para gerar a etiqueta e o QR Code de entrada.</p>
+                  </div>
+
+                  <div className="space-y-4">
+                    {/* Selector of entry type (Membro vs Visitante) */}
                     <div>
-                      <label className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">Buscar Criança Cadastrada</label>
-                      <div className="relative mt-2">
-                        <input 
-                          type="text"
-                          placeholder="Digite o nome da criança para buscar..."
-                          value={searchChildQuery}
-                          onChange={(e) => {
-                            setSearchChildQuery(e.target.value);
-                            setShowSearchSuggestions(true);
-                            if (addChildMembroId) {
-                              setAddChildMembroId('');
-                            }
+                      <label className="text-[10px] font-black uppercase tracking-wider text-slate-450 dark:text-slate-500">Tipo de Criança</label>
+                      <div className="grid grid-cols-2 gap-2 mt-2">
+                        <button 
+                          type="button"
+                          onClick={() => {
+                            setAddChildTipo('Membro');
+                            setAddChildNomeVisitante('');
                           }}
-                          onFocus={() => setShowSearchSuggestions(true)}
-                          className="w-full p-3.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm font-bold text-slate-900 dark:text-slate-200 outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                        />
-                        
-                        {showSearchSuggestions && (
-                          <div className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl max-h-60 overflow-y-auto">
-                            {(() => {
-                              const filteredKids = membrosIgreja.filter(m => {
-                                const isChild = m.categoria === 'Criança' || m.categoria === 'criança';
-                                if (!isChild) return false;
-                                if (!searchChildQuery) return true;
-                                return m.nome?.toLowerCase().includes(searchChildQuery.toLowerCase());
-                              });
+                          className={`py-3 rounded-xl text-xs uppercase tracking-wider font-bold border transition-all ${
+                            addChildTipo === 'Membro'
+                              ? 'bg-amber-500/10 border-amber-500/50 text-amber-600 dark:text-amber-400 font-black'
+                              : 'border-slate-200 dark:border-slate-800 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-950'
+                          }`}
+                        >
+                          Membro Oficial
+                        </button>
+                        <button 
+                          type="button"
+                          onClick={() => {
+                            setAddChildTipo('Visitante');
+                            setAddChildMembroId('');
+                            setSearchChildQuery('');
+                          }}
+                          className={`py-3 rounded-xl text-xs uppercase tracking-wider font-bold border transition-all ${
+                            addChildTipo === 'Visitante'
+                              ? 'bg-amber-500/10 border-amber-500/50 text-amber-600 dark:text-amber-400 font-black'
+                              : 'border-slate-200 dark:border-slate-800 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-950'
+                          }`}
+                        >
+                          Visitante
+                        </button>
+                      </div>
+                    </div>
 
-                              if (filteredKids.length === 0) {
-                                return (
-                                  <div className="p-4 text-center text-slate-500 text-xs">
-                                    Nenhuma criança encontrada com este nome.
-                                  </div>
-                                );
+                    {/* Membro Selector / Visitante Input */}
+                    {addChildTipo === 'Membro' ? (
+                      <div>
+                        <label className="text-[10px] font-black uppercase tracking-wider text-slate-450 dark:text-slate-500">Buscar Criança Cadastrada</label>
+                        <div className="relative mt-2">
+                          <input 
+                            type="text"
+                            placeholder="Digite o nome da criança para buscar..."
+                            value={searchChildQuery}
+                            onChange={(e) => {
+                              setSearchChildQuery(e.target.value);
+                              setShowSearchSuggestions(true);
+                              if (addChildMembroId) {
+                                setAddChildMembroId('');
                               }
+                            }}
+                            onFocus={() => setShowSearchSuggestions(true)}
+                            className="w-full p-3.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm font-bold text-slate-900 dark:text-slate-200 outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                          />
+                          
+                          {showSearchSuggestions && (
+                            <div className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl max-h-60 overflow-y-auto">
+                              {(() => {
+                                const filteredKids = membrosIgreja.filter(m => {
+                                  const isChild = m.categoria === 'Criança' || m.categoria === 'criança';
+                                  if (!isChild) return false;
+                                  if (!searchChildQuery) return true;
+                                  return m.nome?.toLowerCase().includes(searchChildQuery.toLowerCase());
+                                });
 
-                              return filteredKids.map(m => (
-                                <button
-                                  key={m.id}
-                                  type="button"
-                                  onClick={() => {
-                                    setAddChildMembroId(m.id);
-                                    setSearchChildQuery(m.nome);
-                                    setShowSearchSuggestions(false);
-                                  }}
-                                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800 text-left border-b border-slate-100 dark:border-slate-800/50 last:border-0"
-                                >
-                                  {m.foto_url ? (
-                                    // eslint-disable-next-line @next/next/no-img-element
-                                    <img src={m.foto_url} alt={m.nome} className="w-8 h-8 rounded-full object-cover" />
-                                  ) : (
-                                    <div className="w-8 h-8 rounded-full bg-amber-500/10 text-amber-600 flex items-center justify-center font-bold text-sm">
-                                      {m.nome?.charAt(0).toUpperCase()}
+                                if (filteredKids.length === 0) {
+                                  return (
+                                    <div className="p-4 text-center text-slate-500 text-xs">
+                                      Nenhuma criança encontrada com este nome.
                                     </div>
-                                  )}
-                                  <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{m.nome}</p>
-                                    <p className="text-xs text-slate-500 dark:text-slate-400">Membro Criança</p>
-                                  </div>
-                                  {addChildMembroId === m.id && (
-                                    <Check size={16} className="text-green-500" />
-                                  )}
-                                </button>
-                              ));
-                            })()}
+                                  );
+                                }
+
+                                return filteredKids.map(m => (
+                                  <button
+                                    key={m.id}
+                                    type="button"
+                                    onClick={() => {
+                                      setAddChildMembroId(m.id);
+                                      setSearchChildQuery(m.nome);
+                                      setShowSearchSuggestions(false);
+                                    }}
+                                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800 text-left border-b border-slate-100 dark:border-slate-800/50 last:border-0"
+                                  >
+                                    {m.foto_url ? (
+                                      // eslint-disable-next-line @next/next/no-img-element
+                                      <img src={m.foto_url} alt={m.nome} className="w-8 h-8 rounded-full object-cover" />
+                                    ) : (
+                                      <div className="w-8 h-8 rounded-full bg-amber-500/10 text-amber-600 flex items-center justify-center font-bold text-sm">
+                                        {m.nome?.charAt(0).toUpperCase()}
+                                      </div>
+                                    )}
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{m.nome}</p>
+                                      <p className="text-xs text-slate-500 dark:text-slate-400">Membro Criança</p>
+                                    </div>
+                                    {addChildMembroId === m.id && (
+                                      <Check size={16} className="text-green-500" />
+                                    )}
+                                  </button>
+                                ));
+                              })()}
+                            </div>
+                          )}
+                        </div>
+                        
+                        {addChildMembroId && (
+                          <div className="mt-2 flex items-center justify-between p-3 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800/30 rounded-xl">
+                            <div className="flex items-center gap-2">
+                              <Check size={16} className="text-green-500" />
+                              <span className="text-xs font-bold text-green-700 dark:text-green-400">
+                                Criança selecionada: <span className="underline">{searchChildQuery}</span>
+                              </span>
+                            </div>
+                            <button 
+                              type="button" 
+                              onClick={() => {
+                                setAddChildMembroId('');
+                                setSearchChildQuery('');
+                                setAddChildDataNascimento('');
+                                setAddChildFotoUrl('');
+                              }}
+                              className="p-1 text-slate-400 hover:text-red-500"
+                              title="Limpar seleção"
+                            >
+                              <X size={14} />
+                            </button>
                           </div>
                         )}
                       </div>
+                    ) : (
+                      /* Visitante Input */
+                      <div>
+                        <label className="text-[10px] font-black uppercase tracking-wider text-slate-450 dark:text-slate-500">Nome da Criança Visitante *</label>
+                        <input 
+                          type="text"
+                          placeholder="Ex: Pedro Henrique"
+                          value={addChildNomeVisitante}
+                          onChange={(e) => setAddChildNomeVisitante(e.target.value)}
+                          className="w-full mt-2 p-3.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm font-bold text-slate-900 dark:text-slate-200"
+                        />
+                      </div>
+                    )}
+
+                    {/* Responsible Contact details */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[10px] font-black uppercase tracking-wider text-slate-450 dark:text-slate-500">Nome do Responsável *</label>
+                        <input 
+                          type="text"
+                          placeholder="Ex: Carlos Jorge"
+                          value={addChildNomeResponsavel}
+                          onChange={(e) => setAddChildNomeResponsavel(e.target.value)}
+                          className="w-full mt-1.5 p-3.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm font-bold text-slate-900 dark:text-slate-200"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black uppercase tracking-wider text-slate-450 dark:text-slate-500">Telefone do Responsável *</label>
+                        <input 
+                          type="text"
+                          placeholder="Ex: (81) 98888-8888"
+                          value={addChildTelefoneResponsavel}
+                          onChange={(e) => setAddChildTelefoneResponsavel(e.target.value)}
+                          className="w-full mt-1.5 p-3.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm font-bold text-slate-900 dark:text-slate-200"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Birthdate, Age and Gender */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+                      <div className="sm:col-span-1">
+                        <label className="text-[10px] font-black uppercase tracking-wider text-slate-450 dark:text-slate-500">Nascimento *</label>
+                        <input 
+                          type="date"
+                          value={addChildDataNascimento}
+                          onChange={(e) => setAddChildDataNascimento(e.target.value)}
+                          className="w-full mt-1.5 p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-xs font-bold text-slate-900 dark:text-slate-200"
+                        />
+                      </div>
                       
-                      {addChildMembroId && (
-                        <div className="mt-2 flex items-center justify-between p-3 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800/30 rounded-xl">
-                          <div className="flex items-center gap-2">
-                            <Check size={16} className="text-green-500" />
-                            <span className="text-xs font-bold text-green-700 dark:text-green-400">
-                              Criança selecionada: <span className="underline">{searchChildQuery}</span>
-                            </span>
-                          </div>
-                          <button 
-                            type="button" 
-                            onClick={() => {
-                              setAddChildMembroId('');
-                              setSearchChildQuery('');
+                      <div className="sm:col-span-1">
+                        <label className="text-[10px] font-black uppercase tracking-wider text-slate-450 dark:text-slate-500">Idade (Calculada)</label>
+                        <div className="w-full mt-1.5 p-3.5 bg-slate-100/80 dark:bg-slate-950/80 border border-slate-200/60 dark:border-slate-800/60 rounded-2xl text-sm font-black text-slate-700 dark:text-slate-350 text-center select-none">
+                          {addChildDataNascimento ? `${getAgeFromBirthDate(addChildDataNascimento)} anos` : 'Informe data'}
+                        </div>
+                      </div>
+
+                      <div className="sm:col-span-1">
+                        <label className="text-[10px] font-black uppercase tracking-wider text-slate-450 dark:text-slate-500">Sexo *</label>
+                        <select 
+                          value={addChildSexo}
+                          onChange={(e) => setAddChildSexo(e.target.value as 'Masculino' | 'Feminino')}
+                          className="w-full mt-1.5 p-3.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-xs font-bold text-slate-900 dark:text-slate-200"
+                        >
+                          <option value="Masculino">Masculino</option>
+                          <option value="Feminino">Feminino</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Special text inputs: Special Needs, Food Restrictions, Medical Observations */}
+                    <div className="space-y-3 pt-2">
+                      {/* 1. Necessidades Especiais */}
+                      <div className="bg-amber-500/5 dark:bg-amber-500/5 border border-amber-500/20 p-3.5 rounded-2xl flex items-start gap-2.5">
+                        <AlertCircle className="text-amber-500 mt-0.5 shrink-0" size={18} />
+                        <div className="flex-1">
+                          <label className="block text-[10px] font-black uppercase tracking-wider text-amber-600 dark:text-amber-400 leading-none">Necessidades Especiais</label>
+                          <input 
+                            type="text" 
+                            value={addChildNecessidades}
+                            onChange={(e) => setAddChildNecessidades(e.target.value)}
+                            placeholder="Ex: Nenhuma, Autismo, Dificuldade de locomoção"
+                            className="w-full bg-transparent mt-1 text-sm font-bold text-slate-800 dark:text-slate-200 outline-none placeholder:text-slate-400"
+                          />
+                        </div>
+                      </div>
+
+                      {/* 2. Restrições Alimentares */}
+                      <div className="bg-orange-500/5 dark:bg-orange-500/5 border border-orange-500/20 p-3.5 rounded-2xl flex items-start gap-2.5">
+                        <Activity className="text-orange-500 mt-0.5 shrink-0" size={18} />
+                        <div className="flex-1">
+                          <label className="block text-[10px] font-black uppercase tracking-wider text-orange-600 dark:text-orange-400 leading-none">Restrições Alimentares</label>
+                          <input 
+                            type="text" 
+                            value={addChildRestricoes}
+                            onChange={(e) => setAddChildRestricoes(e.target.value)}
+                            placeholder="Ex: Nenhuma, Lactose, Glúten, Amendoim"
+                            className="w-full bg-transparent mt-1 text-sm font-bold text-slate-800 dark:text-slate-200 outline-none placeholder:text-slate-400"
+                          />
+                        </div>
+                      </div>
+
+                      {/* 3. Observações Médicas */}
+                      <div className="bg-rose-500/5 dark:bg-rose-500/5 border border-rose-500/20 p-3.5 rounded-2xl flex items-start gap-2.5">
+                        <Heart className="text-rose-500 mt-0.5 shrink-0" size={18} />
+                        <div className="flex-1">
+                          <label className="block text-[10px] font-black uppercase tracking-wider text-rose-600 dark:text-rose-400 leading-none">Observações Médicas</label>
+                          <input 
+                            type="text" 
+                            value={addChildObservacoesMedicas}
+                            onChange={(e) => setAddChildObservacoesMedicas(e.target.value)}
+                            placeholder="Ex: Asma (usa bombinha), Alergias a medicamentos"
+                            className="w-full bg-transparent mt-1 text-sm font-bold text-slate-800 dark:text-slate-200 outline-none placeholder:text-slate-400"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Image Authorization and Upload */}
+                    <div className="space-y-3 pt-1">
+                      <div className="flex items-center gap-3 p-3.5 bg-slate-50 dark:bg-slate-950/40 rounded-2xl border border-slate-100 dark:border-slate-800">
+                        <input 
+                          type="checkbox"
+                          id="autoriza_imagem_check"
+                          checked={addChildAutorizaImagem}
+                          onChange={(e) => {
+                            setAddChildAutorizaImagem(e.target.checked);
+                            if (!e.target.checked) {
+                              setAddChildFotoUrl('');
+                            }
+                          }}
+                          className="h-4.5 w-4.5 rounded border-slate-300 text-amber-500 focus:ring-amber-500 cursor-pointer"
+                        />
+                        <label htmlFor="autoriza_imagem_check" className="text-xs font-bold text-slate-700 dark:text-slate-300 cursor-pointer select-none">
+                          Autoriza divulgação de imagem da criança
+                        </label>
+                      </div>
+
+                      {addChildAutorizaImagem && (
+                        <div 
+                          onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                          onDragLeave={() => setIsDragging(false)}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            setIsDragging(false);
+                            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                              handleChildPhotoUpload(e.dataTransfer.files[0]);
+                            }
+                          }}
+                          onClick={() => document.getElementById('child-photo-file-input')?.click()}
+                          className={`p-4 border-2 border-dashed rounded-2xl text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-2 min-h-[100px] ${
+                            isDragging 
+                              ? 'border-amber-500 bg-amber-500/10' 
+                              : addChildFotoUrl 
+                                ? 'border-green-500/50 bg-green-500/5' 
+                                : 'border-slate-200 dark:border-slate-850 hover:bg-slate-50 dark:hover:bg-slate-950/40'
+                          }`}
+                        >
+                          <input 
+                            type="file"
+                            id="child-photo-file-input"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              if (e.target.files && e.target.files.length > 0) {
+                                handleChildPhotoUpload(e.target.files[0]);
+                              }
                             }}
-                            className="p-1 text-slate-400 hover:text-red-500"
-                            title="Limpar seleção"
-                          >
-                            <X size={14} />
-                          </button>
+                          />
+                          
+                          {addChildFotoUrl ? (
+                            <div className="relative w-16 h-16 rounded-full overflow-hidden border-2 border-green-500">
+                              <img src={addChildFotoUrl} alt="Foto da criança" className="w-full h-full object-cover" />
+                              <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                                <UploadCloud size={16} className="text-white" />
+                              </div>
+                            </div>
+                          ) : (
+                            <UploadCloud size={24} className="text-slate-400" />
+                          )}
+                          
+                          <div className="space-y-0.5">
+                            <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                              {uploading ? 'Carregando foto...' : addChildFotoUrl ? 'Foto selecionada! Clique para alterar' : 'Arraste a foto da criança aqui'}
+                            </p>
+                            <p className="text-[10px] text-slate-400">Ou clique para escolher do seu dispositivo</p>
+                          </div>
                         </div>
                       )}
                     </div>
-                  ) : (
-                    /* Visitante inputs */
+
+                    <button 
+                      onClick={handleAddCriancaToSala}
+                      disabled={uploading}
+                      className="w-full py-4 bg-amber-500 hover:bg-[#E4A232] text-white font-black uppercase text-xs tracking-widest rounded-2xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Plus size={16} /> Confirmar Check-In na Sala
+                    </button>
+                  </div>
+                </div>
+
+                {/* Right Column: Present kids list */}
+                <div className="lg:col-span-7 bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-[2rem] border border-slate-200/50 dark:border-slate-800/80 shadow-sm space-y-6">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
                     <div>
-                      <label className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">Nome da Criança Visitante</label>
-                      <input 
-                        type="text"
-                        placeholder="Ex: Pedro Henrique"
-                        value={addChildNomeVisitante}
-                        onChange={(e) => setAddChildNomeVisitante(e.target.value)}
-                        className="w-full mt-2 p-3.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm font-bold text-slate-900 dark:text-slate-200"
-                      />
+                      <h3 className="text-lg font-black uppercase tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
+                        <Baby size={20} className="text-[#E4A232]" />
+                        Crianças Atendidas na Sala ({childrenInActiveSala.length})
+                      </h3>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Lista de check-ins ativos com acesso a etiquetas de identificação.</p>
+                    </div>
+                  </div>
+
+                  {childrenInActiveSala.length === 0 ? (
+                    <div className="text-center py-16 bg-slate-50/50 dark:bg-slate-950/20 rounded-3xl border border-dashed border-slate-200 dark:border-slate-800 space-y-3">
+                      <Smile size={40} className="text-slate-350 dark:text-slate-600 mx-auto animate-bounce" />
+                      <p className="text-sm text-slate-400 font-bold uppercase tracking-wide">Nenhuma criança na sala ainda</p>
+                      <p className="text-xs text-slate-400 max-w-sm mx-auto font-normal">Use o painel ao lado para registrar os dados e iniciar os check-ins das crianças.</p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto rounded-2xl border border-slate-100 dark:border-slate-800/80">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="bg-slate-50 dark:bg-slate-950 text-[10px] font-black uppercase tracking-widest text-slate-450 dark:text-slate-500 border-b border-slate-100 dark:border-slate-800">
+                            <th className="py-4 px-4">Identificação</th>
+                            <th className="py-4 px-4">Responsável</th>
+                            <th className="py-4 px-4 text-center">Ações de Atendimento</th>
+                            <th className="py-4 px-4 text-right">Saída</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50 text-xs font-bold">
+                          {childrenInActiveSala.map((c) => {
+                            let displayNome = '';
+                            let displayPhoto = '';
+                            
+                            if (c.tipo_crianca === 'Membro') {
+                              const foundMembro = membrosIgreja.find(m => m.id === c.id_membro);
+                              displayNome = foundMembro?.nome || 'Membro não encontrado';
+                              displayPhoto = c.foto_url || foundMembro?.foto_url || '';
+                            } else {
+                              displayNome = c.nome_visitante || 'Visitante';
+                              displayPhoto = c.foto_url || '';
+                            }
+
+                            // Has special warnings
+                            const hasAlerts = c.necessidades_especiais || c.restricoes_alimentares || c.observacoes_medicas;
+
+                            return (
+                              <tr key={c.id} className="text-slate-800 dark:text-slate-200 hover:bg-slate-50/50 dark:hover:bg-slate-950/20 transition-all">
+                                <td className="py-3.5 px-4">
+                                  <div className="flex items-center gap-3">
+                                    <div className="h-10 w-10 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden flex items-center justify-center border border-slate-200 dark:border-slate-700 shrink-0">
+                                      {c.autoriza_imagem && displayPhoto ? (
+                                        // eslint-disable-next-line @next/next/no-img-element
+                                        <img src={displayPhoto} alt={displayNome} className="h-full w-full object-cover" />
+                                      ) : (
+                                        <Smile size={18} className="text-slate-400" />
+                                      )}
+                                    </div>
+                                    <div className="min-w-0">
+                                      <p className="font-black text-slate-900 dark:text-white truncate text-xs">{displayNome}</p>
+                                      <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5 flex items-center gap-1">
+                                        <span className={`px-1.5 py-0.5 rounded-md ${
+                                          c.tipo_crianca === 'Membro' 
+                                            ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400' 
+                                            : 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400'
+                                        }`}>
+                                          {c.tipo_crianca}
+                                        </span>
+                                        • {getAgeFromBirthDate(c.data_nascimento)} anos
+                                        {hasAlerts && (
+                                          <span className="px-1 py-0.5 bg-rose-500/10 text-rose-500 rounded-md font-black">
+                                            ALERTA
+                                          </span>
+                                        )}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </td>
+                                
+                                <td className="py-3.5 px-4 min-w-[120px]">
+                                  <p className="font-bold text-slate-700 dark:text-slate-350 truncate">{c.nome_responsavel}</p>
+                                  <p className="text-[9px] text-slate-400 mt-0.5 font-mono">{c.telefone_responsavel}</p>
+                                </td>
+
+                                <td className="py-3.5 px-4">
+                                  <div className="flex items-center justify-center gap-2">
+                                    {/* Entry QR Code */}
+                                    <button 
+                                      onClick={() => setSelectedChildForQr(c)}
+                                      className="p-2 bg-amber-500/5 hover:bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 rounded-xl transition-all"
+                                      title="QR Code de Entrada"
+                                    >
+                                      <QrCode size={14} />
+                                    </button>
+
+                                    {/* Print Label Badge */}
+                                    <button 
+                                      onClick={() => setSelectedChildForBadge(c)}
+                                      className="p-2 bg-indigo-500/5 hover:bg-indigo-500/10 border border-indigo-500/20 text-indigo-600 dark:text-indigo-400 rounded-xl transition-all flex items-center gap-1 font-black uppercase text-[9px] tracking-wider"
+                                      title="Etiqueta de Impressão"
+                                    >
+                                      <Printer size={14} />
+                                      Etiqueta
+                                    </button>
+                                  </div>
+                                </td>
+
+                                <td className="py-3.5 px-4 text-right">
+                                  <button 
+                                    onClick={() => handleRemoveCriancaFromSala(c.id)}
+                                    className="p-2 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded-xl transition-all border border-transparent hover:border-rose-200"
+                                    title="Registrar Saída (Check-out)"
+                                  >
+                                    <X size={16} />
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
                     </div>
                   )}
-
-                  <button 
-                    onClick={handleAddCriancaToSala}
-                    className="w-full py-4 bg-amber-500 hover:bg-[#E4A232] text-white font-black uppercase text-xs tracking-widest rounded-2xl shadow-md transition-all flex items-center justify-center gap-2"
-                  >
-                    <Plus size={16} /> Adicionar na Sala
-                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* Multi-Room list and operator workspace launcher (Dashboard view) */
+            <div className="space-y-8 animate-fade-in">
+              
+              {/* Stats overview row */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+                <div className="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-200/50 dark:border-slate-800/80 shadow-sm space-y-1">
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Salas de Atendimento</p>
+                  <p className="text-2xl font-black text-slate-900 dark:text-white">{salas.length}</p>
+                </div>
+                <div className="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-200/50 dark:border-slate-800/80 shadow-sm space-y-1">
+                  <p className="text-[10px] text-green-500 font-bold uppercase tracking-widest flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span> Salas Abertas
+                  </p>
+                  <p className="text-2xl font-black text-slate-900 dark:text-white">{salas.filter(s => s.status === 'Aberto').length}</p>
+                </div>
+                <div className="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-200/50 dark:border-slate-800/80 shadow-sm space-y-1">
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Salas Fechadas</p>
+                  <p className="text-2xl font-black text-slate-900 dark:text-white">{salas.filter(s => s.status === 'Fechado').length}</p>
+                </div>
+                <div className="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-200/50 dark:border-slate-800/80 shadow-sm space-y-1">
+                  <p className="text-[10px] text-amber-500 font-bold uppercase tracking-widest">Check-ins Hoje</p>
+                  <p className="text-2xl font-black text-slate-900 dark:text-white">{criancasSala.length}</p>
                 </div>
               </div>
 
-              {/* Right Column: Present kids list */}
-              <div className="lg:col-span-8 bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-[2rem] border border-slate-200/50 dark:border-slate-800/80 shadow-sm space-y-6">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
-                  <div>
+              {/* Action and title row */}
+              <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-3xl border border-slate-200/50 dark:border-slate-800/80 shadow-sm">
+                <div>
+                  <h2 className="text-base font-black uppercase text-slate-900 dark:text-white leading-tight">Painel Operacional Kids</h2>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Gerenciamento ativo de salas e check-ins</p>
+                </div>
+                <button 
+                  onClick={handleOpenNewSala}
+                  className="px-5 py-3 bg-amber-500 hover:bg-[#E4A232] text-white text-xs font-black uppercase tracking-widest rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Plus size={16} /> Criar Nova Sala
+                </button>
+              </div>
+
+              {/* If Show Room Form is True, render the room form directly here on the operational panel */}
+              {showSalaForm && (
+                <div className="bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-[2.5rem] border-2 border-amber-500/20 shadow-xl space-y-6 max-w-2xl mx-auto animate-scale-up">
+                  <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
                     <h3 className="text-lg font-black uppercase tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
                       <Baby size={20} className="text-[#E4A232]" />
-                      Crianças Presentes na Sala ({childrenInActiveSala.length})
+                      {editingSala ? 'Editar Detalhes da Sala' : 'Criar Nova Sala de Atendimento'}
                     </h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Lista de crianças atendidas atualmente nesta sala.</p>
+                    <button 
+                      onClick={() => setShowSalaForm(false)}
+                      className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-all text-slate-400 hover:text-slate-600"
+                    >
+                      <X size={20} />
+                    </button>
                   </div>
-                </div>
 
-                {childrenInActiveSala.length === 0 ? (
-                  <div className="text-center py-12 bg-slate-50/50 dark:bg-slate-950/20 rounded-3xl border border-dashed border-slate-200 dark:border-slate-800 space-y-3">
-                    <Smile size={40} className="text-slate-350 dark:text-slate-600 mx-auto" />
-                    <p className="text-sm text-slate-400 font-bold uppercase tracking-wide">Nenhuma criança na sala ainda</p>
-                    <p className="text-xs text-slate-400 max-w-sm mx-auto font-normal">Use o painel ao lado ou escaneie o QR-CODE para registrar os check-ins das crianças.</p>
+                  <form onSubmit={handleSaveSala} className="space-y-4">
+                    <div>
+                      <label className="text-[10px] font-black uppercase tracking-wider text-slate-450 dark:text-slate-500">Nome da Sala *</label>
+                      <input 
+                        type="text"
+                        required
+                        placeholder="Ex: Sala 01, Tenda Laranja, Espaço Kids"
+                        value={salaNome}
+                        onChange={(e) => setSalaNome(e.target.value)}
+                        className="w-full mt-2 p-3.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm font-bold text-slate-900 dark:text-slate-200"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-black uppercase tracking-wider text-slate-450 dark:text-slate-500">Turma Vinculada *</label>
+                      <select 
+                        value={salaTurmaId}
+                        required
+                        onChange={(e) => handleSelectTurmaForSala(e.target.value)}
+                        className="w-full mt-2 p-3.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm font-bold text-slate-900 dark:text-slate-200"
+                      >
+                        <option value="">-- Escolha a Turma --</option>
+                        {turmas.map(t => (
+                          <option key={t.id} value={t.id}>{t.nome}</option>
+                        ))}
+                      </select>
+                      <p className="text-[10px] text-slate-400 mt-1">Isso irá pré-carregar as configurações de idades e capacidade desta turma.</p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[10px] font-black uppercase tracking-wider text-slate-450 dark:text-slate-500">Idade Mínima</label>
+                        <input 
+                          type="number"
+                          value={salaIdadeMin}
+                          onChange={(e) => setSalaIdadeMin(parseInt(e.target.value) || 0)}
+                          className="w-full mt-2 p-3.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm font-bold text-slate-900 dark:text-slate-200"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black uppercase tracking-wider text-slate-450 dark:text-slate-500">Idade Máxima</label>
+                        <input 
+                          type="number"
+                          value={salaIdadeMax}
+                          onChange={(e) => setSalaIdadeMax(parseInt(e.target.value) || 0)}
+                          className="w-full mt-2 p-3.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm font-bold text-slate-900 dark:text-slate-200"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[10px] font-black uppercase tracking-wider text-slate-450 dark:text-slate-500">Capacidade Máxima</label>
+                        <input 
+                          type="number"
+                          value={salaCapacidade}
+                          onChange={(e) => setSalaCapacidade(parseInt(e.target.value) || 1)}
+                          className="w-full mt-2 p-3.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm font-bold text-slate-900 dark:text-slate-200"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black uppercase tracking-wider text-slate-450 dark:text-slate-500">Status Inicial</label>
+                        <select 
+                          value={salaStatus}
+                          onChange={(e) => setSalaStatus(e.target.value as Sala['status'])}
+                          className="w-full mt-2 p-3.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm font-bold text-slate-900 dark:text-slate-200"
+                        >
+                          <option value="Aberto">Aberta (Ativa)</option>
+                          <option value="Fechado">Fechada (Inativa)</option>
+                          <option value="Encerrado">Encerrada</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="pt-4 flex justify-end gap-3 border-t border-slate-100 dark:border-slate-800">
+                      <button 
+                        type="button"
+                        onClick={() => setShowSalaForm(false)}
+                        className="px-5 py-3 bg-slate-100 dark:bg-slate-850 hover:bg-slate-200 text-slate-700 dark:text-slate-350 font-black uppercase text-xs tracking-wider rounded-xl transition"
+                      >
+                        Cancelar
+                      </button>
+                      <button 
+                        type="submit"
+                        disabled={saving}
+                        className="px-6 py-3 bg-amber-500 hover:bg-[#E4A232] text-white font-black uppercase text-xs tracking-wider rounded-xl shadow-md transition disabled:opacity-50"
+                      >
+                        {saving ? 'Gravando...' : 'Salvar Sala'}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )}
+
+              {/* Salas Interactive Grid Dashboard */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {salas.length === 0 ? (
+                  <div className="col-span-full text-center py-16 bg-white dark:bg-slate-900 rounded-[2.5rem] border border-dashed border-slate-200 dark:border-slate-800 space-y-4">
+                    <DoorOpen size={48} className="text-slate-300 dark:text-slate-600 mx-auto" />
+                    <div>
+                      <h4 className="text-base font-black uppercase text-slate-900 dark:text-white">Nenhuma sala cadastrada</h4>
+                      <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1">Crie a sua primeira sala de atendimento kids clicando no botão Criar Nova Sala.</p>
+                    </div>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto rounded-2xl border border-slate-100 dark:border-slate-800/80">
-                    <table className="w-full text-left border-collapse">
-                      <thead>
-                        <tr className="bg-slate-50 dark:bg-slate-950 text-[10px] font-black uppercase tracking-widest text-slate-450 dark:text-slate-500 border-b border-slate-100 dark:border-slate-800">
-                          <th className="py-4 px-6">Foto</th>
-                          <th className="py-4 px-6">Nome</th>
-                          <th className="py-4 px-6">Vínculo</th>
-                          <th className="py-4 px-6">Hora Entrada</th>
-                          <th className="py-4 px-6 text-right">Ação</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50 text-sm font-bold">
-                        {childrenInActiveSala.map((c) => {
-                          let displayNome = '';
-                          let displayPhoto = '';
-                          
-                          if (c.tipo_crianca === 'Membro') {
-                            const foundMembro = membrosIgreja.find(m => m.id === c.id_membro);
-                            displayNome = foundMembro?.nome || 'Membro não encontrado';
-                            displayPhoto = foundMembro?.foto_url || '';
-                          } else {
-                            displayNome = c.nome_visitante || 'Visitante';
-                          }
+                  salas.map((s) => {
+                    const roomTurma = turmas.find(t => t.id === s.id_turma);
+                    const roomKids = criancasSala.filter(c => c.id_sala === s.id);
+                    const fillPercentage = Math.min(100, (roomKids.length / s.capacidade) * 100);
+                    
+                    return (
+                      <div 
+                        key={s.id} 
+                        className="bg-white dark:bg-slate-900 rounded-[2.2rem] border border-slate-200/60 dark:border-slate-800/80 p-6 shadow-sm space-y-5 hover:shadow-md hover:border-amber-500/25 dark:hover:border-amber-500/25 transition-all flex flex-col justify-between"
+                      >
+                        <div className="space-y-4">
+                          {/* Card Header: Title and Status Badge */}
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="space-y-0.5">
+                              <h4 className="text-base font-black uppercase text-slate-900 dark:text-white tracking-tight">{s.nome}</h4>
+                              <p className="text-[10px] text-amber-600 dark:text-amber-400 font-bold uppercase tracking-wider">
+                                Turma: {roomTurma?.nome || 'N/D'}
+                              </p>
+                            </div>
+                            
+                            {/* Status Pill */}
+                            <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                              s.status === 'Aberto'
+                                ? 'bg-green-500/10 text-green-600 dark:text-green-400'
+                                : s.status === 'Fechado'
+                                  ? 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
+                                  : 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
+                            }`}>
+                              {s.status === 'Aberto' && <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>}
+                              {s.status === 'Aberto' ? 'Aberta' : s.status === 'Fechado' ? 'Fechada' : 'Encerrada'}
+                            </span>
+                          </div>
 
-                          return (
-                            <tr key={c.id} className="text-slate-800 dark:text-slate-200 hover:bg-slate-50/50 dark:hover:bg-slate-950/20 transition-all">
-                              <td className="py-3.5 px-6">
-                                <div className="h-10 w-10 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden flex items-center justify-center border border-slate-200 dark:border-slate-700">
-                                  {displayPhoto ? (
-                                    // eslint-disable-next-line @next/next/no-img-element
-                                    <img src={displayPhoto} alt={displayNome} className="h-full w-full object-cover" />
-                                  ) : (
-                                    <Smile size={18} className="text-slate-400" />
-                                  )}
-                                </div>
-                              </td>
-                              <td className="py-3.5 px-6 font-black truncate max-w-xs">{displayNome}</td>
-                              <td className="py-3.5 px-6 text-xs uppercase">
-                                <span className={`px-2.5 py-1 rounded-full font-black tracking-wider ${
-                                  c.tipo_crianca === 'Membro' 
-                                    ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400' 
-                                    : 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400'
-                                }`}>
-                                  {c.tipo_crianca}
-                                </span>
-                              </td>
-                              <td className="py-3.5 px-6 text-xs text-slate-500">
-                                {new Date(c.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                              </td>
-                              <td className="py-3.5 px-6 text-right">
-                                <button 
-                                  onClick={() => handleRemoveCriancaFromSala(c.id)}
-                                  className="p-2 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded-lg transition-all"
-                                  title="Registrar Saída (Check-out)"
-                                >
-                                  <X size={18} />
-                                </button>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
+                          {/* Quick statistics */}
+                          <div className="grid grid-cols-2 gap-3 text-xs font-bold uppercase tracking-wider text-slate-500">
+                            <div className="p-2.5 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-100 dark:border-slate-800/40">
+                              <p className="text-[8px] text-slate-400">Faixa Etária</p>
+                              <p className="text-[11px] font-black text-slate-800 dark:text-slate-200 mt-0.5">
+                                {s.idade_minima} - {s.idade_maxima} anos
+                              </p>
+                            </div>
+                            <div className="p-2.5 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-100 dark:border-slate-800/40">
+                              <p className="text-[8px] text-slate-400">Capacidade</p>
+                              <p className="text-[11px] font-black text-slate-800 dark:text-slate-200 mt-0.5">
+                                {roomKids.length} / {s.capacidade} kids
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Capacity Progress Bar */}
+                          <div className="space-y-1">
+                            <div className="flex justify-between text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                              <span>Ocupação da Sala</span>
+                              <span>{Math.round(fillPercentage)}%</span>
+                            </div>
+                            <div className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                              <div 
+                                className={`h-full rounded-full transition-all duration-300 ${
+                                  fillPercentage >= 90 
+                                    ? 'bg-rose-500' 
+                                    : fillPercentage >= 70 
+                                      ? 'bg-amber-500' 
+                                      : 'bg-green-500'
+                                }`}
+                                style={{ width: `${fillPercentage}%` }}
+                              ></div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Room Card Actions */}
+                        <div className="pt-4 border-t border-slate-100 dark:border-slate-800/60 space-y-2">
+                          <button 
+                            onClick={async () => {
+                              // Automatically set open status if they click to operate/check-in
+                              let updatedSalas = [...salas];
+                              if (s.status !== 'Aberto') {
+                                updatedSalas = salas.map(item => item.id === s.id ? { ...item, status: 'Aberto' as const } : item);
+                                await saveSalasToDb(updatedSalas);
+                              }
+                              setSelectedSalaId(s.id);
+                              setSelectedTurmaId(s.id_turma);
+                              setIsSalaAbertaOperator(true);
+                              localStorage.setItem(`kids_active_sala_${selectedIgreja?.id}`, s.id);
+                            }}
+                            className="w-full py-2.5 bg-amber-500/10 hover:bg-amber-500 text-amber-600 dark:text-amber-400 hover:text-white font-black uppercase text-[10px] tracking-widest rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer border border-amber-500/20"
+                          >
+                            <DoorOpen size={14} /> Atendimento (Check-In)
+                          </button>
+
+                          <div className="grid grid-cols-3 gap-2">
+                            {/* Change status to open */}
+                            <button 
+                              onClick={() => handleChangeSalaStatus(s.id, 'Aberto')}
+                              disabled={s.status === 'Aberto'}
+                              className="py-1.5 bg-green-500/5 hover:bg-green-500/10 text-green-600 disabled:opacity-40 disabled:hover:bg-transparent rounded-lg text-[9px] font-black uppercase tracking-wider transition border border-green-500/10 cursor-pointer"
+                            >
+                              Abrir
+                            </button>
+                            {/* Change status to close */}
+                            <button 
+                              onClick={() => handleChangeSalaStatus(s.id, 'Fechado')}
+                              disabled={s.status === 'Fechado'}
+                              className="py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 disabled:opacity-40 disabled:hover:bg-transparent dark:bg-slate-800 dark:text-slate-400 rounded-lg text-[9px] font-black uppercase tracking-wider transition border border-transparent cursor-pointer"
+                            >
+                              Fechar
+                            </button>
+                            {/* Change status to end */}
+                            <button 
+                              onClick={() => handleChangeSalaStatus(s.id, 'Encerrado')}
+                              disabled={s.status === 'Encerrado'}
+                              className="py-1.5 bg-rose-500/5 hover:bg-rose-500/10 text-rose-600 disabled:opacity-40 disabled:hover:bg-transparent rounded-lg text-[9px] font-black uppercase tracking-wider transition border border-rose-500/10 cursor-pointer"
+                            >
+                              Encerrar
+                            </button>
+                          </div>
+
+                          <div className="flex justify-end gap-2 pt-2 text-[10px] font-bold text-slate-400">
+                            <button 
+                              onClick={() => {
+                                setEditingSala(s);
+                                setSalaNome(s.nome);
+                                setSalaTurmaId(s.id_turma);
+                                setSalaIdadeMin(s.idade_minima);
+                                setSalaIdadeMax(s.idade_maxima);
+                                setSalaCapacidade(s.capacidade);
+                                setSalaStatus(s.status);
+                                setShowSalaForm(true);
+                              }}
+                              className="hover:text-[#E4A232] px-2 py-1 transition flex items-center gap-1"
+                            >
+                              <Edit3 size={12} /> Editar
+                            </button>
+                            <button 
+                              onClick={() => handleDeleteSala(s.id)}
+                              className="hover:text-rose-500 px-2 py-1 transition flex items-center gap-1"
+                            >
+                              <Trash2 size={12} /> Excluir
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
                 )}
               </div>
             </div>

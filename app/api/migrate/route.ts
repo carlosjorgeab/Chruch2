@@ -350,8 +350,27 @@ export async function GET(req: NextRequest) {
       tipo_crianca VARCHAR(20) CHECK (tipo_crianca IN ('Membro', 'Visitante')),
       id_membro UUID REFERENCES membros(id) ON DELETE SET NULL,
       nome_visitante VARCHAR(255),
+      nome_responsavel VARCHAR(255),
+      telefone_responsavel VARCHAR(50),
+      data_nascimento DATE,
+      sexo VARCHAR(15),
+      necessidades_especiais TEXT,
+      restricoes_alimentares TEXT,
+      observacoes_medicas TEXT,
+      autoriza_imagem BOOLEAN DEFAULT false,
+      foto_url TEXT,
       created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
     );
+
+    ALTER TABLE kids_sala_criancas ADD COLUMN IF NOT EXISTS nome_responsavel VARCHAR(255);
+    ALTER TABLE kids_sala_criancas ADD COLUMN IF NOT EXISTS telefone_responsavel VARCHAR(50);
+    ALTER TABLE kids_sala_criancas ADD COLUMN IF NOT EXISTS data_nascimento DATE;
+    ALTER TABLE kids_sala_criancas ADD COLUMN IF NOT EXISTS sexo VARCHAR(15);
+    ALTER TABLE kids_sala_criancas ADD COLUMN IF NOT EXISTS necessidades_especiais TEXT;
+    ALTER TABLE kids_sala_criancas ADD COLUMN IF NOT EXISTS restricoes_alimentares TEXT;
+    ALTER TABLE kids_sala_criancas ADD COLUMN IF NOT EXISTS observacoes_medicas TEXT;
+    ALTER TABLE kids_sala_criancas ADD COLUMN IF NOT EXISTS autoriza_imagem BOOLEAN DEFAULT false;
+    ALTER TABLE kids_sala_criancas ADD COLUMN IF NOT EXISTS foto_url TEXT;
 
     -- 15. Create storage 'files' bucket and its security policies
     INSERT INTO storage.buckets (id, name, public)

@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { Settings, Save, Bell, Shield, Globe, Moon, Clock, Lock, MonitorStop, RefreshCw, CheckCircle, AlertTriangle, Database, FileText, Copy, Check, UserPlus, Cake, BookOpen, Mail, Send } from 'lucide-react';
+import { Settings, Save, Bell, Shield, Globe, Moon, Clock, Lock, MonitorStop, RefreshCw, CheckCircle, AlertTriangle, Database, FileText, Copy, Check, UserPlus, Cake, BookOpen, Mail, Send, Activity } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useLanguage } from '@/context/LanguageContext';
 import { defaultTranslations } from '@/lib/translations';
@@ -52,13 +52,32 @@ export default function ConfiguracoesPage() {
   const [checkingDb, setCheckingDb] = useState(false);
   const [schemaSql, setSchemaSql] = useState('');
   const [copied, setCopied] = useState(false);
+  const [migrations, setMigrations] = useState<Array<{ filename: string; description: string; content: string }>>([]);
+  const [loadingMigrations, setLoadingMigrations] = useState(false);
+  const [expandedMigration, setExpandedMigration] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (activeTab === 'database') {
       checkDatabaseTables();
       fetchSchema();
+      fetchMigrations();
     }
   }, [activeTab]);
+
+  const fetchMigrations = async () => {
+    try {
+      setLoadingMigrations(true);
+      const res = await fetch('/api/migrations');
+      const data = await res.json();
+      if (data.migrations) {
+        setMigrations(data.migrations);
+      }
+    } catch (e) {
+      console.error('Error fetching migrations:', e);
+    } finally {
+      setLoadingMigrations(false);
+    }
+  };
 
   const fetchSchema = async () => {
     try {
@@ -74,7 +93,10 @@ export default function ConfiguracoesPage() {
 
   const checkDatabaseTables = async () => {
     setCheckingDb(true);
-    const tables = ['igrejas', 'perfis', 'usuarios', 'membros', 'comunidades', 'lecoes', 'presencas', 'configuracoes_sistema', 'transacoes'];
+    const tables = [
+      'igrejas', 'perfis', 'usuarios', 'membros', 'comunidades', 'lecoes', 'presencas', 'configuracoes_sistema', 'transacoes',
+      'kids_turmas', 'kids_turma_membros', 'kids_salas', 'kids_programacao_sala', 'kids_sala_criancas'
+    ];
     
     const statusUpdates: Record<string, { exists: boolean; loading: boolean; error?: string }> = {};
     
@@ -1041,7 +1063,10 @@ export default function ConfiguracoesPage() {
                   </p>
 
                   <div className="space-y-2.5 max-h-[280px] overflow-y-auto pr-1">
-                    {['igrejas', 'perfis', 'usuarios', 'membros', 'comunidades', 'lecoes', 'presencas', 'configuracoes_sistema', 'transacoes'].map((tableName) => {
+                    {[
+                      'igrejas', 'perfis', 'usuarios', 'membros', 'comunidades', 'lecoes', 'presencas', 'configuracoes_sistema', 'transacoes',
+                      'kids_turmas', 'kids_turma_membros', 'kids_salas', 'kids_programacao_sala', 'kids_sala_criancas'
+                    ].map((tableName) => {
                       const status = dbStatus[tableName];
                       return (
                         <div key={tableName} className="flex items-center justify-between p-3 bg-white dark:bg-slate-850 rounded-xl border border-slate-100 dark:border-slate-800 text-xs">
@@ -1116,6 +1141,72 @@ export default function ConfiguracoesPage() {
                     {copied ? 'Copiado para Área de Transferência!' : 'Copiar Script SQL Completo (DDL)'}
                   </button>
                 </div>
+              </div>
+
+              {/* Histórico de Migrações do Banco de Dados */}
+              <div className="bg-slate-50 dark:bg-slate-900/60 rounded-3xl p-6 border border-slate-200 dark:border-slate-800/80 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <Activity className="text-indigo-500" size={18} />
+                    Histórico de Migrações do Banco de Dados
+                  </h4>
+                  <div className="text-xs text-indigo-600 dark:text-indigo-400 font-bold bg-indigo-50 dark:bg-indigo-950/20 px-2.5 py-1 rounded-full">
+                    {migrations.length} {migrations.length === 1 ? 'Migração Registrada' : 'Migrações Registradas'}
+                  </div>
+                </div>
+
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Arquivos de migrações estruturais do banco de dados salvos no diretório <code className="font-mono bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-indigo-500">/supabase/migrations</code>.
+                </p>
+
+                {loadingMigrations ? (
+                  <div className="flex flex-col items-center justify-center py-8 gap-2">
+                    <RefreshCw size={24} className="animate-spin text-slate-400" />
+                    <span className="text-xs text-slate-400">Carregando histórico de migrações...</span>
+                  </div>
+                ) : migrations.length === 0 ? (
+                  <div className="p-4 bg-white dark:bg-slate-850 rounded-2xl text-center text-xs text-slate-500 dark:text-slate-400">
+                    Nenhuma migração encontrada no diretório.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {migrations.map((mig) => {
+                      const isExpanded = !!expandedMigration[mig.filename];
+                      return (
+                        <div key={mig.filename} className="bg-white dark:bg-slate-850 border border-slate-100 dark:border-slate-800/60 rounded-2xl overflow-hidden transition-all duration-200">
+                          <div 
+                            className="p-4 flex items-center justify-between gap-4 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/20"
+                            onClick={() => setExpandedMigration(prev => ({ ...prev, [mig.filename]: !prev[mig.filename] }))}
+                          >
+                            <div className="space-y-1">
+                              <p className="font-mono text-xs font-bold text-slate-850 dark:text-slate-200">{mig.filename}</p>
+                              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">{mig.description}</p>
+                            </div>
+                            <button className="text-xs text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 font-semibold px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-750 transition-all">
+                              {isExpanded ? 'Ocultar Detalhes' : 'Visualizar SQL'}
+                            </button>
+                          </div>
+                          {isExpanded && (
+                            <div className="border-t border-slate-100 dark:border-slate-800 p-4 bg-slate-900 text-slate-300 font-mono text-[10px] overflow-x-auto relative max-h-[300px] overflow-y-auto">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigator.clipboard.writeText(mig.content);
+                                  alert('Código SQL copiado!');
+                                }}
+                                className="absolute right-3 top-3 p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-all"
+                                title="Copiar código desta migração"
+                              >
+                                <Copy size={12} />
+                              </button>
+                              <pre className="whitespace-pre">{mig.content}</pre>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           )}

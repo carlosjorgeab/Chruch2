@@ -316,5 +316,70 @@ CREATE TABLE IF NOT EXISTS eventos_inscricoes (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
+-- 14. Kids Module - Turmas
+CREATE TABLE IF NOT EXISTS kids_turmas (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id_igreja UUID REFERENCES igrejas(id) ON DELETE CASCADE,
+  nome VARCHAR(255) NOT NULL,
+  idade_minima INT,
+  idade_maxima INT,
+  capacidade INT,
+  tipo_entrada VARCHAR(50) CHECK (tipo_entrada IN ('Link Público', 'Manual', 'Automático')),
+  imagem_url TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 15. Kids Module - Membros da Turma
+CREATE TABLE IF NOT EXISTS kids_turma_membros (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id_turma UUID REFERENCES kids_turmas(id) ON DELETE CASCADE,
+  id_membro UUID REFERENCES membros(id) ON DELETE CASCADE,
+  cargo VARCHAR(50) CHECK (cargo IN ('Lider', 'Coordenador', 'Supervisor', 'Professor', 'Auxiliar', 'Monitor', 'Recepcionista', 'Berçario', 'Voluntário', 'Segurança', 'Apoio')),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+  UNIQUE(id_turma, id_membro)
+);
+
+-- 16. Kids Module - Salas
+CREATE TABLE IF NOT EXISTS kids_salas (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id_turma UUID REFERENCES kids_turmas(id) ON DELETE CASCADE,
+  nome VARCHAR(255) NOT NULL,
+  idade_minima INT,
+  idade_maxima INT,
+  capacidade INT,
+  status VARCHAR(50) DEFAULT 'Fechado' CHECK (status IN ('Fechado', 'Aberto', 'Encerrado')),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 17. Kids Module - Programação da Sala
+CREATE TABLE IF NOT EXISTS kids_programacao_sala (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id_sala UUID REFERENCES kids_salas(id) ON DELETE CASCADE,
+  id_agenda UUID REFERENCES agendas(id) ON DELETE SET NULL,
+  descricao TEXT NOT NULL,
+  data_hora TIMESTAMP WITH TIME ZONE NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 18. Kids Module - Crianças na Sala
+CREATE TABLE IF NOT EXISTS kids_sala_criancas (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id_sala UUID REFERENCES kids_salas(id) ON DELETE CASCADE,
+  tipo_crianca VARCHAR(20) CHECK (tipo_crianca IN ('Membro', 'Visitante')),
+  id_membro UUID REFERENCES membros(id) ON DELETE SET NULL,
+  nome_visitante VARCHAR(255),
+  nome_responsavel VARCHAR(255),
+  telefone_responsavel VARCHAR(50),
+  data_nascimento DATE,
+  sexo VARCHAR(15),
+  necessidades_especiais TEXT,
+  restricoes_alimentares TEXT,
+  observacoes_medicas TEXT,
+  autoriza_imagem BOOLEAN DEFAULT false,
+  foto_url TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+
 
 
