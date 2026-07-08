@@ -1218,6 +1218,7 @@ export default function KidsModule() {
                               }
                             }}
                             onFocus={() => setShowSearchSuggestions(true)}
+                            onBlur={() => setTimeout(() => setShowSearchSuggestions(false), 200)}
                             className="w-full p-3.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm font-bold text-slate-900 dark:text-slate-200 outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                           />
                           
@@ -1225,7 +1226,7 @@ export default function KidsModule() {
                             <div className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl max-h-60 overflow-y-auto">
                               {(() => {
                                 const filteredKids = membrosIgreja.filter(m => {
-                                  const isChild = m.categoria === 'Criança' || m.categoria === 'criança';
+                                  const isChild = m.categoria && m.categoria.toLowerCase().includes('crian');
                                   if (!isChild) return false;
                                   if (!searchChildQuery) return true;
                                   return m.nome?.toLowerCase().includes(searchChildQuery.toLowerCase());
