@@ -359,6 +359,9 @@ export async function GET(req: NextRequest) {
       observacoes_medicas TEXT,
       autoriza_imagem BOOLEAN DEFAULT false,
       foto_url TEXT,
+      status VARCHAR(50) DEFAULT 'Aberto',
+      observacao_checkout TEXT,
+      data_checkout TIMESTAMP WITH TIME ZONE,
       created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
     );
 
@@ -371,6 +374,9 @@ export async function GET(req: NextRequest) {
     ALTER TABLE kids_sala_criancas ADD COLUMN IF NOT EXISTS observacoes_medicas TEXT;
     ALTER TABLE kids_sala_criancas ADD COLUMN IF NOT EXISTS autoriza_imagem BOOLEAN DEFAULT false;
     ALTER TABLE kids_sala_criancas ADD COLUMN IF NOT EXISTS foto_url TEXT;
+    ALTER TABLE kids_sala_criancas ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'Aberto';
+    ALTER TABLE kids_sala_criancas ADD COLUMN IF NOT EXISTS observacao_checkout TEXT;
+    ALTER TABLE kids_sala_criancas ADD COLUMN IF NOT EXISTS data_checkout TIMESTAMP WITH TIME ZONE;
 
     -- 15. Create storage 'files' bucket and its security policies
     INSERT INTO storage.buckets (id, name, public)

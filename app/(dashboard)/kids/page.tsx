@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase';
 import { 
   Baby, Users, DoorOpen, Plus, Trash2, Calendar, Edit3, Check, X, 
   UploadCloud, ArrowRight, UserCheck, Smile, HelpCircle, QrCode, AlertCircle,
-  Activity, Heart, ShieldAlert, Phone, User, Info, FileText, Printer
+  Activity, Heart, ShieldAlert, Phone, User, Info, FileText, Printer, Clock
 } from 'lucide-react';
 
 interface TurmaMembro {
@@ -61,6 +61,9 @@ interface SalaCrianca {
   observacoes_medicas?: string;
   autoriza_imagem: boolean;
   foto_url?: string;
+  status?: string;
+  observacao_checkout?: string;
+  data_checkout?: string;
 }
 
 export default function KidsModule() {
@@ -146,6 +149,22 @@ export default function KidsModule() {
   const [selectedChildForBadge, setSelectedChildForBadge] = useState<SalaCrianca | null>(null);
   const [selectedChildForQr, setSelectedChildForQr] = useState<SalaCrianca | null>(null);
 
+  // Editing check-in state
+  const [editingCheckin, setEditingCheckin] = useState<SalaCrianca | null>(null);
+  const [editChildNomeResponsavel, setEditChildNomeResponsavel] = useState<string>('');
+  const [editChildTelefoneResponsavel, setEditChildTelefoneResponsavel] = useState<string>('');
+  const [editChildDataNascimento, setEditChildDataNascimento] = useState<string>('');
+  const [editChildSexo, setEditChildSexo] = useState<'Masculino' | 'Feminino'>('Masculino');
+  const [editChildNecessidades, setEditChildNecessidades] = useState<string>('');
+  const [editChildRestricoes, setEditChildRestricoes] = useState<string>('');
+  const [editChildObservacoesMedicas, setEditChildObservacoesMedicas] = useState<string>('');
+  const [editChildAutorizaImagem, setEditChildAutorizaImagem] = useState<boolean>(false);
+  const [editChildFotoUrl, setEditChildFotoUrl] = useState<string>('');
+
+  // Checking out child state
+  const [checkingOutChild, setCheckingOutChild] = useState<SalaCrianca | null>(null);
+  const [checkoutObservation, setCheckoutObservation] = useState<string>('');
+
   // Auto populate member child details
   useEffect(() => {
     if (addChildTipo === 'Membro' && addChildMembroId) {
@@ -184,7 +203,7 @@ export default function KidsModule() {
     }
   }, [selectedIgreja, canAccessPainel, canAccessTurmas, canAccessSalas]);
 
-  // Load data from DB via configuracoes_sistema
+  // Load data from DB
   const loadAllData = async () => {
     if (!selectedIgreja?.id) return;
     setLoading(true);
@@ -199,60 +218,135 @@ export default function KidsModule() {
       if (memError) throw memError;
       setMembrosIgreja(members || []);
 
-      // 2. Load Turmas from configuracoes_sistema
-      const { data: configTurmas, error: tError } = await supabase
-        .from('configuracoes_sistema')
-        .select('valor')
-        .eq('chave', `kids_turmas_${selectedIgreja.id}`)
-        .maybeSingle();
+      // 2. Load Turmas from kids_turmas
+      const { data: turmasDb, error: tError } = await supabase
+        .from('kids_turmas')
+        .select('*')
+        .eq('id_igreja', selectedIgreja.id)
+        .order('nome', { ascending: true });
+
+      if (tError) throw tError;
 
       let loadedTurmas: Turma[] = [];
-      if (configTurmas?.valor) {
-        try {
-          loadedTurmas = JSON.parse(configTurmas.valor);
-          setTurmas(loadedTurmas);
-        } catch (e) {
-          console.error('Error parsing turmas JSON:', e);
-        }
-      } else {
-        setTurmas([]);
+      const turmaIds = (turmasDb || []).map(t => t.id);
+
+      if (turmaIds.length > 0) {
+        // Load members for these turmas
+        const { data: tmDb, error: tmError } = await supabase
+          .from('kids_turma_membros')
+          .select('*')
+          .in('id_turma', turmaIds);
+
+        if (tmError) throw tmError;
+
+        loadedTurmas = (turmasDb || []).map(t => {
+          const filteredMembers = (tmDb || [])
+            .filter(tm => tm.id_turma === t.id)
+            .map(tm => {
+              const mObj = members?.find(m => m.id === tm.id_membro);
+              return {
+                id_membro: tm.id_membro,
+                nome_membro: mObj?.nome || 'Membro não encontrado',
+                cargo: tm.cargo as any
+              };
+            });
+
+          return {
+            id: t.id,
+            nome: t.nome,
+            idade_minima: t.idade_minima ?? 0,
+            idade_maxima: t.idade_maxima ?? 12,
+            capacidade: t.capacidade ?? 15,
+            tipo_entrada: t.tipo_entrada as any,
+            imagem_url: t.imagem_url || '',
+            membros: filteredMembers
+          };
+        });
       }
 
-      // 3. Load Salas from configuracoes_sistema
-      const { data: configSalas, error: sError } = await supabase
-        .from('configuracoes_sistema')
-        .select('valor')
-        .eq('chave', `kids_salas_${selectedIgreja.id}`)
-        .maybeSingle();
+      setTurmas(loadedTurmas);
 
+      // 3. Load Salas from kids_salas
       let loadedSalas: Sala[] = [];
-      if (configSalas?.valor) {
-        try {
-          loadedSalas = JSON.parse(configSalas.valor);
-          setSalas(loadedSalas);
-        } catch (e) {
-          console.error('Error parsing salas JSON:', e);
+      if (turmaIds.length > 0) {
+        const { data: salasDb, error: sError } = await supabase
+          .from('kids_salas')
+          .select('*')
+          .in('id_turma', turmaIds);
+
+        if (sError) throw sError;
+
+        const salaIds = (salasDb || []).map(s => s.id);
+        let progDb: any[] = [];
+        if (salaIds.length > 0) {
+          const { data: pDb, error: pError } = await supabase
+            .from('kids_programacao_sala')
+            .select('*')
+            .in('id_sala', salaIds);
+
+          if (pError) throw pError;
+          progDb = pDb || [];
         }
-      } else {
-        setSalas([]);
+
+        loadedSalas = (salasDb || []).map(s => {
+          const sProgs = progDb
+            .filter(p => p.id_sala === s.id)
+            .map(p => ({
+              id: p.id,
+              descricao: p.descricao,
+              data_hora: p.data_hora,
+              id_agenda: p.id_agenda
+            }));
+
+          return {
+            id: s.id,
+            id_turma: s.id_turma,
+            nome: s.nome,
+            idade_minima: s.idade_minima ?? 0,
+            idade_maxima: s.idade_maxima ?? 12,
+            capacidade: s.capacidade ?? 15,
+            status: s.status as any,
+            programacao: sProgs
+          };
+        });
       }
 
-      // 4. Load Children check-in records from configuracoes_sistema
-      const { data: configCriancas, error: cError } = await supabase
-        .from('configuracoes_sistema')
-        .select('valor')
-        .eq('chave', `kids_sala_criancas_${selectedIgreja.id}`)
-        .maybeSingle();
+      setSalas(loadedSalas);
 
-      if (configCriancas?.valor) {
-        try {
-          setCriancasSala(JSON.parse(configCriancas.valor));
-        } catch (e) {
-          console.error('Error parsing children records JSON:', e);
-        }
-      } else {
-        setCriancasSala([]);
+      // 4. Load Children check-in records from kids_sala_criancas
+      let loadedCriancas: SalaCrianca[] = [];
+      const allSalaIds = loadedSalas.map(s => s.id);
+      if (allSalaIds.length > 0) {
+        const { data: criancasDb, error: cError } = await supabase
+          .from('kids_sala_criancas')
+          .select('*')
+          .in('id_sala', allSalaIds);
+
+        if (cError) throw cError;
+
+        loadedCriancas = (criancasDb || []).map(c => ({
+          id: c.id,
+          id_sala: c.id_sala,
+          tipo_crianca: c.tipo_crianca as any,
+          id_membro: c.id_membro,
+          nome_visitante: c.nome_visitante,
+          created_at: c.created_at,
+          nome_responsavel: c.nome_responsavel || '',
+          telefone_responsavel: c.telefone_responsavel || '',
+          data_nascimento: c.data_nascimento || '',
+          sexo: c.sexo as any,
+          necessidades_especiais: c.necessidades_especiais || '',
+          restricoes_alimentares: c.restricoes_alimentares || '',
+          observacoes_medicas: c.observacoes_medicas || '',
+          autoriza_imagem: c.autoriza_imagem || false,
+          foto_url: c.foto_url || '',
+          status: c.status || 'Aberto',
+          observacao_checkout: c.observacao_checkout || '',
+          data_checkout: c.data_checkout || ''
+        }));
       }
+
+      setCriancasSala(loadedCriancas);
 
       // 5. Check if we had an open Sala session saved in localStorage
       const cachedSalaId = localStorage.getItem(`kids_active_sala_${selectedIgreja.id}`);
@@ -283,61 +377,167 @@ export default function KidsModule() {
     }
   };
 
-  // Save Turmas to cloud DB
+  // Save Turmas to cloud DB (real tables)
   const saveTurmasToDb = async (updatedTurmas: Turma[]) => {
     if (!selectedIgreja?.id) return;
     try {
-      const { error } = await supabase
-        .from('configuracoes_sistema')
-        .upsert({
-          chave: `kids_turmas_${selectedIgreja.id}`,
-          valor: JSON.stringify(updatedTurmas),
-          descricao: `Turmas do módulo Kids da igreja ${selectedIgreja.nome}`
-        }, { onConflict: 'chave' });
+      // 1. Prepare Turma records for DB upsert
+      const turmasToUpsert = updatedTurmas.map(t => ({
+        id: t.id,
+        id_igreja: selectedIgreja.id,
+        nome: t.nome,
+        idade_minima: t.idade_minima,
+        idade_maxima: t.idade_maxima,
+        capacidade: t.capacidade,
+        tipo_entrada: t.tipo_entrada,
+        imagem_url: t.imagem_url || null
+      }));
 
-      if (error) throw error;
+      // Upsert into kids_turmas
+      if (turmasToUpsert.length > 0) {
+        const { error: tError } = await supabase
+          .from('kids_turmas')
+          .upsert(turmasToUpsert);
+        if (tError) throw tError;
+      }
+
+      // 2. Sync members
+      // Gather all turma IDs being saved
+      const turmaIds = updatedTurmas.map(t => t.id);
+      
+      // Delete old member mappings for these turmas
+      if (turmaIds.length > 0) {
+        const { error: dError } = await supabase
+          .from('kids_turma_membros')
+          .delete()
+          .in('id_turma', turmaIds);
+        if (dError) throw dError;
+      }
+
+      // Insert new member mappings
+      const membersToInsert: any[] = [];
+      updatedTurmas.forEach(t => {
+        if (t.membros && t.membros.length > 0) {
+          t.membros.forEach(m => {
+            membersToInsert.push({
+              id_turma: t.id,
+              id_membro: m.id_membro,
+              cargo: m.cargo
+            });
+          });
+        }
+      });
+
+      if (membersToInsert.length > 0) {
+        const { error: mError } = await supabase
+          .from('kids_turma_membros')
+          .insert(membersToInsert);
+        if (mError) throw mError;
+      }
+
       setTurmas(updatedTurmas);
-      showNotification('Turmas salvas com sucesso no servidor!', 'success');
+      showNotification('Turmas salvas com sucesso no banco de dados!', 'success');
     } catch (err: any) {
-      console.error('Error saving turmas:', err);
+      console.error('Error saving turmas to database:', err);
       showNotification('Erro ao salvar as turmas no banco de dados.', 'error');
     }
   };
 
-  // Save Salas to cloud DB
+  // Save Salas to cloud DB (real tables)
   const saveSalasToDb = async (updatedSalas: Sala[]) => {
     if (!selectedIgreja?.id) return;
     try {
-      const { error } = await supabase
-        .from('configuracoes_sistema')
-        .upsert({
-          chave: `kids_salas_${selectedIgreja.id}`,
-          valor: JSON.stringify(updatedSalas),
-          descricao: `Salas do módulo Kids da igreja ${selectedIgreja.nome}`
-        }, { onConflict: 'chave' });
+      // Prepare Sala records for DB upsert
+      const salasToUpsert = updatedSalas.map(s => ({
+        id: s.id,
+        id_turma: s.id_turma,
+        nome: s.nome,
+        idade_minima: s.idade_minima,
+        idade_maxima: s.idade_maxima,
+        capacidade: s.capacidade,
+        status: s.status
+      }));
 
-      if (error) throw error;
+      // Upsert into kids_salas
+      if (salasToUpsert.length > 0) {
+        const { error: sError } = await supabase
+          .from('kids_salas')
+          .upsert(salasToUpsert);
+        if (sError) throw sError;
+      }
+
+      // Sync Programacao
+      const salaIds = updatedSalas.map(s => s.id);
+      if (salaIds.length > 0) {
+        const { error: dError } = await supabase
+          .from('kids_programacao_sala')
+          .delete()
+          .in('id_sala', salaIds);
+        if (dError) throw dError;
+      }
+
+      const progToInsert: any[] = [];
+      updatedSalas.forEach(s => {
+        if (s.programacao && s.programacao.length > 0) {
+          s.programacao.forEach(p => {
+            progToInsert.push({
+              id: p.id,
+              id_sala: s.id,
+              id_agenda: p.id_agenda || null,
+              descricao: p.descricao,
+              data_hora: new Date(p.data_hora).toISOString()
+            });
+          });
+        }
+      });
+
+      if (progToInsert.length > 0) {
+        const { error: pError } = await supabase
+          .from('kids_programacao_sala')
+          .insert(progToInsert);
+        if (pError) throw pError;
+      }
+
       setSalas(updatedSalas);
-      showNotification('Salas salvas com sucesso no servidor!', 'success');
+      showNotification('Salas salvas com sucesso no banco de dados!', 'success');
     } catch (err: any) {
       console.error('Error saving salas:', err);
       showNotification('Erro ao salvar as salas no banco de dados.', 'error');
     }
   };
 
-  // Save Children check-in records to cloud DB
+  // Save Children check-in records to cloud DB (real table)
   const saveChildrenToDb = async (updatedCriancas: SalaCrianca[]) => {
     if (!selectedIgreja?.id) return;
     try {
-      const { error } = await supabase
-        .from('configuracoes_sistema')
-        .upsert({
-          chave: `kids_sala_criancas_${selectedIgreja.id}`,
-          valor: JSON.stringify(updatedCriancas),
-          descricao: `Presenças de crianças nas salas da igreja ${selectedIgreja.nome}`
-        }, { onConflict: 'chave' });
+      const criancasToUpsert = updatedCriancas.map(c => ({
+        id: c.id,
+        id_sala: c.id_sala,
+        tipo_crianca: c.tipo_crianca,
+        id_membro: c.id_membro || null,
+        nome_visitante: c.nome_visitante || null,
+        nome_responsavel: c.nome_responsavel,
+        telefone_responsavel: c.telefone_responsavel,
+        data_nascimento: c.data_nascimento || null,
+        sexo: c.sexo,
+        necessidades_especiais: c.necessidades_especiais || null,
+        restricoes_alimentares: c.restricoes_alimentares || null,
+        observacoes_medicas: c.observacoes_medicas || null,
+        autoriza_imagem: c.autoriza_imagem,
+        foto_url: c.foto_url || null,
+        status: c.status || 'Aberto',
+        observacao_checkout: c.observacao_checkout || null,
+        data_checkout: c.data_checkout || null,
+        created_at: c.created_at
+      }));
 
-      if (error) throw error;
+      if (criancasToUpsert.length > 0) {
+        const { error: cError } = await supabase
+          .from('kids_sala_criancas')
+          .upsert(criancasToUpsert);
+        if (cError) throw cError;
+      }
+
       setCriancasSala(updatedCriancas);
     } catch (err: any) {
       console.error('Error saving checked-in children:', err);
@@ -427,13 +627,22 @@ export default function KidsModule() {
   const handleDeleteTurma = async (turmaId: string) => {
     if (!confirm('Deseja realmente excluir esta turma? Todas as salas vinculadas a ela serão afetadas.')) return;
     try {
+      // Explicitly delete from database
+      const { error: dError } = await supabase
+        .from('kids_turmas')
+        .delete()
+        .eq('id', turmaId);
+      if (dError) throw dError;
+
       const updatedTurmasList = turmas.filter(t => t.id !== turmaId);
       const updatedSalas = salas.filter(s => s.id_turma !== turmaId);
       
-      await saveTurmasToDb(updatedTurmasList);
-      await saveSalasToDb(updatedSalas);
+      setTurmas(updatedTurmasList);
+      setSalas(updatedSalas);
+      showNotification('Turma excluída com sucesso!', 'success');
     } catch (err) {
       console.error(err);
+      showNotification('Erro ao excluir turma.', 'error');
     }
   };
 
@@ -602,11 +811,18 @@ export default function KidsModule() {
   const handleDeleteSala = async (salaId: string) => {
     if (!confirm('Deseja realmente excluir esta sala?')) return;
     try {
+      const { error: dError } = await supabase
+        .from('kids_salas')
+        .delete()
+        .eq('id', salaId);
+      if (dError) throw dError;
+
       const updatedSalas = salas.filter(s => s.id !== salaId);
       const updatedCriancas = criancasSala.filter(c => c.id_sala !== salaId);
       
-      await saveSalasToDb(updatedSalas);
-      await saveChildrenToDb(updatedCriancas);
+      setSalas(updatedSalas);
+      setCriancasSala(updatedCriancas);
+      showNotification('Sala excluída com sucesso!', 'success');
       
       if (selectedSalaId === salaId) {
         setIsSalaAbertaOperator(false);
@@ -615,6 +831,7 @@ export default function KidsModule() {
       }
     } catch (err) {
       console.error(err);
+      showNotification('Erro ao excluir sala.', 'error');
     }
   };
 
@@ -960,9 +1177,105 @@ export default function KidsModule() {
   };
 
   const handleRemoveCriancaFromSala = async (checkinId: string) => {
-    const updatedCriancas = criancasSala.filter(c => c.id !== checkinId);
-    await saveChildrenToDb(updatedCriancas);
-    showNotification('Saída registrada com sucesso!', 'success');
+    if (!confirm('Deseja realmente excluir este check-in?')) return;
+    try {
+      const { error: dError } = await supabase
+        .from('kids_sala_criancas')
+        .delete()
+        .eq('id', checkinId);
+      if (dError) throw dError;
+
+      const updatedCriancas = criancasSala.filter(c => c.id !== checkinId);
+      setCriancasSala(updatedCriancas);
+      showNotification('Check-in excluído com sucesso!', 'success');
+    } catch (err) {
+      console.error(err);
+      showNotification('Erro ao excluir check-in.', 'error');
+    }
+  };
+
+  const handleOpenEditCheckin = (c: SalaCrianca) => {
+    setEditingCheckin(c);
+    setEditChildNomeResponsavel(c.nome_responsavel || '');
+    setEditChildTelefoneResponsavel(c.telefone_responsavel || '');
+    setEditChildDataNascimento(c.data_nascimento || '');
+    setEditChildSexo(c.sexo || 'Masculino');
+    setEditChildNecessidades(c.necessidades_especiais || '');
+    setEditChildRestricoes(c.restricoes_alimentares || '');
+    setEditChildObservacoesMedicas(c.observacoes_medicas || '');
+    setEditChildAutorizaImagem(c.autoriza_imagem || false);
+    setEditChildFotoUrl(c.foto_url || '');
+  };
+
+  const handleSaveEditCheckin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingCheckin) return;
+    if (!editChildNomeResponsavel.trim()) {
+      showNotification('Informe o Nome do Responsável.', 'error');
+      return;
+    }
+    if (!editChildTelefoneResponsavel.trim()) {
+      showNotification('Informe o Telefone do Responsável.', 'error');
+      return;
+    }
+
+    try {
+      const updatedCriancas = criancasSala.map(c => {
+        if (c.id === editingCheckin.id) {
+          return {
+            ...c,
+            nome_responsavel: editChildNomeResponsavel.trim(),
+            telefone_responsavel: editChildTelefoneResponsavel.trim(),
+            data_nascimento: editChildDataNascimento,
+            sexo: editChildSexo,
+            necessidades_especiais: editChildNecessidades.trim() || undefined,
+            restricoes_alimentares: editChildRestricoes.trim() || undefined,
+            observacoes_medicas: editChildObservacoesMedicas.trim() || undefined,
+            autoriza_imagem: editChildAutorizaImagem,
+            foto_url: editChildAutorizaImagem && editChildFotoUrl ? editChildFotoUrl : undefined
+          };
+        }
+        return c;
+      });
+
+      await saveChildrenToDb(updatedCriancas);
+      setEditingCheckin(null);
+      showNotification('Check-in editado com sucesso!', 'success');
+    } catch (err) {
+      console.error(err);
+      showNotification('Erro ao editar check-in.', 'error');
+    }
+  };
+
+  const handleOpenCheckout = (c: SalaCrianca) => {
+    setCheckingOutChild(c);
+    setCheckoutObservation(c.observacao_checkout || '');
+  };
+
+  const handleSaveCheckout = async () => {
+    if (!checkingOutChild) return;
+
+    try {
+      const updatedCriancas = criancasSala.map(c => {
+        if (c.id === checkingOutChild.id) {
+          return {
+            ...c,
+            status: 'Saída',
+            observacao_checkout: checkoutObservation.trim() || undefined,
+            data_checkout: new Date().toISOString()
+          };
+        }
+        return c;
+      });
+
+      await saveChildrenToDb(updatedCriancas);
+      setCheckingOutChild(null);
+      setCheckoutObservation('');
+      showNotification('Check-out realizado com sucesso!', 'success');
+    } catch (err) {
+      console.error(err);
+      showNotification('Erro ao salvar check-out.', 'error');
+    }
   };
 
   // Helper selectors and loaders
@@ -1523,8 +1836,9 @@ export default function KidsModule() {
                           <tr className="bg-slate-50 dark:bg-slate-950 text-[10px] font-black uppercase tracking-widest text-slate-450 dark:text-slate-500 border-b border-slate-100 dark:border-slate-800">
                             <th className="py-4 px-4">Identificação</th>
                             <th className="py-4 px-4">Responsável</th>
-                            <th className="py-4 px-4 text-center">Ações de Atendimento</th>
-                            <th className="py-4 px-4 text-right">Saída</th>
+                            <th className="py-4 px-4">Status</th>
+                            <th className="py-4 px-4 text-center">Ações</th>
+                            <th className="py-4 px-4 text-right">Check-out</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50 text-xs font-bold">
@@ -1545,7 +1859,7 @@ export default function KidsModule() {
                             const hasAlerts = c.necessidades_especiais || c.restricoes_alimentares || c.observacoes_medicas;
 
                             return (
-                              <tr key={c.id} className="text-slate-800 dark:text-slate-200 hover:bg-slate-50/50 dark:hover:bg-slate-950/20 transition-all">
+                              <tr key={c.id} className={`text-slate-800 dark:text-slate-200 hover:bg-slate-50/50 dark:hover:bg-slate-950/20 transition-all ${c.status === 'Saída' ? 'opacity-70 bg-slate-50/30' : ''}`}>
                                 <td className="py-3.5 px-4">
                                   <div className="flex items-center gap-3">
                                     <div className="h-10 w-10 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden flex items-center justify-center border border-slate-200 dark:border-slate-700 shrink-0">
@@ -1583,12 +1897,33 @@ export default function KidsModule() {
                                 </td>
 
                                 <td className="py-3.5 px-4">
+                                  {c.status === 'Saída' ? (
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase bg-rose-500/10 text-rose-600 dark:text-rose-400">
+                                      Saída
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 animate-pulse">
+                                      Ativo
+                                    </span>
+                                  )}
+                                </td>
+
+                                <td className="py-3.5 px-4 text-center">
                                   <div className="flex items-center justify-center gap-2">
-                                    {/* Entry QR Code */}
+                                    {/* Edit check-in */}
+                                    <button 
+                                      onClick={() => handleOpenEditCheckin(c)}
+                                      className="p-2 bg-blue-500/5 hover:bg-blue-500/10 border border-blue-500/20 text-blue-600 dark:text-blue-400 rounded-xl transition-all"
+                                      title="Editar Check-in"
+                                    >
+                                      <Edit3 size={14} />
+                                    </button>
+
+                                    {/* Checkout QR Code */}
                                     <button 
                                       onClick={() => setSelectedChildForQr(c)}
                                       className="p-2 bg-amber-500/5 hover:bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 rounded-xl transition-all"
-                                      title="QR Code de Entrada"
+                                      title="QR Code de Checkout"
                                     >
                                       <QrCode size={14} />
                                     </button>
@@ -1597,7 +1932,7 @@ export default function KidsModule() {
                                     <button 
                                       onClick={() => setSelectedChildForBadge(c)}
                                       className="p-2 bg-indigo-500/5 hover:bg-indigo-500/10 border border-indigo-500/20 text-indigo-600 dark:text-indigo-400 rounded-xl transition-all flex items-center gap-1 font-black uppercase text-[9px] tracking-wider"
-                                      title="Etiqueta de Impressão"
+                                      title="Imprimir Etiqueta"
                                     >
                                       <Printer size={14} />
                                       Etiqueta
@@ -1606,13 +1941,24 @@ export default function KidsModule() {
                                 </td>
 
                                 <td className="py-3.5 px-4 text-right">
-                                  <button 
-                                    onClick={() => handleRemoveCriancaFromSala(c.id)}
-                                    className="p-2 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded-xl transition-all border border-transparent hover:border-rose-200"
-                                    title="Registrar Saída (Check-out)"
-                                  >
-                                    <X size={16} />
-                                  </button>
+                                  {c.status === 'Saída' ? (
+                                    <div className="text-right">
+                                      <p className="text-[10px] text-slate-400">Saída realizada</p>
+                                      {c.data_checkout && (
+                                        <p className="text-[9px] font-mono text-slate-400">
+                                          {new Date(c.data_checkout).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        </p>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <button 
+                                      onClick={() => handleOpenCheckout(c)}
+                                      className="px-3 py-1.5 bg-rose-500 hover:bg-rose-600 text-white text-[10px] font-black uppercase tracking-wider rounded-xl shadow-sm transition-all"
+                                      title="Registrar Check-out"
+                                    >
+                                      Check-out
+                                    </button>
+                                  )}
                                 </td>
                               </tr>
                             );
@@ -2618,6 +2964,419 @@ export default function KidsModule() {
               </div>
             )
           )}
+        </div>
+      )}
+
+      {/* MODALS SECTION */}
+
+      {/* 1. EDIT CHECK-IN MODAL */}
+      {editingCheckin && (
+        <div className="fixed inset-0 bg-slate-900/65 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-150 dark:border-slate-800 shadow-2xl w-full max-w-2xl overflow-hidden animate-scale-in">
+            <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-950/20">
+              <h3 className="text-md font-black uppercase tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
+                <Edit3 size={18} className="text-blue-500" />
+                Editar Dados de Check-in
+              </h3>
+              <button 
+                onClick={() => setEditingCheckin(null)}
+                className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl transition-all"
+              >
+                <X size={18} className="text-slate-500" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditCheckin} className="p-8 space-y-6 max-h-[75vh] overflow-y-auto">
+              {/* Parent/Contact Info */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-500">Nome do Responsável</label>
+                  <input 
+                    type="text"
+                    required
+                    value={editChildNomeResponsavel}
+                    onChange={(e) => setEditChildNomeResponsavel(e.target.value)}
+                    className="w-full mt-1.5 p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-900 dark:text-slate-200"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-500">Telefone do Responsável</label>
+                  <input 
+                    type="text"
+                    required
+                    value={editChildTelefoneResponsavel}
+                    onChange={(e) => setEditChildTelefoneResponsavel(e.target.value)}
+                    className="w-full mt-1.5 p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-900 dark:text-slate-200"
+                  />
+                </div>
+              </div>
+
+              {/* Birth & Gender */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-500">Data de Nascimento</label>
+                  <input 
+                    type="date"
+                    required
+                    value={editChildDataNascimento}
+                    onChange={(e) => setEditChildDataNascimento(e.target.value)}
+                    className="w-full mt-1.5 p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-900 dark:text-slate-200"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-500">Sexo / Gênero</label>
+                  <select 
+                    value={editChildSexo}
+                    onChange={(e) => setEditChildSexo(e.target.value as any)}
+                    className="w-full mt-1.5 p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-900 dark:text-slate-200"
+                  >
+                    <option value="Masculino">Masculino</option>
+                    <option value="Feminino">Feminino</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Special needs, dietary restrictions and medical notes */}
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-500">Necessidades Especiais (Se houver)</label>
+                  <textarea 
+                    value={editChildNecessidades}
+                    onChange={(e) => setEditChildNecessidades(e.target.value)}
+                    rows={2}
+                    className="w-full mt-1.5 p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-900 dark:text-slate-200"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-500">Restrições Alimentares / Alergias</label>
+                  <textarea 
+                    value={editChildRestricoes}
+                    onChange={(e) => setEditChildRestricoes(e.target.value)}
+                    rows={2}
+                    className="w-full mt-1.5 p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-900 dark:text-slate-200"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-500">Observações Médicas / Remédios</label>
+                  <textarea 
+                    value={editChildObservacoesMedicas}
+                    onChange={(e) => setEditChildObservacoesMedicas(e.target.value)}
+                    rows={2}
+                    className="w-full mt-1.5 p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-900 dark:text-slate-200"
+                  />
+                </div>
+              </div>
+
+              {/* Image Authorization Toggle */}
+              <div className="flex items-center gap-3 p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-100 dark:border-slate-800/60">
+                <input 
+                  type="checkbox"
+                  id="editChildAutorizaImagem"
+                  checked={editChildAutorizaImagem}
+                  onChange={(e) => setEditChildAutorizaImagem(e.target.checked)}
+                  className="h-4 w-4 rounded text-[#E4A232] border-slate-300 focus:ring-[#E4A232]"
+                />
+                <label htmlFor="editChildAutorizaImagem" className="text-xs font-bold text-slate-700 dark:text-slate-300 selection:bg-transparent cursor-pointer">
+                  Autorizo o uso de imagem da criança para fins ministeriais internos e relatórios.
+                </label>
+              </div>
+
+              <div className="border-t border-slate-100 dark:border-slate-800 pt-6 flex justify-end gap-3">
+                <button 
+                  type="button"
+                  onClick={() => setEditingCheckin(null)}
+                  className="px-5 py-3 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-950/20 text-slate-700 dark:text-slate-300 text-xs font-black uppercase tracking-widest rounded-xl transition-all"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="submit"
+                  className="px-6 py-3 bg-[#E4A232] hover:opacity-95 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-md"
+                >
+                  Salvar Alterações
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 2. CHECK-OUT MODAL */}
+      {checkingOutChild && (
+        <div className="fixed inset-0 bg-slate-900/65 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-150 dark:border-slate-800 shadow-2xl w-full max-w-lg overflow-hidden animate-scale-in">
+            <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-950/20">
+              <h3 className="text-md font-black uppercase tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
+                <DoorOpen size={18} className="text-rose-500" />
+                Registrar Check-out (Saída)
+              </h3>
+              <button 
+                onClick={() => setCheckingOutChild(null)}
+                className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl transition-all"
+              >
+                <X size={18} className="text-slate-500" />
+              </button>
+            </div>
+
+            <div className="p-8 space-y-6 max-h-[75vh] overflow-y-auto">
+              {/* Child profile summary */}
+              <div className="flex items-center gap-4 p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-100 dark:border-slate-800/60">
+                <div className="h-14 w-14 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden flex items-center justify-center border border-slate-200 dark:border-slate-700 shrink-0">
+                  {checkingOutChild.autoriza_imagem && checkingOutChild.foto_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={checkingOutChild.foto_url} alt="Criança" className="h-full w-full object-cover" />
+                  ) : (
+                    <Smile size={24} className="text-slate-400" />
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <h4 className="text-sm font-black text-slate-900 dark:text-white truncate">
+                    {checkingOutChild.tipo_crianca === 'Membro' 
+                      ? (membrosIgreja.find(m => m.id === checkingOutChild.id_membro)?.nome || 'Membro não encontrado')
+                      : (checkingOutChild.nome_visitante || 'Visitante')}
+                  </h4>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">
+                    Responsável: <span className="text-slate-700 dark:text-slate-300 font-black">{checkingOutChild.nome_responsavel}</span>
+                  </p>
+                  <p className="text-[9px] text-slate-400 font-mono mt-0.5">
+                    Fone: {checkingOutChild.telefone_responsavel}
+                  </p>
+                </div>
+              </div>
+
+              {/* QR-CODE of Checkout */}
+              <div className="text-center space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">Código QR de Verificação</label>
+                <div className="inline-block p-4 bg-white dark:bg-white rounded-2xl border border-slate-100 shadow-sm">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img 
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(`KIDS_CHECKOUT|${checkingOutChild.id}|${checkingOutChild.nome_responsavel}`)}`} 
+                    alt="Checkout QR Code" 
+                    className="w-32 h-32" 
+                  />
+                </div>
+                <p className="text-[9px] text-slate-450 font-medium">Escaneie para validar a liberação de segurança</p>
+              </div>
+
+              {/* Entry Time Info */}
+              <div className="p-4 bg-amber-500/5 rounded-2xl border border-amber-500/10 flex justify-between items-center text-xs font-bold">
+                <span className="text-slate-500">Hora de Entrada (Check-in):</span>
+                <span className="text-amber-600 dark:text-amber-400 font-black flex items-center gap-1.5">
+                  <Clock size={14} />
+                  {new Date(checkingOutChild.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                </span>
+              </div>
+
+              {/* Observation Field */}
+              <div>
+                <label className="text-[10px] font-black uppercase tracking-wider text-slate-500">Observações do Checkout</label>
+                <textarea 
+                  value={checkoutObservation}
+                  onChange={(e) => setCheckoutObservation(e.target.value)}
+                  placeholder="Ex: Entregue à mãe, saiu calmo, lanchou antes de sair."
+                  rows={3}
+                  className="w-full mt-1.5 p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-900 dark:text-slate-200"
+                />
+              </div>
+
+              <div className="border-t border-slate-100 dark:border-slate-800 pt-6 flex justify-end gap-3">
+                <button 
+                  type="button"
+                  onClick={() => setCheckingOutChild(null)}
+                  className="px-5 py-3 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-950/20 text-slate-700 dark:text-slate-300 text-xs font-black uppercase tracking-widest rounded-xl transition-all"
+                >
+                  Voltar
+                </button>
+                <button 
+                  onClick={handleSaveCheckout}
+                  className="px-6 py-3 bg-rose-500 hover:bg-rose-600 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-md flex items-center gap-1.5"
+                >
+                  Confirmar Check-out
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 3. QR-CODE VIEW MODAL */}
+      {selectedChildForQr && (
+        <div className="fixed inset-0 bg-slate-900/65 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-150 dark:border-slate-800 shadow-2xl w-full max-w-sm overflow-hidden animate-scale-in">
+            <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-950/20">
+              <h3 className="text-md font-black uppercase tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
+                <QrCode size={18} className="text-amber-500" />
+                QR Code de Checkout
+              </h3>
+              <button 
+                onClick={() => setSelectedChildForQr(null)}
+                className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl transition-all"
+              >
+                <X size={18} className="text-slate-500" />
+              </button>
+            </div>
+
+            <div className="p-8 text-center space-y-6">
+              <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">
+                Criança: <span className="text-slate-900 dark:text-white font-black">
+                  {selectedChildForQr.tipo_crianca === 'Membro' 
+                    ? (membrosIgreja.find(m => m.id === selectedChildForQr.id_membro)?.nome || 'Membro não encontrado')
+                    : (selectedChildForQr.nome_visitante || 'Visitante')}
+                </span>
+              </p>
+
+              <div className="inline-block p-4 bg-white rounded-3xl border border-slate-100 shadow-sm">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img 
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(`KIDS_CHECKOUT|${selectedChildForQr.id}|${selectedChildForQr.nome_responsavel}`)}`} 
+                  alt="Checkout QR Code" 
+                  className="w-48 h-48 mx-auto" 
+                />
+              </div>
+
+              <div className="text-xs text-slate-500 dark:text-slate-400 space-y-1 font-semibold text-left p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-100 dark:border-slate-850">
+                <p>• <span className="font-bold">Responsável:</span> {selectedChildForQr.nome_responsavel}</p>
+                <p>• <span className="font-bold">Telefone:</span> {selectedChildForQr.telefone_responsavel}</p>
+                <p>• <span className="font-bold">Entrada:</span> {new Date(selectedChildForQr.created_at).toLocaleTimeString()}</p>
+              </div>
+
+              <button 
+                onClick={() => setSelectedChildForQr(null)}
+                className="w-full py-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-250 text-xs font-black uppercase tracking-wider rounded-xl transition-all"
+              >
+                Fechar Visualização
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 4. PRINT BADGE PREVIEW MODAL */}
+      {selectedChildForBadge && (
+        <div className="fixed inset-0 bg-slate-900/65 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-150 dark:border-slate-800 shadow-2xl w-full max-w-md overflow-hidden animate-scale-in">
+            <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-950/20">
+              <h3 className="text-md font-black uppercase tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
+                <Printer size={18} className="text-indigo-500" />
+                Visualizar Etiqueta do Aluno
+              </h3>
+              <button 
+                onClick={() => setSelectedChildForBadge(null)}
+                className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl transition-all"
+              >
+                <X size={18} className="text-slate-500" />
+              </button>
+            </div>
+
+            <div className="p-8 space-y-6">
+              {/* Printed Badge Container */}
+              <div 
+                id="print-section" 
+                className="p-6 bg-white dark:bg-white text-slate-900 border-2 border-dashed border-slate-400 rounded-3xl space-y-4 max-w-xs mx-auto shadow-inner select-none font-sans"
+              >
+                {/* Header */}
+                <div className="text-center pb-2 border-b border-slate-200">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">{selectedIgreja?.nome || 'MINISTÉRIO KIDS'}</p>
+                  <h4 className="text-xs font-black uppercase text-amber-600">Módulo Kids - Identificação</h4>
+                </div>
+
+                {/* Body details */}
+                <div className="space-y-3 text-center">
+                  <h3 className="text-lg font-black tracking-tight text-slate-950 uppercase break-words leading-tight">
+                    {selectedChildForBadge.tipo_crianca === 'Membro' 
+                      ? (membrosIgreja.find(m => m.id === selectedChildForBadge.id_membro)?.nome || 'Membro não encontrado')
+                      : (selectedChildForBadge.nome_visitante || 'Visitante')}
+                  </h3>
+
+                  <div className="inline-block px-3 py-1 bg-amber-500/10 text-amber-600 rounded-full text-[10px] font-black uppercase tracking-wider">
+                    Sala: {activeSalaObj?.nome || 'Sala Kids'}
+                  </div>
+
+                  <div className="text-left text-[10px] font-bold space-y-1 text-slate-700 bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                    <p>• <span className="font-black">Responsável:</span> {selectedChildForBadge.nome_responsavel}</p>
+                    <p>• <span className="font-black">Contato:</span> {selectedChildForBadge.telefone_responsavel}</p>
+                    <p>• <span className="font-black">Idade:</span> {getAgeFromBirthDate(selectedChildForBadge.data_nascimento)} anos</p>
+                    <p>• <span className="font-black">Entrada:</span> {new Date(selectedChildForBadge.created_at).toLocaleString()}</p>
+                  </div>
+
+                  {/* Alerts (Allergies / Special Needs) */}
+                  {(selectedChildForBadge.necessidades_especiais || selectedChildForBadge.restricoes_alimentares || selectedChildForBadge.observacoes_medicas) && (
+                    <div className="text-left text-[9px] font-black space-y-1 text-rose-600 bg-rose-50 p-3 rounded-2xl border border-rose-100">
+                      <p className="uppercase tracking-wider flex items-center gap-1"><ShieldAlert size={10} /> Alertas Importantes:</p>
+                      {selectedChildForBadge.necessidades_especiais && <p>• Nec. Especiais: {selectedChildForBadge.necessidades_especiais}</p>}
+                      {selectedChildForBadge.restricoes_alimentares && <p>• Alergias: {selectedChildForBadge.restricoes_alimentares}</p>}
+                      {selectedChildForBadge.observacoes_medicas && <p>• Obs. Médicas: {selectedChildForBadge.observacoes_medicas}</p>}
+                    </div>
+                  )}
+
+                  {/* QR-CODE of Verification */}
+                  <div className="flex justify-center pt-2">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img 
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(`KIDS_CHECKOUT|${selectedChildForBadge.id}|${selectedChildForBadge.nome_responsavel}`)}`} 
+                      alt="Verification QR Code" 
+                      className="w-24 h-24" 
+                    />
+                  </div>
+                </div>
+
+                {/* Footer */}
+                <div className="text-center pt-2 border-t border-slate-100 text-[8px] font-bold text-slate-400 uppercase tracking-widest">
+                  Validação de Saída Requerida
+                </div>
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex gap-3 justify-end pt-4 border-t border-slate-100 dark:border-slate-800">
+                <button 
+                  onClick={() => setSelectedChildForBadge(null)}
+                  className="px-5 py-3 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-950/20 text-slate-700 dark:text-slate-300 text-xs font-black uppercase tracking-widest rounded-xl transition-all"
+                >
+                  Voltar
+                </button>
+                <button 
+                  onClick={() => {
+                    const printContents = document.getElementById('print-section')?.innerHTML;
+                    if (printContents) {
+                      const originalContents = document.body.innerHTML;
+                      // We create a temporary style element to inject print styles
+                      const style = document.createElement('style');
+                      style.innerHTML = `
+                        @media print {
+                          body {
+                            background: white !important;
+                            color: black !important;
+                          }
+                          body * {
+                            visibility: hidden;
+                          }
+                          #print-section, #print-section * {
+                            visibility: visible;
+                          }
+                          #print-section {
+                            position: absolute;
+                            left: 0;
+                            top: 0;
+                            width: 100%;
+                            border: none !important;
+                            box-shadow: none !important;
+                            padding: 0 !important;
+                          }
+                        }
+                      `;
+                      document.head.appendChild(style);
+                      window.print();
+                      document.head.removeChild(style);
+                    }
+                  }}
+                  className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-md flex items-center gap-1.5"
+                >
+                  <Printer size={14} />
+                  Imprimir Etiqueta
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
