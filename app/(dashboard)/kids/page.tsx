@@ -7,7 +7,8 @@ import { supabase } from '@/lib/supabase';
 import { 
   Baby, Users, DoorOpen, Plus, Trash2, Calendar, Edit3, Check, X, 
   UploadCloud, ArrowRight, UserCheck, Smile, HelpCircle, QrCode, AlertCircle,
-  Activity, Heart, ShieldAlert, Phone, User, Info, FileText, Printer, Clock
+  Activity, Heart, ShieldAlert, Phone, User, Info, FileText, Printer, Clock,
+  MessageSquare, Paperclip
 } from 'lucide-react';
 
 interface TurmaMembro {
@@ -164,6 +165,135 @@ export default function KidsModule() {
   // Checking out child state
   const [checkingOutChild, setCheckingOutChild] = useState<SalaCrianca | null>(null);
   const [checkoutObservation, setCheckoutObservation] = useState<string>('');
+
+  // Print format state: 'A' = 14 labels (3.39 x 10.10 cm), 'B' = 18 labels (4.66 x 6.35 cm)
+  const [badgeSize, setBadgeSize] = useState<'A' | 'B'>('A');
+  const [badgePrintMode, setBadgePrintMode] = useState<'single' | 'full' | 'specific'>('single');
+  const [badgeSpecificPosition, setBadgeSpecificPosition] = useState<number>(0);
+
+  // Tab controls inside Room Operator view
+  const [leftPanelTab, setLeftPanelTab] = useState<'checkin' | 'comunicado'>('checkin');
+  const [rightPanelTab, setRightPanelTab] = useState<'presentes' | 'comunicados'>('presentes');
+
+  // Comunicado States
+  const [comunicadoCriancasIds, setComunicadoCriancasIds] = useState<string[]>([]);
+  const [comunicadoTipo, setComunicadoTipo] = useState<'Observação' | 'Ocorrências' | 'Conteúdo' | 'Evidências' | 'Outros'>('Observação');
+  const [comunicadoEnviarResponsaveis, setComunicadoEnviarResponsaveis] = useState<boolean>(false);
+  const [comunicadoDescricao, setComunicadoDescricao] = useState<string>('');
+  const [comunicadoArquivos, setComunicadoArquivos] = useState<{name: string, url: string}[]>([]);
+  const [uploadingComunicadoFile, setUploadingComunicadoFile] = useState<boolean>(false);
+  const [comunicadosList, setComunicadosList] = useState<any[]>([]);
+  const [loadingComunicados, setLoadingComunicados] = useState<boolean>(false);
+
+  const loadComunicados = async (salaId: string) => {
+    if (!salaId) return;
+    setLoadingComunicados(true);
+    try {
+      const { data, error } = await supabase
+        .from('kids_comunicados')
+        .select('*')
+        .eq('id_sala', salaId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setComunicadosList(data || []);
+    } catch (err) {
+      console.error('Erro ao buscar comunicados:', err);
+    } finally {
+      setLoadingComunicados(false);
+    }
+  };
+
+  const handleComunicadoFileUpload = async (file: File) => {
+    setUploadingComunicadoFile(true);
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const response = await fetch('/api/financeiro/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Erro ao realizar upload do anexo.');
+      }
+
+      setComunicadoArquivos(prev => [...prev, { name: file.name, url: result.url }]);
+      showNotification('Anexo carregado com sucesso!', 'success');
+    } catch (err: any) {
+      console.error(err);
+      showNotification(`Erro no upload do anexo: ${err.message}`, 'error');
+    } finally {
+      setUploadingComunicadoFile(false);
+    }
+  };
+
+  const handleSaveComunicado = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!selectedSalaId) {
+      showNotification('Nenhuma sala ativa selecionada.', 'error');
+      return;
+    }
+
+    if (comunicadoCriancasIds.length === 0) {
+      showNotification('Selecione pelo menos uma criança para o comunicado.', 'error');
+      return;
+    }
+
+    if (!comunicadoDescricao.trim()) {
+      showNotification('Insira uma descrição para o comunicado.', 'error');
+      return;
+    }
+
+    try {
+      const payload = {
+        id_sala: selectedSalaId,
+        ids_criancas: comunicadoCriancasIds,
+        tipo: comunicadoTipo,
+        enviar_responsaveis: comunicadoEnviarResponsaveis,
+        descricao: comunicadoDescricao,
+        anexos: comunicadoArquivos,
+      };
+
+      const { error } = await supabase
+        .from('kids_comunicados')
+        .insert([payload]);
+
+      if (error) throw error;
+
+      showNotification('Comunicado criado com sucesso!', 'success');
+      
+      // Clear form states
+      setComunicadoCriancasIds([]);
+      setComunicadoDescricao('');
+      setComunicadoArquivos([]);
+      setComunicadoEnviarResponsaveis(false);
+      setComunicadoTipo('Observação');
+
+      // Reload list
+      await loadComunicados(selectedSalaId);
+    } catch (err: any) {
+      console.error('Erro ao salvar comunicado:', err);
+      showNotification(`Erro ao salvar comunicado: ${err.message}`, 'error');
+    }
+  };
+
+  const handleSelectAllKidsForComunicado = (select: boolean) => {
+    if (select) {
+      setComunicadoCriancasIds(childrenInActiveSala.map(c => c.id));
+    } else {
+      setComunicadoCriancasIds([]);
+    }
+  };
+
+  useEffect(() => {
+    if (selectedSalaId) {
+      loadComunicados(selectedSalaId);
+    }
+  }, [selectedSalaId]);
 
   // Auto populate member child details
   useEffect(() => {
@@ -1066,7 +1196,7 @@ export default function KidsModule() {
     }
   };
 
-  // Add child to the currently open Room with all detailed fields
+  // Add child or save edited check-in to the currently open Room with all detailed fields
   const handleAddCriancaToSala = async () => {
     if (!selectedSalaId) {
       showNotification('Selecione ou abra uma sala primeiro.', 'error');
@@ -1076,11 +1206,19 @@ export default function KidsModule() {
     const currentSala = salas.find(s => s.id === selectedSalaId);
     if (!currentSala) return;
 
-    // Calculate current occupancy
-    const currentCount = criancasSala.filter(c => c.id_sala === selectedSalaId).length;
-    if (currentCount >= currentSala.capacidade) {
-      if (!confirm('A capacidade máxima da sala já foi atingida. Deseja adicionar mesmo assim?')) {
-        return;
+    // Enforce Room Status Constraint: Only open rooms can receive new check-ins
+    if (currentSala.status !== 'Aberto' && !editingCheckin) {
+      showNotification('A sala não está aberta. Abra a sala para poder admitir novas crianças.', 'error');
+      return;
+    }
+
+    if (!editingCheckin) {
+      // Calculate current occupancy only for new check-ins
+      const currentCount = criancasSala.filter(c => c.id_sala === selectedSalaId).length;
+      if (currentCount >= currentSala.capacidade) {
+        if (!confirm('A capacidade máxima da sala já foi atingida. Deseja adicionar mesmo assim?')) {
+          return;
+        }
       }
     }
 
@@ -1098,64 +1236,108 @@ export default function KidsModule() {
       return;
     }
 
-    let newCheckIn: SalaCrianca;
+    let updatedCriancas: SalaCrianca[];
 
-    if (addChildTipo === 'Membro') {
-      if (!addChildMembroId) {
-        showNotification('Selecione a criança cadastrada na igreja.', 'error');
+    if (editingCheckin) {
+      // EDIT MODE: Update existing check-in
+      updatedCriancas = criancasSala.map(c => {
+        if (c.id === editingCheckin.id) {
+          return {
+            ...c,
+            tipo_crianca: addChildTipo,
+            id_membro: addChildTipo === 'Membro' ? (addChildMembroId || null) : null,
+            nome_visitante: addChildTipo === 'Visitante' ? addChildNomeVisitante.trim() : null,
+            nome_responsavel: addChildNomeResponsavel.trim(),
+            telefone_responsavel: addChildTelefoneResponsavel.trim(),
+            data_nascimento: addChildDataNascimento,
+            sexo: addChildSexo,
+            necessidades_especiais: addChildNecessidades.trim() || undefined,
+            restricoes_alimentares: addChildRestricoes.trim() || undefined,
+            observacoes_medicas: addChildObservacoesMedicas.trim() || undefined,
+            autoriza_imagem: addChildAutorizaImagem,
+            foto_url: addChildAutorizaImagem && addChildFotoUrl ? addChildFotoUrl : undefined
+          };
+        }
+        return c;
+      });
+
+      try {
+        await saveChildrenToDb(updatedCriancas);
+        setEditingCheckin(null);
+        showNotification('Check-in editado com sucesso!', 'success');
+      } catch (err) {
+        console.error(err);
+        showNotification('Erro ao salvar edição de check-in.', 'error');
         return;
       }
-
-      // Check if child is already checked in to this active room
-      if (criancasSala.some(c => c.id_membro === addChildMembroId && c.id_sala === selectedSalaId)) {
-        showNotification('Esta criança já está adicionada nesta sala.', 'error');
-        return;
-      }
-
-      newCheckIn = {
-        id: crypto.randomUUID(),
-        id_sala: selectedSalaId,
-        tipo_crianca: 'Membro',
-        id_membro: addChildMembroId,
-        nome_visitante: null,
-        created_at: new Date().toISOString(),
-        nome_responsavel: addChildNomeResponsavel.trim(),
-        telefone_responsavel: addChildTelefoneResponsavel.trim(),
-        data_nascimento: addChildDataNascimento,
-        sexo: addChildSexo,
-        necessidades_especiais: addChildNecessidades.trim() || undefined,
-        restricoes_alimentares: addChildRestricoes.trim() || undefined,
-        observacoes_medicas: addChildObservacoesMedicas.trim() || undefined,
-        autoriza_imagem: addChildAutorizaImagem,
-        foto_url: addChildAutorizaImagem && addChildFotoUrl ? addChildFotoUrl : undefined
-      };
     } else {
-      if (!addChildNomeVisitante.trim()) {
-        showNotification('Informe o nome da criança visitante.', 'error');
-        return;
+      // INSERT MODE: Add new check-in
+      let newCheckIn: SalaCrianca;
+
+      if (addChildTipo === 'Membro') {
+        if (!addChildMembroId) {
+          showNotification('Selecione a criança cadastrada na igreja.', 'error');
+          return;
+        }
+
+        // Check if child is already checked in to this active room
+        if (criancasSala.some(c => c.id_membro === addChildMembroId && c.id_sala === selectedSalaId)) {
+          showNotification('Esta criança já está adicionada nesta sala.', 'error');
+          return;
+        }
+
+        newCheckIn = {
+          id: crypto.randomUUID(),
+          id_sala: selectedSalaId,
+          tipo_crianca: 'Membro',
+          id_membro: addChildMembroId,
+          nome_visitante: null,
+          created_at: new Date().toISOString(),
+          nome_responsavel: addChildNomeResponsavel.trim(),
+          telefone_responsavel: addChildTelefoneResponsavel.trim(),
+          data_nascimento: addChildDataNascimento,
+          sexo: addChildSexo,
+          necessidades_especiais: addChildNecessidades.trim() || undefined,
+          restricoes_alimentares: addChildRestricoes.trim() || undefined,
+          observacoes_medicas: addChildObservacoesMedicas.trim() || undefined,
+          autoriza_imagem: addChildAutorizaImagem,
+          foto_url: addChildAutorizaImagem && addChildFotoUrl ? addChildFotoUrl : undefined
+        };
+      } else {
+        if (!addChildNomeVisitante.trim()) {
+          showNotification('Informe o nome da criança visitante.', 'error');
+          return;
+        }
+
+        newCheckIn = {
+          id: crypto.randomUUID(),
+          id_sala: selectedSalaId,
+          tipo_crianca: 'Visitante',
+          id_membro: null,
+          nome_visitante: addChildNomeVisitante.trim(),
+          created_at: new Date().toISOString(),
+          nome_responsavel: addChildNomeResponsavel.trim(),
+          telefone_responsavel: addChildTelefoneResponsavel.trim(),
+          data_nascimento: addChildDataNascimento,
+          sexo: addChildSexo,
+          necessidades_especiais: addChildNecessidades.trim() || undefined,
+          restricoes_alimentares: addChildRestricoes.trim() || undefined,
+          observacoes_medicas: addChildObservacoesMedicas.trim() || undefined,
+          autoriza_imagem: addChildAutorizaImagem,
+          foto_url: addChildAutorizaImagem && addChildFotoUrl ? addChildFotoUrl : undefined
+        };
       }
 
-      newCheckIn = {
-        id: crypto.randomUUID(),
-        id_sala: selectedSalaId,
-        tipo_crianca: 'Visitante',
-        id_membro: null,
-        nome_visitante: addChildNomeVisitante.trim(),
-        created_at: new Date().toISOString(),
-        nome_responsavel: addChildNomeResponsavel.trim(),
-        telefone_responsavel: addChildTelefoneResponsavel.trim(),
-        data_nascimento: addChildDataNascimento,
-        sexo: addChildSexo,
-        necessidades_especiais: addChildNecessidades.trim() || undefined,
-        restricoes_alimentares: addChildRestricoes.trim() || undefined,
-        observacoes_medicas: addChildObservacoesMedicas.trim() || undefined,
-        autoriza_imagem: addChildAutorizaImagem,
-        foto_url: addChildAutorizaImagem && addChildFotoUrl ? addChildFotoUrl : undefined
-      };
+      updatedCriancas = [...criancasSala, newCheckIn];
+      try {
+        await saveChildrenToDb(updatedCriancas);
+        showNotification('Criança adicionada com sucesso!', 'success');
+      } catch (err) {
+        console.error(err);
+        showNotification('Erro ao salvar check-in.', 'error');
+        return;
+      }
     }
-
-    const updatedCriancas = [...criancasSala, newCheckIn];
-    await saveChildrenToDb(updatedCriancas);
 
     // Reset fields
     setAddChildMembroId('');
@@ -1172,8 +1354,6 @@ export default function KidsModule() {
     setAddChildObservacoesMedicas('');
     setAddChildAutorizaImagem(false);
     setAddChildFotoUrl('');
-
-    showNotification('Criança adicionada com sucesso!', 'success');
   };
 
   const handleRemoveCriancaFromSala = async (checkinId: string) => {
@@ -1196,55 +1376,41 @@ export default function KidsModule() {
 
   const handleOpenEditCheckin = (c: SalaCrianca) => {
     setEditingCheckin(c);
-    setEditChildNomeResponsavel(c.nome_responsavel || '');
-    setEditChildTelefoneResponsavel(c.telefone_responsavel || '');
-    setEditChildDataNascimento(c.data_nascimento || '');
-    setEditChildSexo(c.sexo || 'Masculino');
-    setEditChildNecessidades(c.necessidades_especiais || '');
-    setEditChildRestricoes(c.restricoes_alimentares || '');
-    setEditChildObservacoesMedicas(c.observacoes_medicas || '');
-    setEditChildAutorizaImagem(c.autoriza_imagem || false);
-    setEditChildFotoUrl(c.foto_url || '');
+    setLeftPanelTab('checkin'); // Switch to check-in tab to show editing fields
+    setAddChildTipo(c.tipo_crianca);
+    setAddChildMembroId(c.id_membro || '');
+    setAddChildNomeVisitante(c.nome_visitante || '');
+    setAddChildNomeResponsavel(c.nome_responsavel || '');
+    setAddChildTelefoneResponsavel(c.telefone_responsavel || '');
+    setAddChildDataNascimento(c.data_nascimento || '');
+    setAddChildSexo(c.sexo || 'Masculino');
+    setAddChildNecessidades(c.necessidades_especiais || '');
+    setAddChildRestricoes(c.restricoes_alimentares || '');
+    setAddChildObservacoesMedicas(c.observacoes_medicas || '');
+    setAddChildAutorizaImagem(c.autoriza_imagem || false);
+    setAddChildFotoUrl(c.foto_url || '');
+
+    const container = document.getElementById('checkin-form-title-container');
+    if (container) {
+      container.scrollIntoView({ behavior: 'smooth' });
+    }
   };
 
-  const handleSaveEditCheckin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingCheckin) return;
-    if (!editChildNomeResponsavel.trim()) {
-      showNotification('Informe o Nome do Responsável.', 'error');
-      return;
-    }
-    if (!editChildTelefoneResponsavel.trim()) {
-      showNotification('Informe o Telefone do Responsável.', 'error');
-      return;
-    }
-
-    try {
-      const updatedCriancas = criancasSala.map(c => {
-        if (c.id === editingCheckin.id) {
-          return {
-            ...c,
-            nome_responsavel: editChildNomeResponsavel.trim(),
-            telefone_responsavel: editChildTelefoneResponsavel.trim(),
-            data_nascimento: editChildDataNascimento,
-            sexo: editChildSexo,
-            necessidades_especiais: editChildNecessidades.trim() || undefined,
-            restricoes_alimentares: editChildRestricoes.trim() || undefined,
-            observacoes_medicas: editChildObservacoesMedicas.trim() || undefined,
-            autoriza_imagem: editChildAutorizaImagem,
-            foto_url: editChildAutorizaImagem && editChildFotoUrl ? editChildFotoUrl : undefined
-          };
-        }
-        return c;
-      });
-
-      await saveChildrenToDb(updatedCriancas);
-      setEditingCheckin(null);
-      showNotification('Check-in editado com sucesso!', 'success');
-    } catch (err) {
-      console.error(err);
-      showNotification('Erro ao editar check-in.', 'error');
-    }
+  const handleCancelEditCheckin = () => {
+    setEditingCheckin(null);
+    setAddChildMembroId('');
+    setSearchChildQuery('');
+    setShowSearchSuggestions(false);
+    setAddChildNomeVisitante('');
+    setAddChildNomeResponsavel('');
+    setAddChildTelefoneResponsavel('');
+    setAddChildDataNascimento('');
+    setAddChildSexo('Masculino');
+    setAddChildNecessidades('');
+    setAddChildRestricoes('');
+    setAddChildObservacoesMedicas('');
+    setAddChildAutorizaImagem(false);
+    setAddChildFotoUrl('');
   };
 
   const handleOpenCheckout = (c: SalaCrianca) => {
@@ -1410,10 +1576,22 @@ export default function KidsModule() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3">
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-green-500/10 text-green-600 dark:text-green-400 font-black text-[10px] uppercase tracking-wider rounded-full">
-                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span> Atendimento Aberto
-                  </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-black uppercase text-slate-400">Status da Sala:</span>
+                  <select
+                    value={activeSalaObj.status || 'Fechado'}
+                    onChange={async (e) => {
+                      const newStatus = e.target.value as any;
+                      const updated = salas.map(s => s.id === activeSalaObj.id ? { ...s, status: newStatus } : s);
+                      await saveSalasToDb(updated);
+                      showNotification(`Status da sala alterado para ${newStatus}.`, 'success');
+                    }}
+                    className="p-1.5 px-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                  >
+                    <option value="Aberto">🟢 Aberto</option>
+                    <option value="Fechado">🔴 Fechado</option>
+                    <option value="Encerrado">🔒 Encerrado</option>
+                  </select>
                 </div>
               </div>
 
@@ -1466,349 +1644,614 @@ export default function KidsModule() {
 
               {/* Main workspace splits */}
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-                
-                {/* Left Column: Children Check-In controls */}
-                <div className="lg:col-span-5 bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-[2rem] border border-slate-200/50 dark:border-slate-800/80 shadow-sm space-y-6">
+                {/* Left Column: Children Check-In controls & Comunicados */}
+                <div id="checkin-form-title-container" className="lg:col-span-5 bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-[2rem] border border-slate-200/50 dark:border-slate-800/80 shadow-sm space-y-6">
                   <div className="border-b border-slate-100 dark:border-slate-800 pb-4">
                     <h3 className="text-lg font-black uppercase tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
-                      <UserCheck size={20} className="text-[#E4A232]" />
-                      Fazer Entrada (Check-In)
+                      {leftPanelTab === 'comunicado' && activeSalaObj.status === 'Aberto' ? (
+                        <>
+                          <MessageSquare size={20} className="text-[#E4A232]" />
+                          Criar Comunicado
+                        </>
+                      ) : editingCheckin ? (
+                        <>
+                          <Edit3 size={20} className="text-[#E4A232]" />
+                          Editar Check-In
+                        </>
+                      ) : (
+                        <>
+                          <UserCheck size={20} className="text-[#E4A232]" />
+                          Fazer Entrada (Check-In)
+                        </>
+                      )}
                     </h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-1">Insira os dados completos da criança para gerar a etiqueta e o QR Code de entrada.</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-1">
+                      {leftPanelTab === 'comunicado' && activeSalaObj.status === 'Aberto'
+                        ? 'Envie comunicados gerais, ocorrências ou orientações para os responsáveis e registre no sistema.'
+                        : 'Insira os dados completos da criança para gerar a etiqueta e o QR Code de entrada.'}
+                    </p>
                   </div>
 
-                  <div className="space-y-4">
-                    {/* Selector of entry type (Membro vs Visitante) */}
-                    <div>
-                      <label className="text-[10px] font-black uppercase tracking-wider text-slate-450 dark:text-slate-500">Tipo de Criança</label>
-                      <div className="grid grid-cols-2 gap-2 mt-2">
-                        <button 
-                          type="button"
-                          onClick={() => {
-                            setAddChildTipo('Membro');
-                            setAddChildNomeVisitante('');
-                          }}
-                          className={`py-3 rounded-xl text-xs uppercase tracking-wider font-bold border transition-all ${
-                            addChildTipo === 'Membro'
-                              ? 'bg-amber-500/10 border-amber-500/50 text-amber-600 dark:text-amber-400 font-black'
-                              : 'border-slate-200 dark:border-slate-800 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-950'
-                          }`}
-                        >
-                          Membro Oficial
-                        </button>
-                        <button 
-                          type="button"
-                          onClick={() => {
-                            setAddChildTipo('Visitante');
-                            setAddChildMembroId('');
-                            setSearchChildQuery('');
-                          }}
-                          className={`py-3 rounded-xl text-xs uppercase tracking-wider font-bold border transition-all ${
-                            addChildTipo === 'Visitante'
-                              ? 'bg-amber-500/10 border-amber-500/50 text-amber-600 dark:text-amber-400 font-black'
-                              : 'border-slate-200 dark:border-slate-800 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-950'
-                          }`}
-                        >
-                          Visitante
-                        </button>
+                  {/* Tab Switcher inside Left Panel (Only if Room is Open) */}
+                  {activeSalaObj.status === 'Aberto' && !editingCheckin && (
+                    <div className="flex bg-slate-100 dark:bg-slate-950 p-1 rounded-xl gap-1 border border-slate-200/40 dark:border-slate-800">
+                      <button
+                        type="button"
+                        onClick={() => setLeftPanelTab('checkin')}
+                        className={`flex-1 py-2 text-xs font-black uppercase tracking-wider rounded-lg transition-all ${
+                          leftPanelTab === 'checkin'
+                            ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm'
+                            : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                        }`}
+                      >
+                        ➕ Check-In
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setLeftPanelTab('comunicado')}
+                        className={`flex-1 py-2 text-xs font-black uppercase tracking-wider rounded-lg transition-all ${
+                          leftPanelTab === 'comunicado'
+                            ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm'
+                            : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                        }`}
+                      >
+                        📢 Comunicado
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Room Status Alert: If room is not open, block check-ins and announcements */}
+                  {activeSalaObj.status !== 'Aberto' && !editingCheckin ? (
+                    <div className="flex flex-col items-center justify-center text-center p-6 bg-amber-500/5 dark:bg-amber-950/20 border border-amber-500/20 rounded-2xl space-y-4 py-8">
+                      <div className="p-3 bg-amber-500/10 text-amber-500 rounded-full animate-pulse">
+                        <AlertCircle size={28} />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider">Sala {activeSalaObj.status === 'Fechado' ? 'Fechada' : 'Encerrada'}</h4>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-1.5 leading-relaxed">
+                          O atendimento nesta sala está **{activeSalaObj.status}**. Altere o status para "Aberto" no seletor de status acima para registrar novos alunos ou criar comunicados.
+                        </p>
                       </div>
                     </div>
-
-                    {/* Membro Selector / Visitante Input */}
-                    {addChildTipo === 'Membro' ? (
+                  ) : leftPanelTab === 'comunicado' && activeSalaObj.status === 'Aberto' ? (
+                    /* COMUNICADO FORM */
+                    <form onSubmit={handleSaveComunicado} className="space-y-4">
+                      {/* Selection of children */}
                       <div>
-                        <label className="text-[10px] font-black uppercase tracking-wider text-slate-450 dark:text-slate-500">Buscar Criança Cadastrada</label>
-                        <div className="relative mt-2">
-                          <input 
-                            type="text"
-                            placeholder="Digite o nome da criança para buscar..."
-                            value={searchChildQuery}
-                            onChange={(e) => {
-                              setSearchChildQuery(e.target.value);
-                              setShowSearchSuggestions(true);
-                              if (addChildMembroId) {
-                                setAddChildMembroId('');
-                              }
-                            }}
-                            onFocus={() => setShowSearchSuggestions(true)}
-                            onBlur={() => setTimeout(() => setShowSearchSuggestions(false), 200)}
-                            className="w-full p-3.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm font-bold text-slate-900 dark:text-slate-200 outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                          />
-                          
-                          {showSearchSuggestions && (
-                            <div className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl max-h-60 overflow-y-auto">
-                              {(() => {
-                                const filteredKids = membrosIgreja.filter(m => {
-                                  const isChild = m.categoria && m.categoria.toLowerCase().includes('crian');
-                                  if (!isChild) return false;
-                                  if (!searchChildQuery) return true;
-                                  return m.nome?.toLowerCase().includes(searchChildQuery.toLowerCase());
-                                });
-
-                                if (filteredKids.length === 0) {
-                                  return (
-                                    <div className="p-4 text-center text-slate-500 text-xs">
-                                      Nenhuma criança encontrada com este nome.
-                                    </div>
-                                  );
-                                }
-
-                                return filteredKids.map(m => (
-                                  <button
-                                    key={m.id}
-                                    type="button"
-                                    onClick={() => {
-                                      setAddChildMembroId(m.id);
-                                      setSearchChildQuery(m.nome);
-                                      setShowSearchSuggestions(false);
-                                    }}
-                                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800 text-left border-b border-slate-100 dark:border-slate-800/50 last:border-0"
-                                  >
-                                    {m.foto_url ? (
-                                      // eslint-disable-next-line @next/next/no-img-element
-                                      <img src={m.foto_url} alt={m.nome} className="w-8 h-8 rounded-full object-cover" />
-                                    ) : (
-                                      <div className="w-8 h-8 rounded-full bg-amber-500/10 text-amber-600 flex items-center justify-center font-bold text-sm">
-                                        {m.nome?.charAt(0).toUpperCase()}
-                                      </div>
-                                    )}
-                                    <div className="flex-1 min-w-0">
-                                      <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{m.nome}</p>
-                                      <p className="text-xs text-slate-500 dark:text-slate-400">Membro Criança</p>
-                                    </div>
-                                    {addChildMembroId === m.id && (
-                                      <Check size={16} className="text-green-500" />
-                                    )}
-                                  </button>
-                                ));
-                              })()}
-                            </div>
-                          )}
-                        </div>
-                        
-                        {addChildMembroId && (
-                          <div className="mt-2 flex items-center justify-between p-3 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800/30 rounded-xl">
-                            <div className="flex items-center gap-2">
-                              <Check size={16} className="text-green-500" />
-                              <span className="text-xs font-bold text-green-700 dark:text-green-400">
-                                Criança selecionada: <span className="underline">{searchChildQuery}</span>
-                              </span>
-                            </div>
-                            <button 
-                              type="button" 
-                              onClick={() => {
-                                setAddChildMembroId('');
-                                setSearchChildQuery('');
-                                setAddChildDataNascimento('');
-                                setAddChildFotoUrl('');
-                              }}
-                              className="p-1 text-slate-400 hover:text-red-500"
-                              title="Limpar seleção"
+                        <div className="flex justify-between items-center mb-1.5">
+                          <label className="text-[10px] font-black uppercase tracking-wider text-slate-450 dark:text-slate-500">Destinatários (Crianças) *</label>
+                          <div className="flex gap-2 text-[9px] font-black uppercase tracking-widest">
+                            <button
+                              type="button"
+                              onClick={() => handleSelectAllKidsForComunicado(true)}
+                              className="text-amber-600 dark:text-amber-400 hover:underline cursor-pointer"
                             >
-                              <X size={14} />
+                              Todos
+                            </button>
+                            <span className="text-slate-300">|</span>
+                            <button
+                              type="button"
+                              onClick={() => handleSelectAllKidsForComunicado(false)}
+                              className="text-slate-500 hover:underline cursor-pointer"
+                            >
+                              Nenhum
                             </button>
                           </div>
-                        )}
-                      </div>
-                    ) : (
-                      /* Visitante Input */
-                      <div>
-                        <label className="text-[10px] font-black uppercase tracking-wider text-slate-450 dark:text-slate-500">Nome da Criança Visitante *</label>
-                        <input 
-                          type="text"
-                          placeholder="Ex: Pedro Henrique"
-                          value={addChildNomeVisitante}
-                          onChange={(e) => setAddChildNomeVisitante(e.target.value)}
-                          className="w-full mt-2 p-3.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm font-bold text-slate-900 dark:text-slate-200"
-                        />
-                      </div>
-                    )}
-
-                    {/* Responsible Contact details */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-[10px] font-black uppercase tracking-wider text-slate-450 dark:text-slate-500">Nome do Responsável *</label>
-                        <input 
-                          type="text"
-                          placeholder="Ex: Carlos Jorge"
-                          value={addChildNomeResponsavel}
-                          onChange={(e) => setAddChildNomeResponsavel(e.target.value)}
-                          className="w-full mt-1.5 p-3.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm font-bold text-slate-900 dark:text-slate-200"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-black uppercase tracking-wider text-slate-450 dark:text-slate-500">Telefone do Responsável *</label>
-                        <input 
-                          type="text"
-                          placeholder="Ex: (81) 98888-8888"
-                          value={addChildTelefoneResponsavel}
-                          onChange={(e) => setAddChildTelefoneResponsavel(e.target.value)}
-                          className="w-full mt-1.5 p-3.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm font-bold text-slate-900 dark:text-slate-200"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Birthdate, Age and Gender */}
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
-                      <div className="sm:col-span-1">
-                        <label className="text-[10px] font-black uppercase tracking-wider text-slate-450 dark:text-slate-500">Nascimento *</label>
-                        <input 
-                          type="date"
-                          value={addChildDataNascimento}
-                          onChange={(e) => setAddChildDataNascimento(e.target.value)}
-                          className="w-full mt-1.5 p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-xs font-bold text-slate-900 dark:text-slate-200"
-                        />
-                      </div>
-                      
-                      <div className="sm:col-span-1">
-                        <label className="text-[10px] font-black uppercase tracking-wider text-slate-450 dark:text-slate-500">Idade (Calculada)</label>
-                        <div className="w-full mt-1.5 p-3.5 bg-slate-100/80 dark:bg-slate-950/80 border border-slate-200/60 dark:border-slate-800/60 rounded-2xl text-sm font-black text-slate-700 dark:text-slate-350 text-center select-none">
-                          {addChildDataNascimento ? `${getAgeFromBirthDate(addChildDataNascimento)} anos` : 'Informe data'}
                         </div>
+                        <div className="max-h-40 overflow-y-auto border border-slate-200 dark:border-slate-800 rounded-xl p-3 bg-slate-50 dark:bg-slate-950 space-y-2">
+                          {childrenInActiveSala.length === 0 ? (
+                            <p className="text-xs text-slate-400 text-center font-bold py-2">Nenhuma criança presente na sala ainda.</p>
+                          ) : (
+                            childrenInActiveSala.map(c => {
+                              const name = c.tipo_crianca === 'Membro' 
+                                ? (membrosIgreja.find(m => m.id === c.id_membro)?.nome || 'Membro')
+                                : (c.nome_visitante || 'Visitante');
+                              const isChecked = comunicadoCriancasIds.includes(c.id);
+                              return (
+                                <label key={c.id} className="flex items-center gap-2 cursor-pointer select-none">
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={() => {
+                                      if (isChecked) {
+                                        setComunicadoCriancasIds(comunicadoCriancasIds.filter(id => id !== c.id));
+                                      } else {
+                                        setComunicadoCriancasIds([...comunicadoCriancasIds, c.id]);
+                                      }
+                                    }}
+                                    className="h-4 w-4 rounded text-amber-500 border-slate-300 focus:ring-amber-500"
+                                  />
+                                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300">{name}</span>
+                                </label>
+                              );
+                            })
+                          )}
+                        </div>
+                        <p className="text-[9px] text-slate-400 font-bold uppercase mt-1">{comunicadoCriancasIds.length} de {childrenInActiveSala.length} selecionadas</p>
                       </div>
 
-                      <div className="sm:col-span-1">
-                        <label className="text-[10px] font-black uppercase tracking-wider text-slate-450 dark:text-slate-500">Sexo *</label>
-                        <select 
-                          value={addChildSexo}
-                          onChange={(e) => setAddChildSexo(e.target.value as 'Masculino' | 'Feminino')}
-                          className="w-full mt-1.5 p-3.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-xs font-bold text-slate-900 dark:text-slate-200"
+                      {/* Tipo de Comunicado */}
+                      <div>
+                        <label className="text-[10px] font-black uppercase tracking-wider text-slate-450 dark:text-slate-500">Tipo de Comunicado</label>
+                        <select
+                          value={comunicadoTipo}
+                          onChange={(e) => setComunicadoTipo(e.target.value as any)}
+                          className="w-full mt-1.5 p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-900 dark:text-slate-200 focus:ring-1 focus:ring-amber-500"
                         >
-                          <option value="Masculino">Masculino</option>
-                          <option value="Feminino">Feminino</option>
+                          <option value="Observação">📝 Observação</option>
+                          <option value="Ocorrências">⚠️ Ocorrência</option>
+                          <option value="Conteúdo">📚 Conteúdo Ministrado</option>
+                          <option value="Evidências">📸 Evidências / Fotos</option>
+                          <option value="Outros">🔔 Outros</option>
                         </select>
                       </div>
-                    </div>
 
-                    {/* Special text inputs: Special Needs, Food Restrictions, Medical Observations */}
-                    <div className="space-y-3 pt-2">
-                      {/* 1. Necessidades Especiais */}
-                      <div className="bg-amber-500/5 dark:bg-amber-500/5 border border-amber-500/20 p-3.5 rounded-2xl flex items-start gap-2.5">
-                        <AlertCircle className="text-amber-500 mt-0.5 shrink-0" size={18} />
-                        <div className="flex-1">
-                          <label className="block text-[10px] font-black uppercase tracking-wider text-amber-600 dark:text-amber-400 leading-none">Necessidades Especiais</label>
-                          <input 
-                            type="text" 
-                            value={addChildNecessidades}
-                            onChange={(e) => setAddChildNecessidades(e.target.value)}
-                            placeholder="Ex: Nenhuma, Autismo, Dificuldade de locomoção"
-                            className="w-full bg-transparent mt-1 text-sm font-bold text-slate-800 dark:text-slate-200 outline-none placeholder:text-slate-400"
-                          />
-                        </div>
-                      </div>
-
-                      {/* 2. Restrições Alimentares */}
-                      <div className="bg-orange-500/5 dark:bg-orange-500/5 border border-orange-500/20 p-3.5 rounded-2xl flex items-start gap-2.5">
-                        <Activity className="text-orange-500 mt-0.5 shrink-0" size={18} />
-                        <div className="flex-1">
-                          <label className="block text-[10px] font-black uppercase tracking-wider text-orange-600 dark:text-orange-400 leading-none">Restrições Alimentares</label>
-                          <input 
-                            type="text" 
-                            value={addChildRestricoes}
-                            onChange={(e) => setAddChildRestricoes(e.target.value)}
-                            placeholder="Ex: Nenhuma, Lactose, Glúten, Amendoim"
-                            className="w-full bg-transparent mt-1 text-sm font-bold text-slate-800 dark:text-slate-200 outline-none placeholder:text-slate-400"
-                          />
-                        </div>
-                      </div>
-
-                      {/* 3. Observações Médicas */}
-                      <div className="bg-rose-500/5 dark:bg-rose-500/5 border border-rose-500/20 p-3.5 rounded-2xl flex items-start gap-2.5">
-                        <Heart className="text-rose-500 mt-0.5 shrink-0" size={18} />
-                        <div className="flex-1">
-                          <label className="block text-[10px] font-black uppercase tracking-wider text-rose-600 dark:text-rose-400 leading-none">Observações Médicas</label>
-                          <input 
-                            type="text" 
-                            value={addChildObservacoesMedicas}
-                            onChange={(e) => setAddChildObservacoesMedicas(e.target.value)}
-                            placeholder="Ex: Asma (usa bombinha), Alergias a medicamentos"
-                            className="w-full bg-transparent mt-1 text-sm font-bold text-slate-800 dark:text-slate-200 outline-none placeholder:text-slate-400"
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Image Authorization and Upload */}
-                    <div className="space-y-3 pt-1">
-                      <div className="flex items-center gap-3 p-3.5 bg-slate-50 dark:bg-slate-950/40 rounded-2xl border border-slate-100 dark:border-slate-800">
-                        <input 
+                      {/* Enviar para Responsáveis */}
+                      <div className="flex items-center gap-2 p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200/50 dark:border-slate-850">
+                        <input
                           type="checkbox"
-                          id="autoriza_imagem_check"
-                          checked={addChildAutorizaImagem}
-                          onChange={(e) => {
-                            setAddChildAutorizaImagem(e.target.checked);
-                            if (!e.target.checked) {
-                              setAddChildFotoUrl('');
-                            }
-                          }}
-                          className="h-4.5 w-4.5 rounded border-slate-300 text-amber-500 focus:ring-amber-500 cursor-pointer"
+                          id="comunicadoEnviarResponsaveis"
+                          checked={comunicadoEnviarResponsaveis}
+                          onChange={(e) => setComunicadoEnviarResponsaveis(e.target.checked)}
+                          className="h-4 w-4 rounded text-amber-500 border-slate-300 focus:ring-amber-500 cursor-pointer"
                         />
-                        <label htmlFor="autoriza_imagem_check" className="text-xs font-bold text-slate-700 dark:text-slate-300 cursor-pointer select-none">
-                          Autoriza divulgação de imagem da criança
+                        <label htmlFor="comunicadoEnviarResponsaveis" className="text-xs font-bold text-slate-700 dark:text-slate-300 cursor-pointer select-none">
+                          Notificar Responsáveis por WhatsApp/Painel
                         </label>
                       </div>
 
-                      {addChildAutorizaImagem && (
-                        <div 
-                          onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-                          onDragLeave={() => setIsDragging(false)}
-                          onDrop={(e) => {
-                            e.preventDefault();
-                            setIsDragging(false);
-                            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-                              handleChildPhotoUpload(e.dataTransfer.files[0]);
+                      {/* Descrição */}
+                      <div>
+                        <label className="text-[10px] font-black uppercase tracking-wider text-slate-450 dark:text-slate-500">Descrição do Comunicado *</label>
+                        <textarea
+                          rows={3}
+                          required
+                          value={comunicadoDescricao}
+                          onChange={(e) => setComunicadoDescricao(e.target.value)}
+                          placeholder="Digite aqui os detalhes do comunicado..."
+                          className="w-full mt-1.5 p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-900 dark:text-slate-200 focus:ring-1 focus:ring-amber-500"
+                        />
+                      </div>
+
+                      {/* Files Upload (Inclusão de um ou vários arquivos) */}
+                      <div>
+                        <label className="text-[10px] font-black uppercase tracking-wider text-slate-450 dark:text-slate-500 block mb-1.5">Anexos / Imagens</label>
+                        <div
+                          onClick={() => {
+                            if (!uploadingComunicadoFile) {
+                              document.getElementById('comunicado-file-input')?.click();
                             }
                           }}
-                          onClick={() => document.getElementById('child-photo-file-input')?.click()}
-                          className={`p-4 border-2 border-dashed rounded-2xl text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-2 min-h-[100px] ${
-                            isDragging 
-                              ? 'border-amber-500 bg-amber-500/10' 
-                              : addChildFotoUrl 
-                                ? 'border-green-500/50 bg-green-500/5' 
-                                : 'border-slate-200 dark:border-slate-850 hover:bg-slate-50 dark:hover:bg-slate-950/40'
+                          className={`p-4 rounded-xl border-2 border-dashed transition-all duration-200 flex flex-col items-center justify-center text-center cursor-pointer ${
+                            uploadingComunicadoFile
+                              ? 'border-amber-500 bg-amber-50/5 cursor-wait'
+                              : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 hover:border-amber-500/50'
                           }`}
                         >
-                          <input 
+                          <input
                             type="file"
-                            id="child-photo-file-input"
-                            accept="image/*"
+                            id="comunicado-file-input"
                             className="hidden"
+                            multiple
+                            onClick={(e) => e.stopPropagation()}
                             onChange={(e) => {
                               if (e.target.files && e.target.files.length > 0) {
-                                handleChildPhotoUpload(e.target.files[0]);
+                                Array.from(e.target.files).forEach(file => {
+                                  handleComunicadoFileUpload(file);
+                                });
                               }
                             }}
                           />
-                          
-                          {addChildFotoUrl ? (
-                            <div className="relative w-16 h-16 rounded-full overflow-hidden border-2 border-green-500">
-                              <img src={addChildFotoUrl} alt="Foto da criança" className="w-full h-full object-cover" />
-                              <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
-                                <UploadCloud size={16} className="text-white" />
-                              </div>
-                            </div>
+                          {uploadingComunicadoFile ? (
+                            <div className="w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin mb-1" />
                           ) : (
-                            <UploadCloud size={24} className="text-slate-400" />
+                            <UploadCloud size={20} className="text-amber-500 mb-1" />
                           )}
-                          
-                          <div className="space-y-0.5">
-                            <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                              {uploading ? 'Carregando foto...' : addChildFotoUrl ? 'Foto selecionada! Clique para alterar' : 'Arraste a foto da criança aqui'}
-                            </p>
-                            <p className="text-[10px] text-slate-400">Ou clique para escolher do seu dispositivo</p>
+                          <p className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                            {uploadingComunicadoFile ? 'Enviando arquivos...' : 'Arraste ou clique para anexar arquivos'}
+                          </p>
+                          <p className="text-[9px] text-slate-400 mt-0.5">Imagens, relatórios, PDF, etc.</p>
+                        </div>
+
+                        {/* Attached Files List */}
+                        {comunicadoArquivos.length > 0 && (
+                          <div className="mt-3 space-y-1.5">
+                            {comunicadoArquivos.map((file, idx) => (
+                              <div key={idx} className="flex items-center justify-between p-2 bg-slate-100 dark:bg-slate-900 rounded-lg text-xs">
+                                <span className="font-bold text-slate-750 dark:text-slate-350 truncate max-w-[180px] flex items-center gap-1.5">
+                                  <Paperclip size={12} className="text-slate-400" />
+                                  {file.name}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => setComunicadoArquivos(comunicadoArquivos.filter((_, i) => i !== idx))}
+                                  className="p-1 hover:bg-slate-200 dark:hover:bg-slate-800 text-rose-500 rounded-lg transition-colors"
+                                >
+                                  <X size={12} />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Submit */}
+                      <button
+                        type="submit"
+                        disabled={uploadingComunicadoFile}
+                        className="w-full py-3 bg-[#E4A232] hover:opacity-95 text-white font-black uppercase text-xs tracking-widest rounded-xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                      >
+                        <MessageSquare size={14} /> Registrar Comunicado
+                      </button>
+                    </form>
+                  ) : (
+                    /* CHECK-IN FORM */
+                    <div className="space-y-4">
+                      {/* Selector of entry type (Membro vs Visitante) */}
+                      {!editingCheckin && (
+                        <div>
+                          <label className="text-[10px] font-black uppercase tracking-wider text-slate-450 dark:text-slate-500">Tipo de Criança</label>
+                          <div className="grid grid-cols-2 gap-2 mt-2">
+                            <button 
+                              type="button"
+                              onClick={() => {
+                                setAddChildTipo('Membro');
+                                setAddChildNomeVisitante('');
+                              }}
+                              className={`py-3 rounded-xl text-xs uppercase tracking-wider font-bold border transition-all ${
+                                addChildTipo === 'Membro'
+                                  ? 'bg-amber-500/10 border-amber-500/50 text-amber-600 dark:text-amber-400 font-black'
+                                  : 'border-slate-200 dark:border-slate-800 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-950'
+                              }`}
+                            >
+                              Membro Oficial
+                            </button>
+                            <button 
+                              type="button"
+                              onClick={() => {
+                                setAddChildTipo('Visitante');
+                                setAddChildMembroId('');
+                                setSearchChildQuery('');
+                              }}
+                              className={`py-3 rounded-xl text-xs uppercase tracking-wider font-bold border transition-all ${
+                                addChildTipo === 'Visitante'
+                                  ? 'bg-amber-500/10 border-amber-500/50 text-amber-600 dark:text-amber-400 font-black'
+                                  : 'border-slate-200 dark:border-slate-800 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-950'
+                              }`}
+                            >
+                              Visitante
+                            </button>
                           </div>
                         </div>
                       )}
-                    </div>
 
-                    <button 
-                      onClick={handleAddCriancaToSala}
-                      disabled={uploading}
-                      className="w-full py-4 bg-amber-500 hover:bg-[#E4A232] text-white font-black uppercase text-xs tracking-widest rounded-2xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <Plus size={16} /> Confirmar Check-In na Sala
-                    </button>
-                  </div>
+                      {/* Membro Selector / Visitante Input */}
+                      <div className="space-y-4">
+                        {addChildTipo === 'Membro' ? (
+                          /* Membro Autocomplete Input */
+                          <div className="relative">
+                            <label className="text-[10px] font-black uppercase tracking-wider text-slate-450 dark:text-slate-500">Buscar Criança Cadastrada</label>
+                            {editingCheckin ? (
+                              <div className="mt-1.5 p-3.5 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-black text-slate-700 dark:text-slate-300">
+                                {membrosIgreja.find(m => m.id === addChildMembroId)?.nome || 'Criança Oficial'}
+                              </div>
+                            ) : (
+                              <>
+                                <div className="relative mt-2">
+                                  <input 
+                                    type="text"
+                                    placeholder="Digite o nome da criança para buscar..."
+                                    value={searchChildQuery}
+                                    onChange={(e) => {
+                                      setSearchChildQuery(e.target.value);
+                                      setShowSearchSuggestions(true);
+                                      if (addChildMembroId) {
+                                        setAddChildMembroId('');
+                                      }
+                                    }}
+                                    onFocus={() => setShowSearchSuggestions(true)}
+                                    onBlur={() => setTimeout(() => setShowSearchSuggestions(false), 200)}
+                                    className="w-full p-3.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm font-bold text-slate-900 dark:text-slate-200 outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                                  />
+                                  
+                                  {showSearchSuggestions && (
+                                    <div className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl max-h-60 overflow-y-auto">
+                                      {(() => {
+                                        const filteredKids = membrosIgreja.filter(m => {
+                                          const isChild = m.categoria && m.categoria.toLowerCase().includes('crian');
+                                          if (!isChild) return false;
+                                          if (!searchChildQuery) return true;
+                                          return m.nome?.toLowerCase().includes(searchChildQuery.toLowerCase());
+                                        });
+
+                                        if (filteredKids.length === 0) {
+                                          return (
+                                            <div className="p-4 text-center text-slate-500 text-xs">
+                                              Nenhuma criança encontrada com este nome.
+                                            </div>
+                                          );
+                                        }
+
+                                        return filteredKids.map(m => (
+                                          <button
+                                            key={m.id}
+                                            type="button"
+                                            onClick={() => {
+                                              setAddChildMembroId(m.id);
+                                              setSearchChildQuery(m.nome);
+                                              setShowSearchSuggestions(false);
+                                            }}
+                                            className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800 text-left border-b border-slate-100 dark:border-slate-800/50 last:border-0 cursor-pointer"
+                                          >
+                                            {m.foto_url ? (
+                                              // eslint-disable-next-line @next/next/no-img-element
+                                              <img src={m.foto_url} alt={m.nome} className="w-8 h-8 rounded-full object-cover" />
+                                            ) : (
+                                              <div className="w-8 h-8 rounded-full bg-amber-500/10 text-amber-600 flex items-center justify-center font-bold text-sm">
+                                                {m.nome?.charAt(0).toUpperCase()}
+                                              </div>
+                                            )}
+                                            <div className="flex-1 min-w-0">
+                                              <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{m.nome}</p>
+                                              <p className="text-xs text-slate-500 dark:text-slate-400">Membro Criança</p>
+                                            </div>
+                                            {addChildMembroId === m.id && (
+                                              <Check size={16} className="text-green-500" />
+                                            )}
+                                          </button>
+                                        ));
+                                      })()}
+                                    </div>
+                                  )}
+                                </div>
+                                
+                                {addChildMembroId && (
+                                  <div className="mt-2 flex items-center justify-between p-3 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800/30 rounded-xl">
+                                    <div className="flex items-center gap-2">
+                                      <Check size={16} className="text-green-500" />
+                                      <span className="text-xs font-bold text-green-700 dark:text-green-400">
+                                        Criança selecionada: <span className="underline">{searchChildQuery}</span>
+                                      </span>
+                                    </div>
+                                    <button 
+                                      type="button" 
+                                      onClick={() => {
+                                        setAddChildMembroId('');
+                                        setSearchChildQuery('');
+                                        setAddChildDataNascimento('');
+                                        setAddChildFotoUrl('');
+                                      }}
+                                      className="p-1 text-slate-400 hover:text-red-500 cursor-pointer"
+                                      title="Limpar seleção"
+                                    >
+                                      <X size={14} />
+                                    </button>
+                                  </div>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        ) : (
+                          /* Visitante Input */
+                          <div>
+                            <label className="text-[10px] font-black uppercase tracking-wider text-slate-450 dark:text-slate-500">Nome da Criança Visitante *</label>
+                            <input 
+                              type="text"
+                              placeholder="Ex: Pedro Henrique"
+                              value={addChildNomeVisitante}
+                              disabled={!!editingCheckin}
+                              onChange={(e) => setAddChildNomeVisitante(e.target.value)}
+                              className="w-full mt-2 p-3.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm font-bold text-slate-900 dark:text-slate-200"
+                            />
+                          </div>
+                        )}
+
+                        {/* Responsible Contact details */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <label className="text-[10px] font-black uppercase tracking-wider text-slate-450 dark:text-slate-500">Nome do Responsável *</label>
+                            <input 
+                              type="text"
+                              placeholder="Ex: Carlos Jorge"
+                              value={addChildNomeResponsavel}
+                              onChange={(e) => setAddChildNomeResponsavel(e.target.value)}
+                              className="w-full mt-1.5 p-3.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm font-bold text-slate-900 dark:text-slate-200"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-black uppercase tracking-wider text-slate-450 dark:text-slate-500">Telefone do Responsável *</label>
+                            <input 
+                              type="text"
+                              placeholder="Ex: (81) 98888-8888"
+                              value={addChildTelefoneResponsavel}
+                              onChange={(e) => setAddChildTelefoneResponsavel(e.target.value)}
+                              className="w-full mt-1.5 p-3.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm font-bold text-slate-900 dark:text-slate-200"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Birthdate, Age and Gender */}
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+                          <div className="sm:col-span-1">
+                            <label className="text-[10px] font-black uppercase tracking-wider text-slate-450 dark:text-slate-500">Nascimento *</label>
+                            <input 
+                              type="date"
+                              value={addChildDataNascimento}
+                              onChange={(e) => setAddChildDataNascimento(e.target.value)}
+                              className="w-full mt-1.5 p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-xs font-bold text-slate-900 dark:text-slate-200"
+                            />
+                          </div>
+                          
+                          <div className="sm:col-span-1">
+                            <label className="text-[10px] font-black uppercase tracking-wider text-slate-450 dark:text-slate-500">Idade (Calculada)</label>
+                            <div className="w-full mt-1.5 p-3.5 bg-slate-100/80 dark:bg-slate-950/80 border border-slate-200/60 dark:border-slate-800/60 rounded-2xl text-sm font-black text-slate-700 dark:text-slate-350 text-center select-none">
+                              {addChildDataNascimento ? `${getAgeFromBirthDate(addChildDataNascimento)} anos` : 'Informe data'}
+                            </div>
+                          </div>
+
+                          <div className="sm:col-span-1">
+                            <label className="text-[10px] font-black uppercase tracking-wider text-slate-450 dark:text-slate-500">Sexo *</label>
+                            <select 
+                              value={addChildSexo}
+                              onChange={(e) => setAddChildSexo(e.target.value as 'Masculino' | 'Feminino')}
+                              className="w-full mt-1.5 p-3.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-xs font-bold text-slate-900 dark:text-slate-200"
+                            >
+                              <option value="Masculino">Masculino</option>
+                              <option value="Feminino">Feminino</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* Special text inputs: Special Needs, Food Restrictions, Medical Observations */}
+                        <div className="space-y-3 pt-2">
+                          {/* 1. Necessidades Especiais */}
+                          <div className="bg-amber-500/5 dark:bg-amber-500/5 border border-amber-500/20 p-3.5 rounded-2xl flex items-start gap-2.5">
+                            <AlertCircle className="text-amber-500 mt-0.5 shrink-0" size={18} />
+                            <div className="flex-1">
+                              <label className="block text-[10px] font-black uppercase tracking-wider text-amber-600 dark:text-amber-400 leading-none">Necessidades Especiais</label>
+                              <input 
+                                type="text" 
+                                value={addChildNecessidades}
+                                onChange={(e) => setAddChildNecessidades(e.target.value)}
+                                placeholder="Ex: Nenhuma, Autismo, Dificuldade de locomoção"
+                                className="w-full bg-transparent mt-1 text-sm font-bold text-slate-800 dark:text-slate-200 outline-none placeholder:text-slate-400"
+                              />
+                            </div>
+                          </div>
+
+                          {/* 2. Restrições Alimentares */}
+                          <div className="bg-orange-500/5 dark:bg-orange-500/5 border border-orange-500/20 p-3.5 rounded-2xl flex items-start gap-2.5">
+                            <Activity className="text-orange-500 mt-0.5 shrink-0" size={18} />
+                            <div className="flex-1">
+                              <label className="block text-[10px] font-black uppercase tracking-wider text-orange-600 dark:text-orange-400 leading-none">Restrições Alimentares</label>
+                              <input 
+                                type="text" 
+                                value={addChildRestricoes}
+                                onChange={(e) => setAddChildRestricoes(e.target.value)}
+                                placeholder="Ex: Nenhuma, Lactose, Glúten, Amendoim"
+                                className="w-full bg-transparent mt-1 text-sm font-bold text-slate-800 dark:text-slate-200 outline-none placeholder:text-slate-400"
+                              />
+                            </div>
+                          </div>
+
+                          {/* 3. Observações Médicas */}
+                          <div className="bg-rose-500/5 dark:bg-rose-500/5 border border-rose-500/20 p-3.5 rounded-2xl flex items-start gap-2.5">
+                            <Heart className="text-rose-500 mt-0.5 shrink-0" size={18} />
+                            <div className="flex-1">
+                              <label className="block text-[10px] font-black uppercase tracking-wider text-rose-600 dark:text-rose-400 leading-none">Observações Médicas</label>
+                              <input 
+                                type="text" 
+                                value={addChildObservacoesMedicas}
+                                onChange={(e) => setAddChildObservacoesMedicas(e.target.value)}
+                                placeholder="Ex: Asma (usa bombinha), Alergias a medicamentos"
+                                className="w-full bg-transparent mt-1 text-sm font-bold text-slate-800 dark:text-slate-200 outline-none placeholder:text-slate-400"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Image Authorization and Upload */}
+                        <div className="space-y-3 pt-1">
+                          <div className="flex items-center gap-3 p-3.5 bg-slate-50 dark:bg-slate-950/40 rounded-2xl border border-slate-100 dark:border-slate-800">
+                            <input 
+                              type="checkbox"
+                              id="autoriza_imagem_check"
+                              checked={addChildAutorizaImagem}
+                              onChange={(e) => {
+                                setAddChildAutorizaImagem(e.target.checked);
+                                if (!e.target.checked) {
+                                  setAddChildFotoUrl('');
+                                }
+                              }}
+                              className="h-4.5 w-4.5 rounded border-slate-300 text-amber-500 focus:ring-amber-500 cursor-pointer"
+                            />
+                            <label htmlFor="autoriza_imagem_check" className="text-xs font-bold text-slate-700 dark:text-slate-300 cursor-pointer select-none">
+                              Autoriza divulgação de imagem da criança
+                            </label>
+                          </div>
+
+                          {addChildAutorizaImagem && (
+                            <div 
+                              onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                              onDragLeave={() => setIsDragging(false)}
+                              onDrop={(e) => {
+                                e.preventDefault();
+                                setIsDragging(false);
+                                if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                                  handleChildPhotoUpload(e.dataTransfer.files[0]);
+                                }
+                              }}
+                              onClick={() => document.getElementById('child-photo-file-input')?.click()}
+                              className={`p-4 border-2 border-dashed rounded-2xl text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-2 min-h-[100px] ${
+                                isDragging 
+                                  ? 'border-amber-500 bg-amber-500/10' 
+                                  : addChildFotoUrl 
+                                    ? 'border-green-500/50 bg-green-500/5' 
+                                    : 'border-slate-200 dark:border-slate-850 hover:bg-slate-50 dark:hover:bg-slate-950/40'
+                              }`}
+                            >
+                              <input 
+                                type="file" 
+                                id="child-photo-file-input"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(e) => {
+                                  if (e.target.files && e.target.files.length > 0) {
+                                    handleChildPhotoUpload(e.target.files[0]);
+                                  }
+                                }}
+                              />
+                              
+                              {addChildFotoUrl ? (
+                                <div className="relative w-16 h-16 rounded-full overflow-hidden border-2 border-green-500">
+                                  <img src={addChildFotoUrl} alt="Foto da criança" className="w-full h-full object-cover" />
+                                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                                    <UploadCloud size={16} className="text-white" />
+                                  </div>
+                                </div>
+                              ) : (
+                                <UploadCloud size={24} className="text-slate-400" />
+                              )}
+                              
+                              <div className="space-y-0.5">
+                                <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                  {uploading ? 'Carregando foto...' : addChildFotoUrl ? 'Foto selecionada! Clique para alterar' : 'Arraste a foto da criança aqui'}
+                                </p>
+                                <p className="text-[10px] text-slate-400">Ou clique para escolher do seu dispositivo</p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex flex-col gap-2 pt-2">
+                          <button 
+                            onClick={handleAddCriancaToSala}
+                            disabled={uploading}
+                            className="w-full py-4 bg-amber-500 hover:bg-[#E4A232] text-white font-black uppercase text-xs tracking-widest rounded-2xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {editingCheckin ? (
+                              <>
+                                <Check size={16} /> Confirmar Edição de Check-In
+                              </>
+                            ) : (
+                              <>
+                                <Plus size={16} /> Confirmar Check-In na Sala
+                              </>
+                            )}
+                          </button>
+                          {editingCheckin && (
+                            <button
+                              type="button"
+                              onClick={handleCancelEditCheckin}
+                              className="w-full py-3.5 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-950/40 text-slate-600 dark:text-slate-400 font-black uppercase text-xs tracking-widest rounded-2xl transition-all"
+                            >
+                              Cancelar Edição
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Right Column: Present kids list */}
@@ -2969,138 +3412,6 @@ export default function KidsModule() {
 
       {/* MODALS SECTION */}
 
-      {/* 1. EDIT CHECK-IN MODAL */}
-      {editingCheckin && (
-        <div className="fixed inset-0 bg-slate-900/65 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
-          <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-150 dark:border-slate-800 shadow-2xl w-full max-w-2xl overflow-hidden animate-scale-in">
-            <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-950/20">
-              <h3 className="text-md font-black uppercase tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
-                <Edit3 size={18} className="text-blue-500" />
-                Editar Dados de Check-in
-              </h3>
-              <button 
-                onClick={() => setEditingCheckin(null)}
-                className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl transition-all"
-              >
-                <X size={18} className="text-slate-500" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveEditCheckin} className="p-8 space-y-6 max-h-[75vh] overflow-y-auto">
-              {/* Parent/Contact Info */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-500">Nome do Responsável</label>
-                  <input 
-                    type="text"
-                    required
-                    value={editChildNomeResponsavel}
-                    onChange={(e) => setEditChildNomeResponsavel(e.target.value)}
-                    className="w-full mt-1.5 p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-900 dark:text-slate-200"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-500">Telefone do Responsável</label>
-                  <input 
-                    type="text"
-                    required
-                    value={editChildTelefoneResponsavel}
-                    onChange={(e) => setEditChildTelefoneResponsavel(e.target.value)}
-                    className="w-full mt-1.5 p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-900 dark:text-slate-200"
-                  />
-                </div>
-              </div>
-
-              {/* Birth & Gender */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-500">Data de Nascimento</label>
-                  <input 
-                    type="date"
-                    required
-                    value={editChildDataNascimento}
-                    onChange={(e) => setEditChildDataNascimento(e.target.value)}
-                    className="w-full mt-1.5 p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-900 dark:text-slate-200"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-500">Sexo / Gênero</label>
-                  <select 
-                    value={editChildSexo}
-                    onChange={(e) => setEditChildSexo(e.target.value as any)}
-                    className="w-full mt-1.5 p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-900 dark:text-slate-200"
-                  >
-                    <option value="Masculino">Masculino</option>
-                    <option value="Feminino">Feminino</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Special needs, dietary restrictions and medical notes */}
-              <div className="space-y-4">
-                <div>
-                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-500">Necessidades Especiais (Se houver)</label>
-                  <textarea 
-                    value={editChildNecessidades}
-                    onChange={(e) => setEditChildNecessidades(e.target.value)}
-                    rows={2}
-                    className="w-full mt-1.5 p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-900 dark:text-slate-200"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-500">Restrições Alimentares / Alergias</label>
-                  <textarea 
-                    value={editChildRestricoes}
-                    onChange={(e) => setEditChildRestricoes(e.target.value)}
-                    rows={2}
-                    className="w-full mt-1.5 p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-900 dark:text-slate-200"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-500">Observações Médicas / Remédios</label>
-                  <textarea 
-                    value={editChildObservacoesMedicas}
-                    onChange={(e) => setEditChildObservacoesMedicas(e.target.value)}
-                    rows={2}
-                    className="w-full mt-1.5 p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-900 dark:text-slate-200"
-                  />
-                </div>
-              </div>
-
-              {/* Image Authorization Toggle */}
-              <div className="flex items-center gap-3 p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-100 dark:border-slate-800/60">
-                <input 
-                  type="checkbox"
-                  id="editChildAutorizaImagem"
-                  checked={editChildAutorizaImagem}
-                  onChange={(e) => setEditChildAutorizaImagem(e.target.checked)}
-                  className="h-4 w-4 rounded text-[#E4A232] border-slate-300 focus:ring-[#E4A232]"
-                />
-                <label htmlFor="editChildAutorizaImagem" className="text-xs font-bold text-slate-700 dark:text-slate-300 selection:bg-transparent cursor-pointer">
-                  Autorizo o uso de imagem da criança para fins ministeriais internos e relatórios.
-                </label>
-              </div>
-
-              <div className="border-t border-slate-100 dark:border-slate-800 pt-6 flex justify-end gap-3">
-                <button 
-                  type="button"
-                  onClick={() => setEditingCheckin(null)}
-                  className="px-5 py-3 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-950/20 text-slate-700 dark:text-slate-300 text-xs font-black uppercase tracking-widest rounded-xl transition-all"
-                >
-                  Cancelar
-                </button>
-                <button 
-                  type="submit"
-                  className="px-6 py-3 bg-[#E4A232] hover:opacity-95 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-md"
-                >
-                  Salvar Alterações
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
       {/* 2. CHECK-OUT MODAL */}
       {checkingOutChild && (
         <div className="fixed inset-0 bg-slate-900/65 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
@@ -3252,133 +3563,432 @@ export default function KidsModule() {
       )}
 
       {/* 4. PRINT BADGE PREVIEW MODAL */}
-      {selectedChildForBadge && (
-        <div className="fixed inset-0 bg-slate-900/65 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
-          <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-150 dark:border-slate-800 shadow-2xl w-full max-w-md overflow-hidden animate-scale-in">
-            <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-950/20">
-              <h3 className="text-md font-black uppercase tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
-                <Printer size={18} className="text-indigo-500" />
-                Visualizar Etiqueta do Aluno
-              </h3>
-              <button 
-                onClick={() => setSelectedChildForBadge(null)}
-                className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl transition-all"
-              >
-                <X size={18} className="text-slate-500" />
-              </button>
-            </div>
+      {selectedChildForBadge && (() => {
+        const activeSalaObj = salas.find(s => s.id === selectedSalaId);
+        
+        const displayNome = selectedChildForBadge.tipo_crianca === 'Membro' 
+          ? (membrosIgreja.find(m => m.id === selectedChildForBadge.id_membro)?.nome || 'Membro não encontrado')
+          : (selectedChildForBadge.nome_visitante || 'Visitante');
+        
+        const displayPhoto = selectedChildForBadge.foto_url || (selectedChildForBadge.tipo_crianca === 'Membro' ? (membrosIgreja.find(m => m.id === selectedChildForBadge.id_membro)?.foto_url || '') : '');
+        const hasPhoto = selectedChildForBadge.autoriza_imagem && displayPhoto;
+        
+        const isA = badgeSize === 'A';
+        
+        // Label renderers helper
+        const renderLabelA = (child: SalaCrianca) => {
+          const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(`KIDS_CHECKOUT|${child.id}|${child.nome_responsavel}`)}`;
+          return (
+            <div className="w-full h-full flex flex-row items-center bg-white text-slate-900 border border-slate-300 rounded-xl overflow-hidden font-sans box-border" style={{ padding: '0.2cm', gap: '0.15cm', height: '100%', width: '100%' }}>
+              {/* Photo */}
+              <div className="flex-shrink-0 flex items-center justify-center border border-slate-200 rounded-lg overflow-hidden bg-slate-50" style={{ width: '2.5cm', height: '2.5cm' }}>
+                {hasPhoto ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={displayPhoto} alt={displayNome} className="w-full h-full object-cover animate-fade-in" referrerPolicy="no-referrer" />
+                ) : (
+                  <div className="text-center p-1">
+                    <Smile size={20} className="text-slate-400 mx-auto" />
+                    <span className="text-[7px] text-slate-400 font-bold block mt-0.5">Sem Foto</span>
+                  </div>
+                )}
+              </div>
 
-            <div className="p-8 space-y-6">
-              {/* Printed Badge Container */}
-              <div 
-                id="print-section" 
-                className="p-6 bg-white dark:bg-white text-slate-900 border-2 border-dashed border-slate-400 rounded-3xl space-y-4 max-w-xs mx-auto shadow-inner select-none font-sans"
-              >
-                {/* Header */}
-                <div className="text-center pb-2 border-b border-slate-200">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">{selectedIgreja?.nome || 'MINISTÉRIO KIDS'}</p>
-                  <h4 className="text-xs font-black uppercase text-amber-600">Módulo Kids - Identificação</h4>
+              {/* Details */}
+              <div className="flex-1 flex flex-col justify-between h-full min-w-0" style={{ gap: '2px' }}>
+                <div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-[7px] font-black tracking-widest text-slate-500 uppercase leading-none">Criança</span>
+                    <span className="text-[7px] font-black text-indigo-600 bg-indigo-500/10 px-1 rounded-sm uppercase leading-none">{child.tipo_crianca}</span>
+                  </div>
+                  <h3 className="text-[11px] font-black uppercase tracking-tight text-slate-950 truncate mt-0.5 leading-tight">
+                    {displayNome}
+                  </h3>
+                  <p className="text-[8px] font-bold text-slate-700 mt-0.5">
+                    Idade: <span className="font-black text-slate-950">{getAgeFromBirthDate(child.data_nascimento)} anos</span>
+                  </p>
                 </div>
 
-                {/* Body details */}
-                <div className="space-y-3 text-center">
-                  <h3 className="text-lg font-black tracking-tight text-slate-950 uppercase break-words leading-tight">
-                    {selectedChildForBadge.tipo_crianca === 'Membro' 
-                      ? (membrosIgreja.find(m => m.id === selectedChildForBadge.id_membro)?.nome || 'Membro não encontrado')
-                      : (selectedChildForBadge.nome_visitante || 'Visitante')}
-                  </h3>
+                <div className="border-t border-slate-100 pt-1 space-y-0.5">
+                  <p className="text-[8px] font-medium text-slate-600 leading-tight truncate">
+                    <span className="font-bold text-slate-800">Resp:</span> {child.nome_responsavel}
+                  </p>
+                  <p className="text-[8px] font-mono text-slate-500 leading-none">
+                    <span className="font-bold text-slate-800">Fone:</span> {child.telefone_responsavel}
+                  </p>
+                  <p className="text-[8px] font-bold text-emerald-650 leading-none flex items-center gap-1">
+                    <span>Entrada:</span> {new Date(child.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                </div>
 
-                  <div className="inline-block px-3 py-1 bg-amber-500/10 text-amber-600 rounded-full text-[10px] font-black uppercase tracking-wider">
-                    Sala: {activeSalaObj?.nome || 'Sala Kids'}
+                {(child.necessidades_especiais || child.restricoes_alimentares || child.observacoes_medicas) && (
+                  <div className="bg-rose-50 border border-rose-100 text-rose-600 text-[6.5px] font-black px-1 py-0.5 rounded-sm uppercase truncate leading-none mt-0.5">
+                    ⚠ {child.necessidades_especiais || child.restricoes_alimentares || child.observacoes_medicas}
                   </div>
+                )}
+              </div>
 
-                  <div className="text-left text-[10px] font-bold space-y-1 text-slate-700 bg-slate-50 p-3 rounded-2xl border border-slate-100">
-                    <p>• <span className="font-black">Responsável:</span> {selectedChildForBadge.nome_responsavel}</p>
-                    <p>• <span className="font-black">Contato:</span> {selectedChildForBadge.telefone_responsavel}</p>
-                    <p>• <span className="font-black">Idade:</span> {getAgeFromBirthDate(selectedChildForBadge.data_nascimento)} anos</p>
-                    <p>• <span className="font-black">Entrada:</span> {new Date(selectedChildForBadge.created_at).toLocaleString()}</p>
-                  </div>
+              {/* QR Code */}
+              <div className="flex-shrink-0 flex flex-col items-center justify-center bg-white" style={{ width: '2.5cm', height: '2.5cm' }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={qrCodeUrl} alt="QR Code Checkout" style={{ width: '2.1cm', height: '2.1cm' }} referrerPolicy="no-referrer" />
+                <span className="text-[5.5px] text-slate-400 uppercase font-black tracking-widest mt-0.5 leading-none">Checkout QR</span>
+              </div>
+            </div>
+          );
+        };
 
-                  {/* Alerts (Allergies / Special Needs) */}
-                  {(selectedChildForBadge.necessidades_especiais || selectedChildForBadge.restricoes_alimentares || selectedChildForBadge.observacoes_medicas) && (
-                    <div className="text-left text-[9px] font-black space-y-1 text-rose-600 bg-rose-50 p-3 rounded-2xl border border-rose-100">
-                      <p className="uppercase tracking-wider flex items-center gap-1"><ShieldAlert size={10} /> Alertas Importantes:</p>
-                      {selectedChildForBadge.necessidades_especiais && <p>• Nec. Especiais: {selectedChildForBadge.necessidades_especiais}</p>}
-                      {selectedChildForBadge.restricoes_alimentares && <p>• Alergias: {selectedChildForBadge.restricoes_alimentares}</p>}
-                      {selectedChildForBadge.observacoes_medicas && <p>• Obs. Médicas: {selectedChildForBadge.observacoes_medicas}</p>}
+        const renderLabelB = (child: SalaCrianca) => {
+          const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(`KIDS_CHECKOUT|${child.id}|${child.nome_responsavel}`)}`;
+          return (
+            <div className="w-full h-full flex flex-col justify-between bg-white text-slate-900 border border-slate-300 rounded-xl overflow-hidden font-sans box-border" style={{ padding: '0.15cm', height: '100%', width: '100%', gap: '1px' }}>
+              <div className="flex justify-between items-center border-b border-slate-100 pb-0.5 leading-none">
+                <span className="text-[6.5px] font-black text-[#E4A232] uppercase truncate max-w-[4cm]">{activeSalaObj?.nome || 'Sala Kids'}</span>
+                <span className="text-[6px] font-black text-slate-400 uppercase">{child.tipo_crianca}</span>
+              </div>
+
+              <h3 className="text-[10px] font-black uppercase text-slate-950 truncate leading-tight">
+                {displayNome}
+              </h3>
+
+              <div className="flex gap-1.5 items-center min-w-0 flex-1">
+                <div className="flex-shrink-0 flex items-center justify-center border border-slate-200 rounded-md overflow-hidden bg-slate-50" style={{ width: '1.4cm', height: '1.4cm' }}>
+                  {hasPhoto ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={displayPhoto} alt={displayNome} className="w-full h-full object-cover animate-fade-in" referrerPolicy="no-referrer" />
+                  ) : (
+                    <div className="text-center">
+                      <Smile size={14} className="text-slate-400 mx-auto" />
+                      <span className="text-[5.5px] text-slate-400 font-bold block leading-none">Sem Foto</span>
                     </div>
                   )}
-
-                  {/* QR-CODE of Verification */}
-                  <div className="flex justify-center pt-2">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img 
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(`KIDS_CHECKOUT|${selectedChildForBadge.id}|${selectedChildForBadge.nome_responsavel}`)}`} 
-                      alt="Verification QR Code" 
-                      className="w-24 h-24" 
-                    />
-                  </div>
                 </div>
-
-                {/* Footer */}
-                <div className="text-center pt-2 border-t border-slate-100 text-[8px] font-bold text-slate-400 uppercase tracking-widest">
-                  Validação de Saída Requerida
+                
+                <div className="flex-1 min-w-0 space-y-0.5 leading-none">
+                  <p className="text-[7.5px] font-bold text-slate-800">
+                    Idade: <span className="font-black text-slate-950">{getAgeFromBirthDate(child.data_nascimento)} anos</span>
+                  </p>
+                  <p className="text-[7px] text-slate-600 truncate">
+                    <span className="font-bold">Resp:</span> {child.nome_responsavel.split(' ')[0]}
+                  </p>
+                  <p className="text-[7px] text-slate-500 font-mono leading-none">
+                    {child.telefone_responsavel}
+                  </p>
+                  <p className="text-[7px] text-emerald-650 font-bold leading-none">
+                    Entrada: {new Date(child.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </p>
                 </div>
               </div>
 
-              {/* Action buttons */}
-              <div className="flex gap-3 justify-end pt-4 border-t border-slate-100 dark:border-slate-800">
+              <div className="flex justify-between items-end border-t border-slate-150 pt-0.5 leading-none">
+                {(child.necessidades_especiais || child.restricoes_alimentares || child.observacoes_medicas) ? (
+                  <div className="text-[5.5px] font-black text-rose-600 bg-rose-50 px-1 py-0.5 rounded-sm uppercase max-w-[3.2cm] truncate leading-none">
+                    ⚠ {child.necessidades_especiais || child.restricoes_alimentares || child.observacoes_medicas}
+                  </div>
+                ) : (
+                  <span className="text-[5.5px] text-slate-400 uppercase font-black tracking-widest leading-none">Validação de Saída</span>
+                )}
+
+                <div className="flex-shrink-0 flex items-center justify-center bg-white" style={{ width: '1.3cm', height: '1.3cm' }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={qrCodeUrl} alt="QR Code Checkout" style={{ width: '1.15cm', height: '1.15cm' }} referrerPolicy="no-referrer" />
+                </div>
+              </div>
+            </div>
+          );
+        };
+
+        const totalGridCells = isA ? 14 : 18;
+
+        return (
+          <div className="fixed inset-0 bg-slate-900/65 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
+            <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-150 dark:border-slate-800 shadow-2xl w-full max-w-4xl overflow-hidden animate-scale-in flex flex-col max-h-[90vh]">
+              {/* Header */}
+              <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-950/20">
+                <div className="flex items-center gap-2">
+                  <Printer size={20} className="text-indigo-500 animate-pulse" />
+                  <div>
+                    <h3 className="text-md font-black uppercase tracking-tight text-slate-900 dark:text-white leading-none">
+                      Impressão de Etiquetas de Identificação
+                    </h3>
+                    <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider mt-1">
+                      Aluno: <span className="text-indigo-600 dark:text-indigo-400">{displayNome}</span>
+                    </p>
+                  </div>
+                </div>
                 <button 
                   onClick={() => setSelectedChildForBadge(null)}
-                  className="px-5 py-3 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-950/20 text-slate-700 dark:text-slate-300 text-xs font-black uppercase tracking-widest rounded-xl transition-all"
+                  className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl transition-all cursor-pointer"
                 >
-                  Voltar
+                  <X size={18} className="text-slate-500" />
                 </button>
-                <button 
-                  onClick={() => {
-                    const printContents = document.getElementById('print-section')?.innerHTML;
-                    if (printContents) {
-                      const originalContents = document.body.innerHTML;
-                      // We create a temporary style element to inject print styles
-                      const style = document.createElement('style');
-                      style.innerHTML = `
+              </div>
+
+              {/* Main Content (Split Screen) */}
+              <div className="flex-1 overflow-y-auto p-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
+                
+                {/* Left Column: Settings Panel */}
+                <div className="lg:col-span-5 space-y-6">
+                  {/* 1. Escolha de tamanho */}
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-450 dark:text-slate-500 block">Tamanho da Etiqueta</label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setBadgeSize('A')}
+                        className={`p-4 rounded-2xl border-2 text-left transition-all cursor-pointer flex flex-col justify-between h-24 ${
+                          isA 
+                            ? 'border-indigo-500 bg-indigo-500/5 text-indigo-700 dark:text-indigo-300' 
+                            : 'border-slate-150 dark:border-slate-800 hover:border-slate-300 text-slate-600 dark:text-slate-400'
+                        }`}
+                      >
+                        <span className="text-xs font-black uppercase tracking-wider">Opção A (14 p/ Folha)</span>
+                        <span className="text-[10px] font-semibold leading-relaxed">
+                          3,39 cm x 10,10 cm<br/>2 etiquetas por linha
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setBadgeSize('B')}
+                        className={`p-4 rounded-2xl border-2 text-left transition-all cursor-pointer flex flex-col justify-between h-24 ${
+                          !isA 
+                            ? 'border-indigo-500 bg-indigo-500/5 text-indigo-700 dark:text-indigo-300' 
+                            : 'border-slate-150 dark:border-slate-800 hover:border-slate-300 text-slate-600 dark:text-slate-400'
+                        }`}
+                      >
+                        <span className="text-xs font-black uppercase tracking-wider">Opção B (18 p/ Folha)</span>
+                        <span className="text-[10px] font-semibold leading-relaxed">
+                          4,66 cm x 6,35 cm<br/>3 etiquetas por linha
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 2. Escolha de modo de preenchimento */}
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-450 dark:text-slate-500 block">Formato de Saída (Impressora)</label>
+                    <div className="space-y-2">
+                      <button
+                        type="button"
+                        onClick={() => setBadgePrintMode('single')}
+                        className={`w-full p-3.5 rounded-xl border text-left transition-all flex items-center justify-between cursor-pointer ${
+                          badgePrintMode === 'single'
+                            ? 'border-indigo-500 bg-indigo-500/5 text-indigo-950 dark:text-indigo-200 font-bold'
+                            : 'border-slate-100 dark:border-slate-850 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-950/30'
+                        }`}
+                      >
+                        <div className="text-xs">
+                          <p className="font-black">Etiqueta Única</p>
+                          <p className="text-[9px] text-slate-400 font-medium">Para impressoras térmicas / rolo de etiquetas</p>
+                        </div>
+                        {badgePrintMode === 'single' && <Check size={16} className="text-indigo-500" />}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setBadgePrintMode('full')}
+                        className={`w-full p-3.5 rounded-xl border text-left transition-all flex items-center justify-between cursor-pointer ${
+                          badgePrintMode === 'full'
+                            ? 'border-indigo-500 bg-indigo-500/5 text-indigo-950 dark:text-indigo-200 font-bold'
+                            : 'border-slate-100 dark:border-slate-850 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-950/30'
+                        }`}
+                      >
+                        <div className="text-xs">
+                          <p className="font-black">Folha A4 Inteira</p>
+                          <p className="text-[9px] text-slate-400 font-medium">Repete a mesma etiqueta em todas as {totalGridCells} posições</p>
+                        </div>
+                        {badgePrintMode === 'full' && <Check size={16} className="text-indigo-500" />}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setBadgePrintMode('specific')}
+                        className={`w-full p-3.5 rounded-xl border text-left transition-all flex items-center justify-between cursor-pointer ${
+                          badgePrintMode === 'specific'
+                            ? 'border-indigo-500 bg-indigo-500/5 text-indigo-950 dark:text-indigo-200 font-bold'
+                            : 'border-slate-100 dark:border-slate-850 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-950/30'
+                        }`}
+                      >
+                        <div className="text-xs">
+                          <p className="font-black">Posição Específica na Folha A4</p>
+                          <p className="text-[9px] text-slate-400 font-medium">Imprime em apenas 1 etiqueta para evitar desperdício de papel</p>
+                        </div>
+                        {badgePrintMode === 'specific' && <Check size={16} className="text-indigo-500" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 3. Seletor de posição na folha */}
+                  {badgePrintMode === 'specific' && (
+                    <div className="space-y-3 animate-fade-in">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-450 dark:text-slate-500 block">
+                        Clique na posição que deseja imprimir:
+                      </label>
+                      <div className="p-4 bg-slate-50 dark:bg-slate-950/40 rounded-2xl border border-slate-150 dark:border-slate-850 flex items-center justify-center">
+                        <div 
+                          className={`grid gap-1 bg-slate-200 dark:bg-slate-800 p-1.5 rounded-xl border border-slate-300 dark:border-slate-700 max-w-[200px] ${
+                            isA ? 'grid-cols-2' : 'grid-cols-3'
+                          }`}
+                        >
+                          {Array.from({ length: totalGridCells }).map((_, idx) => (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() => setBadgeSpecificPosition(idx)}
+                              className={`w-10 h-8 rounded-md text-[10px] font-black uppercase tracking-wider flex items-center justify-center transition-all cursor-pointer ${
+                                badgeSpecificPosition === idx
+                                  ? 'bg-indigo-600 text-white shadow-sm scale-105'
+                                  : 'bg-white dark:bg-slate-900 text-slate-450 dark:text-slate-550 hover:bg-indigo-50'
+                              }`}
+                            >
+                              {idx + 1}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Right Column: Visual Preview Area */}
+                <div className="lg:col-span-7 flex flex-col justify-between bg-slate-50 dark:bg-slate-950/60 p-6 rounded-[2rem] border border-slate-150 dark:border-slate-850">
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center pb-2 border-b border-slate-200/50">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Pré-visualização em Tela</span>
+                      <span className="text-[9px] font-bold text-indigo-500 bg-indigo-500/10 px-2 py-0.5 rounded-full uppercase tracking-wider">Livre de Escala</span>
+                    </div>
+
+                    <div className="flex items-center justify-center py-6 min-h-[250px]">
+                      {/* Interactive size container preview */}
+                      <div 
+                        className="shadow-xl rounded-2xl border border-slate-200 overflow-hidden bg-white max-w-full transition-all duration-300"
+                        style={{
+                          width: isA ? '420px' : '320px',
+                          height: isA ? '141px' : '235px'
+                        }}
+                      >
+                        {isA ? renderLabelA(selectedChildForBadge) : renderLabelB(selectedChildForBadge)}
+                      </div>
+                    </div>
+
+                    <div className="bg-amber-500/5 border border-amber-500/10 p-3 rounded-2xl text-[10px] text-amber-700 dark:text-amber-300 font-medium leading-relaxed">
+                      💡 <span className="font-black uppercase">Instruções de Impressão:</span> Defina as margens da impressora como <span className="font-bold">Nenhuma</span> e o tamanho do papel como <span className="font-bold">A4</span> (ou correspondente térmico) no diálogo de impressão do navegador para manter o alinhamento perfeito.
+                    </div>
+                  </div>
+
+                  {/* Hidden print payload wrapper with complete stylesheet for print engine compatibility */}
+                  <div style={{ display: 'none' }}>
+                    <div id="print-section">
+                      {/* Dynamic Print Stylesheet Injection */}
+                      <style dangerouslySetInnerHTML={{ __html: `
                         @media print {
-                          body {
-                            background: white !important;
-                            color: black !important;
-                          }
                           body * {
-                            visibility: hidden;
+                            visibility: hidden !important;
                           }
                           #print-section, #print-section * {
-                            visibility: visible;
+                            visibility: visible !important;
                           }
                           #print-section {
-                            position: absolute;
-                            left: 0;
-                            top: 0;
-                            width: 100%;
-                            border: none !important;
-                            box-shadow: none !important;
+                            position: absolute !important;
+                            left: 0 !important;
+                            top: 0 !important;
+                            width: 21.0cm !important;
+                            height: 29.7cm !important;
+                            margin: 0 !important;
                             padding: 0 !important;
+                            background: white !important;
+                            display: block !important;
+                            box-sizing: border-box !important;
+                          }
+                          @page {
+                            size: ${badgePrintMode === 'single' ? (isA ? '10.10cm 3.39cm' : '6.35cm 4.66cm') : 'A4 portrait'} !important;
+                            margin: 0 !important;
                           }
                         }
-                      `;
-                      document.head.appendChild(style);
-                      window.print();
-                      document.head.removeChild(style);
-                    }
-                  }}
-                  className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-md flex items-center gap-1.5"
-                >
-                  <Printer size={14} />
-                  Imprimir Etiqueta
-                </button>
+                      `}} />
+
+                      {badgePrintMode === 'single' ? (
+                        <div 
+                          style={{ 
+                            width: isA ? '10.10cm' : '6.35cm', 
+                            height: isA ? '3.39cm' : '4.66cm', 
+                            padding: '0.05cm',
+                            boxSizing: 'border-box',
+                            backgroundColor: 'white'
+                          }}
+                        >
+                          {isA ? renderLabelA(selectedChildForBadge) : renderLabelB(selectedChildForBadge)}
+                        </div>
+                      ) : (
+                        <div 
+                          className="grid"
+                          style={{
+                            width: '21.0cm',
+                            height: '29.7cm',
+                            paddingLeft: isA ? '0.4cm' : '0.97cm',
+                            paddingRight: isA ? '0.4cm' : '0.97cm',
+                            paddingTop: isA ? '2.0cm' : '0.87cm',
+                            paddingBottom: isA ? '2.0cm' : '0.87cm',
+                            columnGap: '0.0cm',
+                            rowGap: '0.0cm',
+                            gridTemplateColumns: isA ? 'repeat(2, 10.10cm)' : 'repeat(3, 6.35cm)',
+                            gridAutoRows: isA ? '3.39cm' : '4.66cm',
+                            backgroundColor: 'white',
+                            boxSizing: 'border-box'
+                          }}
+                        >
+                          {Array.from({ length: totalGridCells }).map((_, index) => {
+                            const shouldPrint = badgePrintMode === 'full' || (badgePrintMode === 'specific' && index === badgeSpecificPosition);
+                            return (
+                              <div 
+                                key={index} 
+                                style={{ 
+                                  width: isA ? '10.10cm' : '6.35cm', 
+                                  height: isA ? '3.39cm' : '4.66cm',
+                                  padding: '0.05cm', 
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  backgroundColor: 'white',
+                                  boxSizing: 'border-box'
+                                }}
+                              >
+                                {shouldPrint ? (
+                                  isA ? renderLabelA(selectedChildForBadge) : renderLabelB(selectedChildForBadge)
+                                ) : (
+                                  <div className="w-full h-full opacity-0" />
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Print Action Triggers */}
+                  <div className="flex gap-3 justify-end pt-4 border-t border-slate-200/50">
+                    <button 
+                      onClick={() => setSelectedChildForBadge(null)}
+                      className="px-5 py-3 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-350 text-xs font-black uppercase tracking-widest rounded-xl transition-all cursor-pointer"
+                    >
+                      Voltar
+                    </button>
+                    <button 
+                      onClick={() => window.print()}
+                      className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Printer size={14} />
+                      Enviar p/ Impressora
+                    </button>
+                  </div>
+                </div>
+
               </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
     </div>
   );

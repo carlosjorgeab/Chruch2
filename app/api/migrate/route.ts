@@ -385,6 +385,20 @@ export async function GET(req: NextRequest) {
     ALTER TABLE kids_programacao_sala DISABLE ROW LEVEL SECURITY;
     ALTER TABLE kids_sala_criancas DISABLE ROW LEVEL SECURITY;
 
+    -- Create kids_comunicados table to store announcements/bulletins with attachments
+    CREATE TABLE IF NOT EXISTS kids_comunicados (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      id_sala UUID REFERENCES kids_salas(id) ON DELETE CASCADE,
+      criancas_ids JSONB NOT NULL,
+      tipo VARCHAR(50) NOT NULL,
+      enviar_responsaveis BOOLEAN DEFAULT false,
+      descricao TEXT NOT NULL,
+      arquivos JSONB DEFAULT '[]'::jsonb,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+    );
+
+    ALTER TABLE kids_comunicados DISABLE ROW LEVEL SECURITY;
+
     -- 15. Create storage 'files' bucket and its security policies
     INSERT INTO storage.buckets (id, name, public)
     VALUES ('files', 'files', true)
