@@ -329,8 +329,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
             /* Buttons & Amber Accent Overrides */
             aside .bg-\\[\\#E4A232\\],
+            main button.bg-amber-500,
             main button.bg-amber-600,
             main button.bg-\\[\\#E4A232\\],
+            main .bg-amber-500,
             main .bg-amber-600,
             main .bg-\\[\\#E4A232\\],
             main button.bg-primary,
@@ -340,6 +342,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               border-radius: 1rem !important;
             }
 
+            main button.bg-amber-500:hover,
+            main button.bg-amber-600:hover,
+            main button.bg-\\[\\#E4A232\\]:hover,
+            main button.bg-primary:hover {
+              filter: brightness(0.9) !important;
+            }
+
             main .text-amber-500,
             main .text-amber-600,
             main .text-amber-700,
@@ -347,10 +356,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               color: var(--church-button) !important;
             }
 
-            main .border-amber-500,
+            main .border-amber-550,
             main .border-primary,
             main .focus\\:border-amber-500:focus,
-            main .focus\\:border-primary:focus {
+            main .focus\\:border-primary:focus,
+            main input:focus,
+            main select:focus,
+            main textarea:focus {
               border-color: var(--church-button) !important;
             }
           ` }} />

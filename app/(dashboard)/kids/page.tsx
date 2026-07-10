@@ -8,7 +8,7 @@ import {
   Baby, Users, DoorOpen, Plus, Trash2, Calendar, Edit3, Check, X, 
   UploadCloud, ArrowRight, UserCheck, Smile, HelpCircle, QrCode, AlertCircle,
   Activity, Heart, ShieldAlert, Phone, User, Info, FileText, Printer, Clock,
-  MessageSquare, Paperclip
+  MessageSquare, Paperclip, Megaphone
 } from 'lucide-react';
 
 interface TurmaMembro {
@@ -182,6 +182,7 @@ export default function KidsModule() {
   const [comunicadoDescricao, setComunicadoDescricao] = useState<string>('');
   const [comunicadoArquivos, setComunicadoArquivos] = useState<{name: string, url: string}[]>([]);
   const [uploadingComunicadoFile, setUploadingComunicadoFile] = useState<boolean>(false);
+  const [isDraggingComunicado, setIsDraggingComunicado] = useState<boolean>(false);
   const [comunicadosList, setComunicadosList] = useState<any[]>([]);
   const [loadingComunicados, setLoadingComunicados] = useState<boolean>(false);
 
@@ -251,18 +252,37 @@ export default function KidsModule() {
     try {
       const payload = {
         id_sala: selectedSalaId,
-        ids_criancas: comunicadoCriancasIds,
+        criancas_ids: comunicadoCriancasIds,
         tipo: comunicadoTipo,
         enviar_responsaveis: comunicadoEnviarResponsaveis,
         descricao: comunicadoDescricao,
-        anexos: comunicadoArquivos,
+        arquivos: comunicadoArquivos,
       };
 
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('kids_comunicados')
-        .insert([payload]);
+        .insert([payload])
+        .select('id')
+        .single();
 
       if (error) throw error;
+
+      // Save attachments to the kids_comunicados_anexos table as well!
+      if (comunicadoArquivos.length > 0 && data?.id) {
+        const anexosPayload = comunicadoArquivos.map(file => ({
+          id_comunicado: data.id,
+          nome: file.name,
+          url: file.url
+        }));
+        
+        const { error: anexoError } = await supabase
+          .from('kids_comunicados_anexos')
+          .insert(anexosPayload);
+          
+        if (anexoError) {
+          console.error('Erro ao salvar anexos adicionais:', anexoError);
+        }
+      }
 
       showNotification('Comunicado criado com sucesso!', 'success');
       
@@ -1158,7 +1178,9 @@ export default function KidsModule() {
   // Helper to calculate age from birth date dynamically
   const getAgeFromBirthDate = (birthDateStr: string): string => {
     if (!birthDateStr) return '0';
-    const birthDate = new Date(birthDateStr + 'T00:00:00');
+    // Clean string to keep only the YYYY-MM-DD prefix to handle full ISO datetimes
+    const cleanDateStr = birthDateStr.includes('T') ? birthDateStr.split('T')[0] : birthDateStr;
+    const birthDate = new Date(cleanDateStr + 'T00:00:00');
     if (isNaN(birthDate.getTime())) return '0';
     const today = new Date();
     let age = today.getFullYear() - birthDate.getFullYear();
@@ -1817,6 +1839,20 @@ export default function KidsModule() {
                       <div>
                         <label className="text-[10px] font-black uppercase tracking-wider text-slate-450 dark:text-slate-500 block mb-1.5">Anexos / Imagens</label>
                         <div
+                          onDragOver={(e) => {
+                            e.preventDefault();
+                            setIsDraggingComunicado(true);
+                          }}
+                          onDragLeave={() => setIsDraggingComunicado(false)}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            setIsDraggingComunicado(false);
+                            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                              Array.from(e.dataTransfer.files).forEach(file => {
+                                handleComunicadoFileUpload(file);
+                              });
+                            }
+                          }}
                           onClick={() => {
                             if (!uploadingComunicadoFile) {
                               document.getElementById('comunicado-file-input')?.click();
@@ -1825,7 +1861,9 @@ export default function KidsModule() {
                           className={`p-4 rounded-xl border-2 border-dashed transition-all duration-200 flex flex-col items-center justify-center text-center cursor-pointer ${
                             uploadingComunicadoFile
                               ? 'border-amber-500 bg-amber-50/5 cursor-wait'
-                              : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 hover:border-amber-500/50'
+                              : isDraggingComunicado
+                                ? 'border-amber-500 bg-amber-500/10'
+                                : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 hover:border-amber-500/50'
                           }`}
                         >
                           <input
@@ -2259,22 +2297,62 @@ export default function KidsModule() {
                   <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
                     <div>
                       <h3 className="text-lg font-black uppercase tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
-                        <Baby size={20} className="text-[#E4A232]" />
-                        Crianças Atendidas na Sala ({childrenInActiveSala.length})
+                        {rightPanelTab === 'presentes' ? (
+                          <>
+                            <Baby size={20} className="text-[#E4A232]" />
+                            Crianças Atendidas ({childrenInActiveSala.length})
+                          </>
+                        ) : (
+                          <>
+                            <Megaphone size={20} className="text-[#E4A232]" />
+                            Comunicados Enviados ({comunicadosList.length})
+                          </>
+                        )}
                       </h3>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Lista de check-ins ativos com acesso a etiquetas de identificação.</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                        {rightPanelTab === 'presentes' 
+                          ? 'Lista de check-ins ativos com acesso a etiquetas de identificação.'
+                          : 'Histórico de avisos, ocorrências e comunicados enviados para os pais.'}
+                      </p>
+                    </div>
+
+                    {/* Tab Switcher */}
+                    <div className="flex bg-slate-100 dark:bg-slate-950 p-1 rounded-xl self-stretch sm:self-auto">
+                      <button
+                        type="button"
+                        onClick={() => setRightPanelTab('presentes')}
+                        className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
+                          rightPanelTab === 'presentes'
+                            ? 'bg-white dark:bg-slate-900 text-[#E4A232] shadow-sm'
+                            : 'text-slate-500 hover:text-slate-755 dark:hover:text-slate-300'
+                        }`}
+                      >
+                        Presentes
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRightPanelTab('comunicados')}
+                        className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
+                          rightPanelTab === 'comunicados'
+                            ? 'bg-white dark:bg-slate-900 text-[#E4A232] shadow-sm'
+                            : 'text-slate-500 hover:text-slate-755 dark:hover:text-slate-300'
+                        }`}
+                      >
+                        Comunicados
+                      </button>
                     </div>
                   </div>
 
-                  {childrenInActiveSala.length === 0 ? (
-                    <div className="text-center py-16 bg-slate-50/50 dark:bg-slate-950/20 rounded-3xl border border-dashed border-slate-200 dark:border-slate-800 space-y-3">
-                      <Smile size={40} className="text-slate-350 dark:text-slate-600 mx-auto animate-bounce" />
-                      <p className="text-sm text-slate-400 font-bold uppercase tracking-wide">Nenhuma criança na sala ainda</p>
-                      <p className="text-xs text-slate-400 max-w-sm mx-auto font-normal">Use o painel ao lado para registrar os dados e iniciar os check-ins das crianças.</p>
-                    </div>
-                  ) : (
-                    <div className="overflow-x-auto rounded-2xl border border-slate-100 dark:border-slate-800/80">
-                      <table className="w-full text-left border-collapse">
+                  {rightPanelTab === 'presentes' ? (
+                    childrenInActiveSala.length === 0 ? (
+                      <div className="text-center py-16 bg-slate-50/50 dark:bg-slate-950/20 rounded-3xl border border-dashed border-slate-200 dark:border-slate-800 space-y-3">
+                        <Smile size={40} className="text-slate-350 dark:text-slate-600 mx-auto animate-bounce" />
+                        <p className="text-sm text-slate-400 font-bold uppercase tracking-wide">Nenhuma criança na sala ainda</p>
+                        <p className="text-xs text-slate-400 max-w-sm mx-auto font-normal">Use o painel ao lado para registrar os dados e iniciar os check-ins das crianças.</p>
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto rounded-2xl border border-slate-100 dark:border-slate-800/80">
+                        <table className="w-full text-left border-collapse">
                         <thead>
                           <tr className="bg-slate-50 dark:bg-slate-950 text-[10px] font-black uppercase tracking-widest text-slate-450 dark:text-slate-500 border-b border-slate-100 dark:border-slate-800">
                             <th className="py-4 px-4">Identificação</th>
@@ -2409,6 +2487,111 @@ export default function KidsModule() {
                         </tbody>
                       </table>
                     </div>
+                  )
+                  ) : (
+                    /* COMUNICADOS TAB */
+                    loadingComunicados ? (
+                      <div className="flex flex-col items-center justify-center py-16 space-y-3">
+                        <div className="w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full animate-spin" />
+                        <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Carregando comunicados...</p>
+                      </div>
+                    ) : comunicadosList.length === 0 ? (
+                      <div className="text-center py-16 bg-slate-50/50 dark:bg-slate-950/20 rounded-3xl border border-dashed border-slate-200 dark:border-slate-800 space-y-3">
+                        <Megaphone size={40} className="text-slate-350 dark:text-slate-600 mx-auto" />
+                        <p className="text-sm text-slate-400 font-bold uppercase tracking-wide">Nenhum comunicado enviado</p>
+                        <p className="text-xs text-slate-400 max-w-sm mx-auto font-normal">Use a aba "📢 Comunicado" no painel da esquerda para criar novos comunicados.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+                        {comunicadosList.map((comunicado) => {
+                          // Parse criancas_ids if it's JSON or string
+                          let ids: string[] = [];
+                          try {
+                            ids = typeof comunicado.criancas_ids === 'string' 
+                              ? JSON.parse(comunicado.criancas_ids) 
+                              : (comunicado.criancas_ids || []);
+                          } catch (e) {
+                            ids = comunicado.criancas_ids || [];
+                          }
+
+                          // Find selected children names
+                          const selectedChildrenNames = ids.includes('all') 
+                            ? ['Todas as crianças'] 
+                            : childrenInActiveSala
+                                .filter(c => ids.includes(c.id))
+                                .map(c => c.tipo_crianca === 'Membro' 
+                                  ? (membrosIgreja.find(m => m.id === c.id_membro)?.nome || 'Criança') 
+                                  : (c.nome_visitante || 'Visitante')
+                                );
+
+                          // Format Date
+                          const dateObj = new Date(comunicado.created_at);
+                          const formattedDate = dateObj.toLocaleDateString('pt-BR', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          });
+
+                          // Parse arquivos
+                          let files: {name: string, url: string}[] = [];
+                          try {
+                            files = typeof comunicado.arquivos === 'string'
+                              ? JSON.parse(comunicado.arquivos)
+                              : (comunicado.arquivos || []);
+                          } catch (e) {
+                            files = comunicado.arquivos || [];
+                          }
+
+                          // Badge color mapping
+                          const badgeColors: Record<string, string> = {
+                            'Observação': 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20',
+                            'Ocorrências': 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20',
+                            'Conteúdo': 'bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20',
+                            'Evidências': 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20',
+                            'Outros': 'bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20',
+                          };
+
+                          return (
+                            <div key={comunicado.id} className="p-4 bg-slate-50/50 dark:bg-slate-950/20 rounded-2xl border border-slate-100 dark:border-slate-800 space-y-3">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className={`px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider rounded-full border ${badgeColors[comunicado.tipo] || 'bg-amber-500/10 text-amber-600 border-amber-500/20'}`}>
+                                  {comunicado.tipo}
+                                </span>
+                                <span className="text-[10px] text-slate-400 font-bold">{formattedDate}</span>
+                              </div>
+                              <p className="text-xs text-slate-800 dark:text-slate-200 leading-relaxed font-semibold whitespace-pre-line">{comunicado.descricao}</p>
+                              {selectedChildrenNames.length > 0 && (
+                                <div className="text-[10px] text-slate-500 dark:text-slate-400 font-bold pt-1 border-t border-slate-100 dark:border-slate-800/60 flex flex-wrap gap-1">
+                                  <span className="text-slate-400">Destinatários:</span>
+                                  <span className="text-slate-700 dark:text-slate-300">{selectedChildrenNames.join(', ')}</span>
+                                </div>
+                              )}
+                              {files.length > 0 && (
+                                <div className="space-y-1 pt-1">
+                                  <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">Anexos:</p>
+                                  <div className="flex flex-wrap gap-2">
+                                    {files.map((file, fileIdx) => (
+                                      <a
+                                        key={fileIdx}
+                                        href={file.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-[10px] font-black text-[#E4A232] hover:bg-slate-50 dark:hover:bg-slate-950/60 transition-colors"
+                                      >
+                                        <Paperclip size={10} />
+                                        {file.name}
+                                      </a>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )
                   )}
                 </div>
               </div>
