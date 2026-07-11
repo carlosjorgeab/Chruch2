@@ -174,7 +174,7 @@ export default function KidsModule() {
 
   // Print format state: 'A' = Padrão (14 labels), 'Custom' = Personalizada
   const [badgeSize, setBadgeSize] = useState<'A' | 'Custom'>('A');
-  const [badgePrintMode, setBadgePrintMode] = useState<'single' | 'full' | 'specific'>('single');
+  const [badgePrintMode, setBadgePrintMode] = useState<'single' | 'specific'>('single');
   const [badgeSpecificPosition, setBadgeSpecificPosition] = useState<number>(0);
 
   // Custom label settings
@@ -238,6 +238,97 @@ export default function KidsModule() {
   // Tab controls inside Room Operator view
   const [leftPanelTab, setLeftPanelTab] = useState<'checkin' | 'comunicado'>('checkin');
   const [rightPanelTab, setRightPanelTab] = useState<'presentes' | 'comunicados'>('presentes');
+
+  // Room Team Members and Help Modal States
+  const [activeSalaMembros, setActiveSalaMembros] = useState<any[]>([]);
+  const [isLoadingSalaMembros, setIsLoadingSalaMembros] = useState<boolean>(false);
+  const [isHelpModalOpen, setIsHelpModalOpen] = useState<boolean>(false);
+  const [activeHelpTopic, setActiveHelpTopic] = useState<string>('turmas');
+
+  const loadSalaMembros = async (salaId: string) => {
+    if (!salaId) return;
+    setIsLoadingSalaMembros(true);
+    try {
+      const { data, error } = await supabase
+        .from('kids_sala_membros')
+        .select('*')
+        .eq('id_sala', salaId);
+      if (error) throw error;
+      setActiveSalaMembros(data || []);
+    } catch (err) {
+      console.error('Error loading sala membros:', err);
+    } finally {
+      setIsLoadingSalaMembros(false);
+    }
+  };
+
+  const handleAddMembroToSala = async (membro: TurmaMembro) => {
+    if (!selectedSalaId) return;
+    if (activeSalaMembros.some(m => m.id_membro === membro.id_membro)) {
+      showNotification('Este membro já está adicionado a esta sala.', 'error');
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('kids_sala_membros')
+        .insert({
+          id_sala: selectedSalaId,
+          id_membro: membro.id_membro,
+          cargo: membro.cargo
+        })
+        .select();
+
+      if (error) throw error;
+      
+      setActiveSalaMembros(prev => [...prev, ...(data || [])]);
+      showNotification(`${membro.nome_membro} adicionado à sala!`, 'success');
+    } catch (err) {
+      console.error('Error adding member to sala:', err);
+      showNotification('Erro ao adicionar membro à sala.', 'error');
+    }
+  };
+
+  const handleRemoveMembroFromSala = async (membroId: string, nomeMembro: string) => {
+    if (!selectedSalaId) return;
+
+    try {
+      const { error } = await supabase
+        .from('kids_sala_membros')
+        .delete()
+        .eq('id_sala', selectedSalaId)
+        .eq('id_membro', membroId);
+
+      if (error) throw error;
+
+      setActiveSalaMembros(prev => prev.filter(m => m.id_membro !== membroId));
+      showNotification(`${nomeMembro} removido da sala.`, 'success');
+    } catch (err) {
+      console.error('Error removing member from sala:', err);
+      showNotification('Erro ao remover membro da sala.', 'error');
+    }
+  };
+
+  const getMembroDetails = (id_membro: string) => {
+    const turmaMembro = activeTurmaObj?.membros?.find(m => m.id_membro === id_membro);
+    if (turmaMembro) {
+      return {
+        nome: turmaMembro.nome_membro,
+        cargo: turmaMembro.cargo
+      };
+    }
+    const churchM = membrosIgreja.find(m => m.id === id_membro);
+    if (churchM) {
+      return {
+        nome: churchM.nome,
+        cargo: 'Auxiliar'
+      };
+    }
+    return {
+      nome: 'Membro Desconhecido',
+      cargo: 'Voluntário'
+    };
+  };
 
   // Comunicado States
   const [comunicadoCriancasIds, setComunicadoCriancasIds] = useState<string[]>([]);
@@ -376,6 +467,9 @@ export default function KidsModule() {
   useEffect(() => {
     if (selectedSalaId) {
       loadComunicados(selectedSalaId);
+      loadSalaMembros(selectedSalaId);
+    } else {
+      setActiveSalaMembros([]);
     }
   }, [selectedSalaId]);
 
@@ -1658,6 +1752,20 @@ export default function KidsModule() {
             </button>
           )}
         </div>
+
+        {/* Interactive Help button (?) */}
+        <button
+          type="button"
+          onClick={() => {
+            setActiveHelpTopic('turmas');
+            setIsHelpModalOpen(true);
+          }}
+          className="px-4 py-2.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-slate-900 dark:hover:bg-slate-800 border border-indigo-100 dark:border-slate-800 text-indigo-600 dark:text-indigo-400 text-xs font-black uppercase tracking-widest rounded-2xl transition-all flex items-center gap-2 cursor-pointer shadow-sm"
+          title="Central de Ajuda (?)"
+        >
+          <HelpCircle size={16} className="text-[#E4A232]" />
+          Ajuda (?)
+        </button>
       </div>
 
       {/* ------------------------------------------------------------- */}
@@ -2789,6 +2897,102 @@ export default function KidsModule() {
                     )
                   )}
                 </div>
+
+                {/* Painel de Equipe / Time da Sala Atual */}
+                {activeSalaObj && (
+                  <div className="bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-[2rem] border border-slate-200/50 dark:border-slate-800/80 shadow-sm space-y-6">
+                    <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
+                      <div>
+                        <h4 className="text-sm font-black uppercase tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
+                          <Users size={18} className="text-[#E4A232]" />
+                          Equipe & Voluntários da Sala
+                        </h4>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                          Selecione os membros da turma para escalar no atendimento ativo desta sala.
+                        </p>
+                      </div>
+                      <span className="text-[10px] font-black uppercase bg-[#E4A232]/10 text-[#E4A232] px-2.5 py-1 rounded-full">
+                        {activeSalaMembros.length} Escalado(s)
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* Lado Esquerdo: Membros da Turma Disponíveis */}
+                      <div className="space-y-3">
+                        <h5 className="text-[10px] font-black uppercase tracking-wider text-slate-400">Membros da Turma ({activeTurmaObj?.nome || 'Turma'})</h5>
+                        <div className="border border-slate-100 dark:border-slate-800/80 rounded-2xl p-3 bg-slate-50/50 dark:bg-slate-950/20 max-h-56 overflow-y-auto space-y-2">
+                          {!activeTurmaObj?.membros || activeTurmaObj.membros.length === 0 ? (
+                             <p className="text-xs text-slate-400 text-center font-bold py-6">Nenhum membro vinculado a esta turma.</p>
+                          ) : (
+                            (() => {
+                              const assignedIds = activeSalaMembros.map(m => m.id_membro);
+                              const availableMembros = activeTurmaObj.membros.filter(m => !assignedIds.includes(m.id_membro));
+                              
+                              if (availableMembros.length === 0) {
+                                return <p className="text-xs text-slate-400 text-center font-bold py-6">Todos os membros já foram escalados.</p>;
+                              }
+
+                              return availableMembros.map((membro) => (
+                                <div 
+                                  key={membro.id_membro}
+                                  className="flex items-center justify-between p-2.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-850 shadow-sm"
+                                >
+                                  <div className="min-w-0">
+                                    <p className="text-xs font-black text-slate-800 dark:text-slate-200 truncate">{membro.nome_membro}</p>
+                                    <p className="text-[9px] text-[#E4A232] font-extrabold uppercase mt-0.5">{membro.cargo}</p>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAddMembroToSala(membro)}
+                                    className="px-2.5 py-1.5 bg-amber-500/10 hover:bg-amber-500 text-[#E4A232] hover:text-white rounded-lg text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer"
+                                  >
+                                    Escalar →
+                                  </button>
+                                </div>
+                              ));
+                            })()
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Lado Direito: Membros Pertencentes a Sala Atual */}
+                      <div className="space-y-3">
+                        <h5 className="text-[10px] font-black uppercase tracking-wider text-slate-450">Equipe Escalada na Sala</h5>
+                        <div className="border border-slate-100 dark:border-slate-800/80 rounded-2xl p-3 bg-slate-50/50 dark:bg-slate-950/20 max-h-56 overflow-y-auto space-y-2">
+                          {activeSalaMembros.length === 0 ? (
+                            <div className="text-center py-6">
+                              <p className="text-xs text-slate-400 font-bold">Nenhum voluntário escalado ainda.</p>
+                              <p className="text-[9px] text-slate-400 mt-1">Adicione voluntários ao lado para atuar no check-in.</p>
+                            </div>
+                          ) : (
+                            activeSalaMembros.map((sm) => {
+                              const details = getMembroDetails(sm.id_membro);
+                              return (
+                                <div 
+                                  key={sm.id_membro}
+                                  className="flex items-center justify-between p-2.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-850 shadow-sm"
+                                >
+                                  <div className="min-w-0">
+                                    <p className="text-xs font-black text-slate-800 dark:text-slate-200 truncate">{details.nome}</p>
+                                    <p className="text-[9px] text-slate-400 font-extrabold uppercase mt-0.5">{details.cargo}</p>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveMembroFromSala(sm.id_membro, details.nome)}
+                                    className="p-1.5 hover:bg-rose-50 text-rose-500 rounded-lg hover:text-rose-600 transition-all cursor-pointer"
+                                    title="Remover voluntário da sala"
+                                  >
+                                    <X size={14} />
+                                  </button>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Painel de Programação da Sala */}
                 {activeSalaObj && (
@@ -4023,12 +4227,24 @@ export default function KidsModule() {
         
         const isA = badgeSize === 'A';
         
+        let labelCols = 2;
+        let labelRows = 7;
+        let labelWidth = 10.10;
+        let labelHeight = 3.39;
+
+        if (badgeSize === 'Custom') {
+          labelCols = Number(customColunas) || 1;
+          labelWidth = Number(customLargura) || 6.35;
+          labelHeight = Number(customComprimento) || 4.66;
+        }
+
         // Define dimension parameters based on standard Option A vs Custom Configuration
         const getSheetDimensions = () => {
+          if (badgePrintMode === 'single' || (badgeSize === 'Custom' && customTamanhoFolha === 'Térmico/Rolo')) {
+            return { w: labelWidth, h: labelHeight };
+          }
           if (customTamanhoFolha === 'Letter') {
             return { w: 21.59, h: 27.94 };
-          } else if (customTamanhoFolha === 'Térmico/Rolo' || badgePrintMode === 'single') {
-            return { w: customLargura, h: customComprimento };
           }
           return { w: 21.0, h: 29.7 }; // A4
         };
@@ -4037,25 +4253,36 @@ export default function KidsModule() {
         const sheetWidth = sheetSizeObj.w;
         const sheetHeight = sheetSizeObj.h;
 
-        let labelCols = 2;
-        let labelRows = 7;
-        let labelMargem = 0.4;
-        let labelWidth = 10.10;
-        let labelHeight = 3.39;
+        let labelMargemX = 0;
+        let labelMargemY = 0;
 
-        if (badgeSize === 'Custom') {
-          labelCols = Number(customColunas) || 1;
-          labelWidth = Number(customLargura) || 6.35;
-          labelHeight = Number(customComprimento) || 4.66;
-          labelMargem = Number(customMargem) || 0;
-
+        if (isA) {
+          if (badgePrintMode === 'single') {
+            labelCols = 1;
+            labelRows = 1;
+            labelMargemX = 0;
+            labelMargemY = 0;
+          } else {
+            labelMargemX = (sheetWidth - (labelCols * labelWidth)) / 2;
+            labelMargemY = (sheetHeight - (labelRows * labelHeight)) / 2;
+          }
+        } else {
+          // Custom
+          const baseMargem = Number(customMargem) || 0;
           if (customTamanhoFolha === 'Térmico/Rolo' || badgePrintMode === 'single') {
             labelCols = 1;
             labelRows = 1;
-            labelMargem = 0;
+            labelMargemX = 0;
+            labelMargemY = 0;
           } else {
-            const availH = sheetHeight - (2 * labelMargem);
+            const availH = sheetHeight - (2 * baseMargem);
             labelRows = Math.max(1, Math.floor(availH / labelHeight));
+            // Calculate symmetrical margins to perfectly center the grid block on the physical paper
+            labelMargemX = (sheetWidth - (labelCols * labelWidth)) / 2;
+            labelMargemY = (sheetHeight - (labelRows * labelHeight)) / 2;
+            // Fallbacks to user-defined margins if calculated margins are negative or too small
+            if (labelMargemX < baseMargem) labelMargemX = baseMargem;
+            if (labelMargemY < baseMargem) labelMargemY = baseMargem;
           }
         }
 
@@ -4413,22 +4640,6 @@ export default function KidsModule() {
 
                       <button
                         type="button"
-                        onClick={() => setBadgePrintMode('full')}
-                        className={`w-full p-3.5 rounded-xl border text-left transition-all flex items-center justify-between cursor-pointer ${
-                          badgePrintMode === 'full'
-                            ? 'border-indigo-500 bg-indigo-500/5 text-indigo-950 dark:text-indigo-200 font-bold'
-                            : 'border-slate-100 dark:border-slate-850 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-950/30'
-                        }`}
-                      >
-                        <div className="text-xs">
-                          <p className="font-black">Folha Inteira</p>
-                          <p className="text-[9px] text-slate-400 font-medium">Repete a mesma etiqueta em todas as {totalGridCells} posições</p>
-                        </div>
-                        {badgePrintMode === 'full' && <Check size={16} className="text-indigo-500" />}
-                      </button>
-
-                      <button
-                        type="button"
                         onClick={() => setBadgePrintMode('specific')}
                         className={`w-full p-3.5 rounded-xl border text-left transition-all flex items-center justify-between cursor-pointer ${
                           badgePrintMode === 'specific'
@@ -4506,101 +4717,134 @@ export default function KidsModule() {
 
                   {/* Hidden print payload wrapper with complete stylesheet for print engine compatibility */}
                   <div className="print-only-wrapper">
-                    <div id="print-section">
-                      {/* Dynamic Print Stylesheet Injection */}
-                      <style dangerouslySetInnerHTML={{ __html: `
-                        @media screen {
-                          .print-only-wrapper {
-                            display: none !important;
-                          }
-                        }
-                        @media print {
-                          .print-only-wrapper {
-                            display: block !important;
-                          }
-                          body * {
-                            visibility: hidden !important;
-                          }
-                          #print-section, #print-section * {
-                            visibility: visible !important;
-                          }
-                          #print-section {
-                            position: absolute !important;
-                            left: 0 !important;
-                            top: 0 !important;
-                            width: ${sheetWidth}cm !important;
-                            height: ${sheetHeight}cm !important;
-                            margin: 0 !important;
-                            padding: 0 !important;
-                            background: white !important;
-                            display: block !important;
-                            box-sizing: border-box !important;
-                          }
-                          @page {
-                            size: ${customTamanhoFolha === 'Térmico/Rolo' || badgePrintMode === 'single' ? `${labelWidth}cm ${labelHeight}cm` : (customTamanhoFolha === 'Letter' ? 'letter portrait' : 'A4 portrait')} !important;
-                            margin: 0 !important;
-                          }
-                        }
-                      `}} />
-
-                      {customTamanhoFolha === 'Térmico/Rolo' || badgePrintMode === 'single' ? (
-                        <div 
-                          style={{ 
-                            width: `${labelWidth}cm`, 
-                            height: `${labelHeight}cm`, 
-                            padding: '0.05cm',
-                            boxSizing: 'border-box',
-                            backgroundColor: 'white'
-                          }}
-                        >
-                          {isA ? renderLabelA(selectedChildForBadge) : renderLabelCustom(selectedChildForBadge)}
-                        </div>
-                      ) : (
-                        <div 
-                          className="grid"
-                          style={{
-                            width: `${sheetWidth}cm`,
-                            height: `${sheetHeight}cm`,
-                            paddingLeft: `${labelMargem}cm`,
-                            paddingRight: `${labelMargem}cm`,
-                            paddingTop: `${labelMargem}cm`,
-                            paddingBottom: `${labelMargem}cm`,
-                            columnGap: '0.0cm',
-                            rowGap: '0.0cm',
-                            gridTemplateColumns: `repeat(${labelCols}, ${labelWidth}cm)`,
-                            gridAutoRows: `${labelHeight}cm`,
-                            backgroundColor: 'white',
-                            boxSizing: 'border-box'
-                          }}
-                        >
-                          {Array.from({ length: totalGridCells }).map((_, index) => {
-                            const shouldPrint = badgePrintMode === 'full' || (badgePrintMode === 'specific' && index === badgeSpecificPosition);
-                            return (
-                              <div 
-                                key={index} 
-                                style={{ 
-                                  width: `${labelWidth}cm`, 
-                                  height: `${labelHeight}cm`,
-                                  padding: '0.05cm', 
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  backgroundColor: 'white',
-                                  boxSizing: 'border-box'
-                                }}
-                              >
-                                {shouldPrint ? (
-                                  isA ? renderLabelA(selectedChildForBadge) : renderLabelCustom(selectedChildForBadge)
-                                ) : (
-                                  <div className="w-full h-full opacity-0" />
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                     <div id="print-section">
+                       {/* Dynamic Print Stylesheet Injection */}
+                       <style dangerouslySetInnerHTML={{ __html: `
+                         @media screen {
+                           .print-only-wrapper {
+                             position: absolute !important;
+                             left: -9999px !important;
+                             top: -9999px !important;
+                             width: 1px !important;
+                             height: 1px !important;
+                             overflow: hidden !important;
+                           }
+                         }
+                         @media print {
+                           .print-only-wrapper {
+                             position: static !important;
+                             width: auto !important;
+                             height: auto !important;
+                             overflow: visible !important;
+                             display: block !important;
+                           }
+                           body * {
+                             visibility: hidden !important;
+                           }
+                           #print-section, #print-section * {
+                             visibility: visible !important;
+                           }
+                           /* Strip layout constraints, transforms, and blur filters from parent dialog wrappers when printing */
+                           div[class*="fixed"], 
+                           div[class*="backdrop-blur"], 
+                           div[class*="bg-slate-900/65"], 
+                           div[class*="animate-scale-in"],
+                           div[class*="overflow-y-auto"],
+                           div[class*="grid-cols-12"],
+                           div[class*="lg:col-span-5"] {
+                             position: static !important;
+                             transform: none !important;
+                             filter: none !important;
+                             backdrop-filter: none !important;
+                             animation: none !important;
+                             background: transparent !important;
+                             border: none !important;
+                             box-shadow: none !important;
+                             padding: 0 !important;
+                             margin: 0 !important;
+                             width: auto !important;
+                             height: auto !important;
+                             max-height: none !important;
+                             overflow: visible !important;
+                             display: block !important;
+                           }
+                           #print-section {
+                             position: absolute !important;
+                             left: 0 !important;
+                             top: 0 !important;
+                             width: ${sheetWidth}cm !important;
+                             height: ${sheetHeight}cm !important;
+                             margin: 0 !important;
+                             padding: 0 !important;
+                             background: white !important;
+                             display: block !important;
+                             box-sizing: border-box !important;
+                           }
+                           @page {
+                             size: ${customTamanhoFolha === 'Térmico/Rolo' || badgePrintMode === 'single' ? `${labelWidth}cm ${labelHeight}cm` : (customTamanhoFolha === 'Letter' ? 'letter portrait' : 'A4 portrait')} !important;
+                             margin: 0 !important;
+                           }
+                         }
+                       `}} />
+ 
+                       {customTamanhoFolha === 'Térmico/Rolo' || badgePrintMode === 'single' ? (
+                         <div 
+                           style={{ 
+                             width: `${labelWidth}cm`, 
+                             height: `${labelHeight}cm`, 
+                             padding: '0.05cm',
+                             boxSizing: 'border-box',
+                             backgroundColor: 'white'
+                           }}
+                         >
+                           {isA ? renderLabelA(selectedChildForBadge) : renderLabelCustom(selectedChildForBadge)}
+                         </div>
+                       ) : (
+                         <div 
+                           className="grid"
+                           style={{
+                             width: `${sheetWidth}cm`,
+                             height: `${sheetHeight}cm`,
+                             paddingLeft: `${labelMargemX}cm`,
+                             paddingRight: `${labelMargemX}cm`,
+                             paddingTop: `${labelMargemY}cm`,
+                             paddingBottom: `${labelMargemY}cm`,
+                             columnGap: '0.0cm',
+                             rowGap: '0.0cm',
+                             gridTemplateColumns: `repeat(${labelCols}, ${labelWidth}cm)`,
+                             gridAutoRows: `${labelHeight}cm`,
+                             backgroundColor: 'white',
+                             boxSizing: 'border-box'
+                           }}
+                         >
+                           {Array.from({ length: totalGridCells }).map((_, index) => {
+                             const shouldPrint = badgePrintMode === 'specific' && index === badgeSpecificPosition;
+                             return (
+                               <div 
+                                 key={index} 
+                                 style={{ 
+                                   width: `${labelWidth}cm`, 
+                                   height: `${labelHeight}cm`,
+                                   padding: '0.05cm', 
+                                   display: 'flex',
+                                   alignItems: 'center',
+                                   justifyContent: 'center',
+                                   backgroundColor: 'white',
+                                   boxSizing: 'border-box'
+                                 }}
+                               >
+                                 {shouldPrint ? (
+                                   isA ? renderLabelA(selectedChildForBadge) : renderLabelCustom(selectedChildForBadge)
+                                 ) : (
+                                   <div className="w-full h-full opacity-0" />
+                                 )}
+                               </div>
+                             );
+                           })}
+                         </div>
+                       )}
+                     </div>
+                   </div>
 
                   {/* Print Action Triggers */}
                   <div className="flex gap-3 justify-end pt-4 border-t border-slate-200/50">
@@ -4625,6 +4869,249 @@ export default function KidsModule() {
           </div>
         );
       })()}
+
+      {/* 2. SYSTEM HELP MODAL (?) */}
+      {isHelpModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md flex items-center justify-center z-[60] p-4 animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-[2.5rem] border-2 border-indigo-500/30 dark:border-slate-800 shadow-2xl space-y-6 w-full max-w-5xl max-h-[92vh] overflow-hidden flex flex-col animate-scale-in">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4 flex-shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-indigo-500/10 text-indigo-500 rounded-2xl">
+                  <HelpCircle size={24} className="text-[#E4A232]" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black uppercase tracking-tight text-slate-900 dark:text-white">
+                    Guia de Utilização do Módulo Kids
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Aprenda a operar todas as funcionalidades passo a passo.</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsHelpModalOpen(false)}
+                className="p-2.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-all cursor-pointer text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                title="Fechar ajuda"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Main Interactive Workspace Splits */}
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-6 overflow-hidden flex-1 min-h-0">
+              {/* Left sidebar tabs */}
+              <div className="md:col-span-4 flex flex-col gap-1.5 overflow-y-auto pr-1">
+                {[
+                  { id: 'turmas', title: '1. Criar Turma & Equipe', icon: Users },
+                  { id: 'salas', title: '2. Criar Sala & Programação', icon: DoorOpen },
+                  { id: 'abertura', title: '3. Abertura da Sala', icon: Smile },
+                  { id: 'checkin', title: '4. Check-in de Crianças', icon: UserCheck },
+                  { id: 'qrcode', title: '5. QR Code & Impressão', icon: QrCode },
+                  { id: 'checkout', title: '6. Checkout Seguro', icon: Check },
+                  { id: 'comunicados', title: '7. Enviar Comunicados', icon: MessageSquare },
+                  { id: 'equipe_sala', title: '8. Equipe Escalada', icon: Users },
+                ].map((topic) => {
+                  const TopicIcon = topic.icon;
+                  const isSelected = activeHelpTopic === topic.id;
+                  return (
+                    <button
+                      key={topic.id}
+                      onClick={() => setActiveHelpTopic(topic.id)}
+                      className={`w-full p-3.5 rounded-2xl text-left border transition-all flex items-center gap-3 cursor-pointer font-bold ${
+                        isSelected
+                          ? 'border-[#E4A232] bg-amber-500/10 text-[#E4A232]'
+                          : 'border-slate-100 dark:border-slate-850 hover:bg-slate-50 dark:hover:bg-slate-950/40 text-slate-600 dark:text-slate-400'
+                      }`}
+                    >
+                      <TopicIcon size={16} className={isSelected ? 'text-[#E4A232]' : 'text-slate-400'} />
+                      <span className="text-xs truncate">{topic.title}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Right content view */}
+              <div className="md:col-span-8 overflow-y-auto bg-slate-50/50 dark:bg-slate-950/30 border border-slate-100 dark:border-slate-850 rounded-[2rem] p-6 space-y-4">
+                {activeHelpTopic === 'turmas' && (
+                  <div className="space-y-4 animate-fade-in text-xs leading-relaxed text-slate-650 dark:text-slate-300">
+                    <h4 className="text-sm font-black uppercase text-slate-900 dark:text-white flex items-center gap-1.5">
+                      <Users size={16} className="text-[#E4A232]" />
+                      Configurando Turmas e Cadastro da Equipe
+                    </h4>
+                    <p>
+                      As <strong>Turmas (Categorias)</strong> são os grupos organizadores de faixa etária do departamento infantil (ex: Berçário, Maternal, Kids Junior). Elas servem para agrupar crianças com idades semelhantes e gerenciar a equipe fixa de voluntários subordinada.
+                    </p>
+                    <div className="space-y-2 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-850">
+                      <p className="font-bold text-slate-850 dark:text-slate-200 uppercase tracking-wider text-[10px]">Passo a Passo:</p>
+                      <ul className="list-decimal list-inside space-y-1.5 font-medium">
+                        <li>Vá para a aba <strong>Turmas (Categorias)</strong>;</li>
+                        <li>Clique no botão <strong>+ Nova Turma</strong>;</li>
+                        <li>Defina o Nome, as Idades Mínima e Máxima permitidas, Capacidade e o Tipo de Entrada;</li>
+                        <li>Na listagem de turmas, selecione <strong>Equipe</strong> no cartão da turma para gerenciar os líderes, coordenadores, professores e voluntários dedicados a esta faixa etária.</li>
+                      </ul>
+                    </div>
+                    <div className="bg-amber-500/5 border border-amber-500/10 p-3 rounded-xl text-[10px] text-amber-700 dark:text-amber-300 font-medium">
+                      💡 <strong>Dica Profissional:</strong> Definir faixas etárias sem sobreposição evita que uma criança seja sugerida em salas erradas durante a triagem automática por data de nascimento.
+                    </div>
+                  </div>
+                )}
+
+                {activeHelpTopic === 'salas' && (
+                  <div className="space-y-4 animate-fade-in text-xs leading-relaxed text-slate-650 dark:text-slate-300">
+                    <h4 className="text-sm font-black uppercase text-slate-900 dark:text-white flex items-center gap-1.5">
+                      <DoorOpen size={16} className="text-[#E4A232]" />
+                      Criação de Salas, Programação e Prorrogação
+                    </h4>
+                    <p>
+                      As <strong>Salas</strong> são locais físicos ou subdivisões operacionais ativas subordinadas a uma turma específica. Cada sala possui uma escala de <strong>Programação e Atividades</strong> (louvores, lanches, teatro) que pode ser integrada à agenda oficial da igreja.
+                    </p>
+                    <div className="space-y-2 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-850">
+                      <p className="font-bold text-slate-850 dark:text-slate-200 uppercase tracking-wider text-[10px]">Funcionamento:</p>
+                      <ul className="list-decimal list-inside space-y-1.5 font-medium">
+                        <li>Acesse a aba <strong>Salas</strong>;</li>
+                        <li>Crie uma sala vinculando-a a uma Turma já existente (ela herda automaticamente a faixa etária base);</li>
+                        <li>Clique em <strong>Programação</strong> no cartão da sala para definir as atividades do dia (ex: Teatrinho às 10h);</li>
+                        <li>Você pode <strong>Prorrogar</strong> ou estender os horários de programação e sincronizá-los com a agenda do templo principal.</li>
+                      </ul>
+                    </div>
+                  </div>
+                )}
+
+                {activeHelpTopic === 'abertura' && (
+                  <div className="space-y-4 animate-fade-in text-xs leading-relaxed text-slate-650 dark:text-slate-300">
+                    <h4 className="text-sm font-black uppercase text-slate-900 dark:text-white flex items-center gap-1.5">
+                      <Smile size={16} className="text-[#E4A232]" />
+                      Abertura de Sala para Atendimento
+                    </h4>
+                    <p>
+                      Para iniciar o acolhimento de alunos e receber check-ins no início de um culto ou evento, a Sala precisa ser oficialmente <strong>Aberta</strong> no sistema.
+                    </p>
+                    <div className="space-y-2 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-850">
+                      <p className="font-bold text-slate-850 dark:text-slate-200 uppercase tracking-wider text-[10px]">Processo de Abertura:</p>
+                      <ul className="list-decimal list-inside space-y-1.5 font-medium">
+                        <li>Na aba principal <strong>Painel Operacional</strong>, você verá a lista de salas disponíveis;</li>
+                        <li>Clique no botão <strong>Abrir Atendimento</strong> na sala desejada;</li>
+                        <li>O sistema carrega o <strong>Painel de Atendimento</strong> focado, liberando os recursos de leitura de QR Code, emissão de crachás, lista de presença em tempo real e gerenciamento de equipe ativa.</li>
+                      </ul>
+                    </div>
+                  </div>
+                )}
+
+                {activeHelpTopic === 'checkin' && (
+                  <div className="space-y-4 animate-fade-in text-xs leading-relaxed text-slate-650 dark:text-slate-300">
+                    <h4 className="text-sm font-black uppercase text-slate-900 dark:text-white flex items-center gap-1.5">
+                      <UserCheck size={16} className="text-[#E4A232]" />
+                      Entrada (Check-in) de Membros e Visitantes
+                    </h4>
+                    <p>
+                      O sistema suporta dois fluxos de check-in: <strong>Criança Membro</strong> (com preenchimento automático ultra-rápido por busca de nome) e <strong>Criança Visitante</strong> (para novos visitantes).
+                    </p>
+                    <div className="space-y-2 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-850">
+                      <p className="font-bold text-slate-850 dark:text-slate-200 uppercase tracking-wider text-[10px]">Como Registrar:</p>
+                      <ul className="list-decimal list-inside space-y-1.5 font-medium">
+                        <li>Selecione <strong>Membro Cadastrado</strong> para pesquisar crianças existentes na base de membros da igreja, ou <strong>Criança Visitante</strong>;</li>
+                        <li>Defina o Responsável (pesquisa na base ou nome livre);</li>
+                        <li>Preencha as informações importantes de <strong>Restrições Médicas, Alergias ou Alertas</strong> (ex: "Alergias a Lactose");</li>
+                        <li>Clique em <strong>Confirmar Entrada e Imprimir</strong> para registrar.</li>
+                      </ul>
+                    </div>
+                  </div>
+                )}
+
+                {activeHelpTopic === 'qrcode' && (
+                  <div className="space-y-4 animate-fade-in text-xs leading-relaxed text-slate-650 dark:text-slate-300">
+                    <h4 className="text-sm font-black uppercase text-slate-900 dark:text-white flex items-center gap-1.5">
+                      <QrCode size={16} className="text-[#E4A232]" />
+                      Emissão de QR Code e Impressão de Etiquetas
+                    </h4>
+                    <p>
+                      Ao efetuar o check-in, um <strong>Código de Segurança Único</strong> é gerado para a criança e seu respectivo responsável. O QR Code gerado vincula o aluno de forma inviolável.
+                    </p>
+                    <div className="space-y-2 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-850">
+                      <p className="font-bold text-slate-850 dark:text-slate-200 uppercase tracking-wider text-[10px]">Configurações da Impressão:</p>
+                      <ul className="list-decimal list-inside space-y-1.5 font-medium">
+                        <li>O crachá pode ser configurado em <strong>Etiqueta Única</strong> (ideal para impressoras térmicas como Brother, Zebra ou Dymo) ou em folha <strong>A4/Carta</strong> multilayout;</li>
+                        <li>As dimensões de <strong>Altura</strong>, <strong>Largura</strong> e <strong>Margens</strong> são ajustadas livremente pelo painel;</li>
+                        <li>O layout personalizado centraliza o QR Code, alergias em destaque e as informações de segurança para garantir a legibilidade.</li>
+                      </ul>
+                    </div>
+                  </div>
+                )}
+
+                {activeHelpTopic === 'checkout' && (
+                  <div className="space-y-4 animate-fade-in text-xs leading-relaxed text-slate-650 dark:text-slate-300">
+                    <h4 className="text-sm font-black uppercase text-slate-900 dark:text-white flex items-center gap-1.5">
+                      <Check size={16} className="text-[#E4A232]" />
+                      Saída (Checkout) Seguro de Alunos
+                    </h4>
+                    <p>
+                      A segurança das crianças é prioridade máxima. Nenhuma criança pode ser liberada sem a validação do responsável que efetuou a entrega.
+                    </p>
+                    <div className="space-y-2 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-850">
+                      <p className="font-bold text-slate-850 dark:text-slate-200 uppercase tracking-wider text-[10px]">Instruções para a Saída:</p>
+                      <ul className="list-decimal list-inside space-y-1.5 font-medium">
+                        <li>Na listagem de <strong>Crianças Atendidas (Presentes)</strong>, clique no botão de <strong>Checkout</strong>;</li>
+                        <li>O sistema exibirá as informações do responsável autorizado cadastrado no check-in;</li>
+                        <li>Leia o crachá impresso do pai / responsável para confirmar o ID de segurança correspondente e clique em <strong>Confirmar Checkout</strong>.</li>
+                      </ul>
+                    </div>
+                  </div>
+                )}
+
+                {activeHelpTopic === 'comunicados' && (
+                  <div className="space-y-4 animate-fade-in text-xs leading-relaxed text-slate-650 dark:text-slate-300">
+                    <h4 className="text-sm font-black uppercase text-slate-900 dark:text-white flex items-center gap-1.5">
+                      <MessageSquare size={16} className="text-[#E4A232]" />
+                      Envio de Comunicados e Registro de Ocorrências
+                    </h4>
+                    <p>
+                      Durante o andamento das aulas, o professor pode registrar observações pedagógicas ou disparar ocorrências (ex: choro persistente, mal-estar) instantaneamente para os responsáveis.
+                    </p>
+                    <div className="space-y-2 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-850">
+                      <p className="font-bold text-slate-850 dark:text-slate-200 uppercase tracking-wider text-[10px]">Como Utilizar:</p>
+                      <ul className="list-decimal list-inside space-y-1.5 font-medium">
+                        <li>No painel esquerdo, mude para a aba <strong>📢 Comunicado</strong>;</li>
+                        <li>Selecione as crianças destinatárias na lista de check-ins ativos;</li>
+                        <li>Escolha o tipo de ocorrência (Ex: Observação, Ocorrências, Conteúdo, Evidências);</li>
+                        <li>Anexe arquivos/evidências por foto (se aplicável), digite o texto e registre para notificação imediata.</li>
+                      </ul>
+                    </div>
+                  </div>
+                )}
+
+                {activeHelpTopic === 'equipe_sala' && (
+                  <div className="space-y-4 animate-fade-in text-xs leading-relaxed text-slate-650 dark:text-slate-300">
+                    <h4 className="text-sm font-black uppercase text-slate-900 dark:text-white flex items-center gap-1.5">
+                      <Users size={16} className="text-[#E4A232]" />
+                      Time e Equipe Ativa da Sala
+                    </h4>
+                    <p>
+                      O <strong>Painel de Equipe & Voluntários</strong> possibilita gerenciar em tempo real quais auxiliares e professores estão escalados e atuando ativamente dentro daquela sala física no dia.
+                    </p>
+                    <div className="space-y-2 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-850">
+                      <p className="font-bold text-slate-850 dark:text-slate-200 uppercase tracking-wider text-[10px]">Gestão Operacional:</p>
+                      <ul className="list-decimal list-inside space-y-1.5 font-medium">
+                        <li>Do <strong>Lado Esquerdo</strong> são exibidos todos os voluntários cadastrados que pertencem àquela Turma geral;</li>
+                        <li>Clique em <strong>Escalar →</strong> para alocar o voluntário na equipe ativa da sala;</li>
+                        <li>Do <strong>Lado Direito</strong> são exibidos os voluntários escalados atuantes na sala no momento, com opção de remoção por clique no botão de excluir (X).</li>
+                      </ul>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex justify-end pt-4 border-t border-slate-100 dark:border-slate-800 flex-shrink-0">
+              <button 
+                onClick={() => setIsHelpModalOpen(false)}
+                className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-md cursor-pointer"
+              >
+                Entendido
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

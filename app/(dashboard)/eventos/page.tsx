@@ -29,6 +29,7 @@ import {
   Users
 } from 'lucide-react';
 import { motion } from 'motion/react';
+import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -139,6 +140,9 @@ export default function EventosPage() {
   const [totalParticipants, setTotalParticipants] = useState(0);
   const [totalRevenue, setTotalRevenue] = useState(0);
   const [totalVacancies, setTotalVacancies] = useState(0);
+  const [membrosCount, setMembrosCount] = useState(0);
+  const [visitantesCount, setVisitantesCount] = useState(0);
+  const [isMounted, setIsMounted] = useState(false);
 
   // Agenda popup form states
   const [isAgendaModalOpen, setIsAgendaModalOpen] = useState(false);
@@ -166,6 +170,10 @@ export default function EventosPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [uploadingFile, setUploadingFile] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   useEffect(() => {
     if (selectedIgreja?.id) {
@@ -229,7 +237,7 @@ export default function EventosPage() {
       if (mapped.length > 0) {
         const { data: allInscs, error: inscsErr } = await supabase
           .from('eventos_inscricoes')
-          .select('valor_pago, pago, id_evento')
+          .select('valor_pago, pago, id_evento, tipo_participante')
           .in('id_evento', mapped.map((x: any) => x.id));
         
         if (!inscsErr && allInscs) {
@@ -237,11 +245,28 @@ export default function EventosPage() {
             .filter((i: any) => i.pago)
             .reduce((sum: number, i: any) => sum + Number(i.valor_pago || 0), 0);
           setTotalRevenue(revenueSum);
+
+          // Calculate Membro vs Visitante distribution
+          let mCount = 0;
+          let vCount = 0;
+          allInscs.forEach((i: any) => {
+            if (i.tipo_participante === 'Membro') {
+              mCount++;
+            } else if (i.tipo_participante === 'Visitante') {
+              vCount++;
+            }
+          });
+          setMembrosCount(mCount);
+          setVisitantesCount(vCount);
         } else {
           setTotalRevenue(0);
+          setMembrosCount(0);
+          setVisitantesCount(0);
         }
       } else {
         setTotalRevenue(0);
+        setMembrosCount(0);
+        setVisitantesCount(0);
       }
     } catch (e: any) {
       console.error('Error fetching eventos:', e);
@@ -1060,63 +1085,136 @@ export default function EventosPage() {
           </div>
         )}
 
-        {/* Summary Metrics Panel */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          {/* Card 1: Confirmed Participants */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-6 rounded-[2rem] shadow-sm flex items-center gap-4 relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 rounded-full bg-blue-500/5 dark:bg-blue-500/2 blur-2xl -z-10 pointer-events-none" />
-            <div className="p-4 bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-2xl">
-              <Users size={22} />
+        {/* Summary Metrics Panel & Pie Chart */}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-5">
+          <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-5">
+            {/* Card 1: Confirmed Participants */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-6 rounded-[2rem] shadow-sm flex items-center gap-4 relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-32 h-32 rounded-full bg-blue-500/5 dark:bg-blue-500/2 blur-2xl -z-10 pointer-events-none" />
+              <div className="p-4 bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-2xl">
+                <Users size={22} />
+              </div>
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-550">
+                  Participantes Confirmados
+                </p>
+                <h3 className="text-2xl font-black text-slate-800 dark:text-white mt-1 leading-none">
+                  {totalParticipants}
+                </h3>
+                <p className="text-[9px] text-slate-450 dark:text-slate-400 mt-1.5 font-bold uppercase tracking-wider">
+                  Inscrições Realizadas
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-550">
-                Participantes Confirmados
-              </p>
-              <h3 className="text-2xl font-black text-slate-800 dark:text-white mt-1 leading-none">
-                {totalParticipants}
-              </h3>
-              <p className="text-[9px] text-slate-450 dark:text-slate-400 mt-1.5 font-bold uppercase tracking-wider">
-                Inscrições Realizadas
-              </p>
+
+            {/* Card 2: Revenue Collected */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-6 rounded-[2rem] shadow-sm flex items-center gap-4 relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-32 h-32 rounded-full bg-emerald-500/5 dark:bg-emerald-500/2 blur-2xl -z-10 pointer-events-none" />
+              <div className="p-4 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-2xl">
+                <DollarSign size={22} />
+              </div>
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-550">
+                  Receita Arrecadada
+                </p>
+                <h3 className="text-2xl font-black text-slate-800 dark:text-white mt-1 leading-none">
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalRevenue)}
+                </h3>
+                <p className="text-[9px] text-slate-450 dark:text-slate-400 mt-1.5 font-bold uppercase tracking-wider">
+                  Inscrições Pagas
+                </p>
+              </div>
+            </div>
+
+            {/* Card 3: Available Vacancies */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-6 rounded-[2rem] shadow-sm flex items-center gap-4 relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-32 h-32 rounded-full bg-amber-500/5 dark:bg-amber-500/2 blur-2xl -z-10 pointer-events-none" />
+              <div className="p-4 bg-amber-500/10 text-[#E4A232] rounded-2xl">
+                <CheckCircle2 size={22} />
+              </div>
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-550">
+                  Vagas Disponíveis
+                </p>
+                <h3 className="text-2xl font-black text-slate-800 dark:text-white mt-1 leading-none">
+                  {totalVacancies}
+                </h3>
+                <p className="text-[9px] text-slate-450 dark:text-slate-400 mt-1.5 font-bold uppercase tracking-wider">
+                  Em eventos limitados
+                </p>
+              </div>
             </div>
           </div>
 
-          {/* Card 2: Revenue Collected */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-6 rounded-[2rem] shadow-sm flex items-center gap-4 relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 rounded-full bg-emerald-500/5 dark:bg-emerald-500/2 blur-2xl -z-10 pointer-events-none" />
-            <div className="p-4 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-2xl">
-              <DollarSign size={22} />
+          {/* Card 4: Distribuição Membro vs Visitante */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-5 rounded-[2rem] shadow-sm flex flex-col justify-between relative overflow-hidden min-h-[180px]">
+            <div className="absolute top-0 right-0 w-32 h-32 rounded-full bg-indigo-500/5 dark:bg-indigo-500/2 blur-2xl -z-10 pointer-events-none" />
+            
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-550">
+                Participantes por Tipo
+              </span>
+              <span className="text-[9px] font-bold text-indigo-500 dark:text-indigo-400 uppercase tracking-widest bg-indigo-500/10 px-2.5 py-0.5 rounded-full">
+                Membro vs Visitante
+              </span>
             </div>
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-550">
-                Receita Arrecadada
-              </p>
-              <h3 className="text-2xl font-black text-slate-800 dark:text-white mt-1 leading-none">
-                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalRevenue)}
-              </h3>
-              <p className="text-[9px] text-slate-450 dark:text-slate-400 mt-1.5 font-bold uppercase tracking-wider">
-                Inscrições Pagas
-              </p>
-            </div>
-          </div>
 
-          {/* Card 3: Available Vacancies */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-6 rounded-[2rem] shadow-sm flex items-center gap-4 relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 rounded-full bg-amber-500/5 dark:bg-amber-500/2 blur-2xl -z-10 pointer-events-none" />
-            <div className="p-4 bg-amber-500/10 text-[#E4A232] rounded-2xl">
-              <CheckCircle2 size={22} />
-            </div>
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-550">
-                Vagas Disponíveis
-              </p>
-              <h3 className="text-2xl font-black text-slate-800 dark:text-white mt-1 leading-none">
-                {totalVacancies}
-              </h3>
-              <p className="text-[9px] text-slate-450 dark:text-slate-400 mt-1.5 font-bold uppercase tracking-wider">
-                Em eventos limitados
-              </p>
-            </div>
+            {isMounted && (membrosCount > 0 || visitantesCount > 0) ? (
+              <div className="flex-1 flex flex-col justify-center gap-1.5 pt-2">
+                <div className="h-24 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={[
+                          { name: 'Membros', value: membrosCount, color: '#E4A232' },
+                          { name: 'Visitantes', value: visitantesCount, color: '#3B82F6' }
+                        ]}
+                        cx="50%"
+                        cy="50%"
+                        labelLine={false}
+                        outerRadius={38}
+                        innerRadius={15}
+                        dataKey="value"
+                      >
+                        {[
+                          { name: 'Membros', value: membrosCount, color: '#E4A232' },
+                          { name: 'Visitantes', value: visitantesCount, color: '#3B82F6' }
+                        ].map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip 
+                        contentStyle={{ 
+                          backgroundColor: '#1E293B', 
+                          border: 'none', 
+                          borderRadius: '8px',
+                          fontSize: '10px',
+                          color: '#FFF'
+                        }}
+                        itemStyle={{ color: '#FFF' }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                
+                <div className="flex justify-center gap-4 text-[9px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  <div className="flex items-center gap-1">
+                    <div className="w-2 h-2 rounded-full bg-[#E4A232]" />
+                    <span>Membros: {membrosCount}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className="w-2 h-2 rounded-full bg-[#3B82F6]" />
+                    <span>Visitantes: {visitantesCount}</span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex-1 flex flex-col items-center justify-center text-center py-4 text-slate-400">
+                <Users size={20} className="text-slate-350 dark:text-slate-600 mb-1" />
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Sem inscrições registradas</p>
+                <p className="text-[8px] text-slate-450 dark:text-slate-500 mt-0.5">Cadastre inscrições para visualizar o gráfico</p>
+              </div>
+            )}
           </div>
         </div>
 
