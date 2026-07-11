@@ -4240,7 +4240,7 @@ export default function KidsModule() {
 
         // Define dimension parameters based on standard Option A vs Custom Configuration
         const getSheetDimensions = () => {
-          if (badgePrintMode === 'single' || (badgeSize === 'Custom' && customTamanhoFolha === 'Térmico/Rolo')) {
+          if (customTamanhoFolha === 'Térmico/Rolo') {
             return { w: labelWidth, h: labelHeight };
           }
           if (customTamanhoFolha === 'Letter') {
@@ -4256,25 +4256,21 @@ export default function KidsModule() {
         let labelMargemX = 0;
         let labelMargemY = 0;
 
-        if (isA) {
-          if (badgePrintMode === 'single') {
-            labelCols = 1;
-            labelRows = 1;
-            labelMargemX = 0;
-            labelMargemY = 0;
-          } else {
+        if (customTamanhoFolha === 'Térmico/Rolo') {
+          labelCols = 1;
+          labelRows = 1;
+          labelMargemX = 0;
+          labelMargemY = 0;
+        } else {
+          // Physical sheet paper (A4/Letter)
+          if (isA) {
+            labelCols = 2;
+            labelRows = 7;
             labelMargemX = (sheetWidth - (labelCols * labelWidth)) / 2;
             labelMargemY = (sheetHeight - (labelRows * labelHeight)) / 2;
-          }
-        } else {
-          // Custom
-          const baseMargem = Number(customMargem) || 0;
-          if (customTamanhoFolha === 'Térmico/Rolo' || badgePrintMode === 'single') {
-            labelCols = 1;
-            labelRows = 1;
-            labelMargemX = 0;
-            labelMargemY = 0;
           } else {
+            // Custom
+            const baseMargem = Number(customMargem) || 0;
             const availH = sheetHeight - (2 * baseMargem);
             labelRows = Math.max(1, Math.floor(availH / labelHeight));
             // Calculate symmetrical margins to perfectly center the grid block on the physical paper
@@ -4779,15 +4775,19 @@ export default function KidsModule() {
                              background: white !important;
                              display: block !important;
                              box-sizing: border-box !important;
+                             max-height: ${sheetHeight}cm !important;
+                             overflow: hidden !important;
+                             page-break-after: avoid !important;
+                             page-break-inside: avoid !important;
                            }
                            @page {
-                             size: ${customTamanhoFolha === 'Térmico/Rolo' || badgePrintMode === 'single' ? `${labelWidth}cm ${labelHeight}cm` : (customTamanhoFolha === 'Letter' ? 'letter portrait' : 'A4 portrait')} !important;
+                             size: ${customTamanhoFolha === 'Térmico/Rolo' ? `${labelWidth}cm ${labelHeight}cm` : (customTamanhoFolha === 'Letter' ? 'letter portrait' : 'A4 portrait')} !important;
                              margin: 0 !important;
                            }
                          }
                        `}} />
  
-                       {customTamanhoFolha === 'Térmico/Rolo' || badgePrintMode === 'single' ? (
+                       {customTamanhoFolha === 'Térmico/Rolo' ? (
                          <div 
                            style={{ 
                              width: `${labelWidth}cm`, 
@@ -4818,7 +4818,9 @@ export default function KidsModule() {
                            }}
                          >
                            {Array.from({ length: totalGridCells }).map((_, index) => {
-                             const shouldPrint = badgePrintMode === 'specific' && index === badgeSpecificPosition;
+                             const shouldPrint = badgePrintMode === 'single'
+                               ? index === 0
+                               : (badgePrintMode === 'specific' && index === badgeSpecificPosition);
                              return (
                                <div 
                                  key={index} 
