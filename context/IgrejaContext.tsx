@@ -17,6 +17,7 @@ export type Igreja = {
   cor_fontes?: string | null;
   cor_botoes?: string | null;
   idioma_padrao?: string | null;
+  config_etiqueta?: any;
 };
 
 type IgrejaContextType = {

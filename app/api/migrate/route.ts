@@ -101,6 +101,7 @@ export async function GET(req: NextRequest) {
 
     -- Add subscription expiration date to 'igrejas'
     ALTER TABLE igrejas ADD COLUMN IF NOT EXISTS assinatura_vigencia DATE;
+    ALTER TABLE igrejas ADD COLUMN IF NOT EXISTS config_etiqueta JSONB DEFAULT null;
 
     -- 7. Create table 'arquivos_transacao'
     CREATE TABLE IF NOT EXISTS arquivos_transacao (

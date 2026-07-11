@@ -146,6 +146,12 @@ export default function KidsModule() {
   const [addChildAutorizaImagem, setAddChildAutorizaImagem] = useState<boolean>(false);
   const [addChildFotoUrl, setAddChildFotoUrl] = useState<string>('');
 
+  // Responsible selection states
+  const [responsavelTipo, setResponsavelTipo] = useState<'Membro' | 'Visitante'>('Visitante');
+  const [searchResponsavelQuery, setSearchResponsavelQuery] = useState<string>('');
+  const [showResponsavelSuggestions, setShowResponsavelSuggestions] = useState<boolean>(false);
+  const [selectedResponsavelMembroId, setSelectedResponsavelMembroId] = useState<string>('');
+
   // Badges and QR code previews for children in room
   const [selectedChildForBadge, setSelectedChildForBadge] = useState<SalaCrianca | null>(null);
   const [selectedChildForQr, setSelectedChildForQr] = useState<SalaCrianca | null>(null);
@@ -166,10 +172,68 @@ export default function KidsModule() {
   const [checkingOutChild, setCheckingOutChild] = useState<SalaCrianca | null>(null);
   const [checkoutObservation, setCheckoutObservation] = useState<string>('');
 
-  // Print format state: 'A' = 14 labels (3.39 x 10.10 cm), 'B' = 18 labels (4.66 x 6.35 cm)
-  const [badgeSize, setBadgeSize] = useState<'A' | 'B'>('A');
+  // Print format state: 'A' = Padrão (14 labels), 'Custom' = Personalizada
+  const [badgeSize, setBadgeSize] = useState<'A' | 'Custom'>('A');
   const [badgePrintMode, setBadgePrintMode] = useState<'single' | 'full' | 'specific'>('single');
   const [badgeSpecificPosition, setBadgeSpecificPosition] = useState<number>(0);
+
+  // Custom label settings
+  const [customLargura, setCustomLargura] = useState<number>(6.35);
+  const [customComprimento, setCustomComprimento] = useState<number>(4.66);
+  const [customColunas, setCustomColunas] = useState<number>(3);
+  const [customTamanhoFolha, setCustomTamanhoFolha] = useState<string>('A4');
+  const [customMargem, setCustomMargem] = useState<number>(0.87);
+  const [isSavingCustomConfig, setIsSavingCustomConfig] = useState<boolean>(false);
+
+  // Initialize custom label configurations when church loads
+  useEffect(() => {
+    if (selectedIgreja?.config_etiqueta) {
+      try {
+        const config = typeof selectedIgreja.config_etiqueta === 'string'
+          ? JSON.parse(selectedIgreja.config_etiqueta)
+          : selectedIgreja.config_etiqueta;
+        if (config.largura) setCustomLargura(Number(config.largura));
+        if (config.comprimento) setCustomComprimento(Number(config.comprimento));
+        if (config.colunas) setCustomColunas(Number(config.colunas));
+        if (config.tamanho_folha) setCustomTamanhoFolha(config.tamanho_folha);
+        if (config.margem) setCustomMargem(Number(config.margem));
+      } catch (e) {
+        console.error('Error parsing config_etiqueta:', e);
+      }
+    }
+  }, [selectedIgreja]);
+
+  // Save custom label configuration for the active church
+  const handleSaveCustomLabelConfig = async () => {
+    if (!selectedIgreja?.id) return;
+    setIsSavingCustomConfig(true);
+    try {
+      const configObj = {
+        largura: customLargura,
+        comprimento: customComprimento,
+        colunas: customColunas,
+        tamanho_folha: customTamanhoFolha,
+        margem: customMargem
+      };
+
+      const { error } = await supabase
+        .from('igrejas')
+        .update({ config_etiqueta: configObj })
+        .eq('id', selectedIgreja.id);
+
+      if (error) throw error;
+
+      // Update in memory context
+      selectedIgreja.config_etiqueta = configObj;
+
+      showNotification('Configurações de etiqueta personalizadas salvas com sucesso!', 'success');
+    } catch (err: any) {
+      console.error('Error saving custom label config:', err);
+      showNotification('Erro ao salvar as configurações de etiqueta.', 'error');
+    } finally {
+      setIsSavingCustomConfig(false);
+    }
+  };
 
   // Tab controls inside Room Operator view
   const [leftPanelTab, setLeftPanelTab] = useState<'checkin' | 'comunicado'>('checkin');
@@ -327,6 +391,17 @@ export default function KidsModule() {
     }
   }, [addChildMembroId, addChildTipo, membrosIgreja]);
 
+  // Auto populate member responsible details
+  useEffect(() => {
+    if (responsavelTipo === 'Membro' && selectedResponsavelMembroId) {
+      const found = membrosIgreja.find(m => m.id === selectedResponsavelMembroId);
+      if (found) {
+        setAddChildNomeResponsavel(found.nome || '');
+        setAddChildTelefoneResponsavel(found.telefone || '');
+      }
+    }
+  }, [selectedResponsavelMembroId, responsavelTipo, membrosIgreja]);
+
   // Child Search Autocomplete state
   const [searchChildQuery, setSearchChildQuery] = useState<string>('');
   const [showSearchSuggestions, setShowSearchSuggestions] = useState<boolean>(false);
@@ -361,7 +436,7 @@ export default function KidsModule() {
       // 1. Load Membros list for selectors
       const { data: members, error: memError } = await supabase
         .from('membros')
-        .select('id, nome, categoria, foto_url, data_nascimento, sexo')
+        .select('id, nome, categoria, foto_url, data_nascimento, sexo, telefone')
         .eq('id_igreja', selectedIgreja.id)
         .order('nome', { ascending: true });
 
@@ -1376,6 +1451,12 @@ export default function KidsModule() {
     setAddChildObservacoesMedicas('');
     setAddChildAutorizaImagem(false);
     setAddChildFotoUrl('');
+
+    // Reset responsible states
+    setResponsavelTipo('Visitante');
+    setSearchResponsavelQuery('');
+    setSelectedResponsavelMembroId('');
+    setShowResponsavelSuggestions(false);
   };
 
   const handleRemoveCriancaFromSala = async (checkinId: string) => {
@@ -1433,6 +1514,12 @@ export default function KidsModule() {
     setAddChildObservacoesMedicas('');
     setAddChildAutorizaImagem(false);
     setAddChildFotoUrl('');
+
+    // Reset responsible states
+    setResponsavelTipo('Visitante');
+    setSearchResponsavelQuery('');
+    setSelectedResponsavelMembroId('');
+    setShowResponsavelSuggestions(false);
   };
 
   const handleOpenCheckout = (c: SalaCrianca) => {
@@ -2084,17 +2171,124 @@ export default function KidsModule() {
                           </div>
                         )}
 
+                        {/* Tipo de Responsável */}
+                        <div>
+                          <label className="text-[10px] font-black uppercase tracking-wider text-slate-450 dark:text-slate-500">Responsável é Membro ou Visitante?</label>
+                          <div className="grid grid-cols-2 gap-2 mt-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setResponsavelTipo('Membro');
+                                setAddChildNomeResponsavel('');
+                                setAddChildTelefoneResponsavel('');
+                                setSearchResponsavelQuery('');
+                                setSelectedResponsavelMembroId('');
+                              }}
+                              className={`py-2 rounded-xl text-[10px] uppercase tracking-wider font-black border transition-all cursor-pointer ${
+                                responsavelTipo === 'Membro'
+                                  ? 'bg-amber-500/10 border-amber-500/50 text-amber-600 dark:text-amber-400 font-black'
+                                  : 'border-slate-200 dark:border-slate-800 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-950'
+                              }`}
+                            >
+                              Membro Cadastrado
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setResponsavelTipo('Visitante');
+                                setAddChildNomeResponsavel('');
+                                setAddChildTelefoneResponsavel('');
+                                setSearchResponsavelQuery('');
+                                setSelectedResponsavelMembroId('');
+                              }}
+                              className={`py-2 rounded-xl text-[10px] uppercase tracking-wider font-black border transition-all cursor-pointer ${
+                                responsavelTipo === 'Visitante'
+                                  ? 'bg-amber-500/10 border-amber-500/50 text-amber-600 dark:text-amber-400 font-black'
+                                  : 'border-slate-200 dark:border-slate-800 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-950'
+                              }`}
+                            >
+                              Visitante / Manual
+                            </button>
+                          </div>
+                        </div>
+
                         {/* Responsible Contact details */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <div>
+                          <div className="relative">
                             <label className="text-[10px] font-black uppercase tracking-wider text-slate-450 dark:text-slate-500">Nome do Responsável *</label>
-                            <input 
-                              type="text"
-                              placeholder="Ex: Carlos Jorge"
-                              value={addChildNomeResponsavel}
-                              onChange={(e) => setAddChildNomeResponsavel(e.target.value)}
-                              className="w-full mt-1.5 p-3.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm font-bold text-slate-900 dark:text-slate-200"
-                            />
+                            {responsavelTipo === 'Membro' ? (
+                              <>
+                                <input 
+                                  type="text"
+                                  placeholder="Busque o nome do responsável..."
+                                  value={searchResponsavelQuery}
+                                  onChange={(e) => {
+                                    setSearchResponsavelQuery(e.target.value);
+                                    setShowResponsavelSuggestions(true);
+                                    if (selectedResponsavelMembroId) {
+                                      setSelectedResponsavelMembroId('');
+                                      setAddChildNomeResponsavel('');
+                                      setAddChildTelefoneResponsavel('');
+                                    }
+                                  }}
+                                  onFocus={() => setShowResponsavelSuggestions(true)}
+                                  onBlur={() => setTimeout(() => setShowResponsavelSuggestions(false), 200)}
+                                  className="w-full mt-1.5 p-3.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm font-bold text-slate-900 dark:text-slate-200 outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                                />
+                                
+                                {showResponsavelSuggestions && (
+                                  <div className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl max-h-60 overflow-y-auto">
+                                    {(() => {
+                                      const filteredResponsibles = membrosIgreja.filter(m => {
+                                        const isKid = m.categoria && m.categoria.toLowerCase().includes('crian');
+                                        if (isKid) return false;
+                                        if (!searchResponsavelQuery) return true;
+                                        return m.nome?.toLowerCase().includes(searchResponsavelQuery.toLowerCase());
+                                      });
+
+                                      if (filteredResponsibles.length === 0) {
+                                        return (
+                                          <div className="p-4 text-center text-slate-500 text-xs">
+                                            Nenhum responsável encontrado.
+                                          </div>
+                                        );
+                                      }
+
+                                      return filteredResponsibles.map(m => (
+                                        <button
+                                          key={m.id}
+                                          type="button"
+                                          onClick={() => {
+                                            setSelectedResponsavelMembroId(m.id);
+                                            setSearchResponsavelQuery(m.nome);
+                                            setAddChildNomeResponsavel(m.nome);
+                                            setAddChildTelefoneResponsavel(m.telefone || '');
+                                            setShowResponsavelSuggestions(false);
+                                          }}
+                                          className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800 text-left border-b border-slate-100 dark:border-slate-800/50 last:border-0 cursor-pointer"
+                                        >
+                                          <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{m.nome}</p>
+                                            <p className="text-xs text-slate-500 dark:text-slate-400 font-semibold">{m.categoria || 'Membro'}{m.telefone ? ` • ${m.telefone}` : ''}</p>
+                                          </div>
+                                          {selectedResponsavelMembroId === m.id && (
+                                            <Check size={16} className="text-green-500" />
+                                          )}
+                                        </button>
+                                      ));
+                                    })()}
+                                  </div>
+                                )}
+                              </>
+                            ) : (
+                              <input 
+                                type="text"
+                                placeholder="Ex: Carlos Jorge"
+                                value={addChildNomeResponsavel}
+                                onChange={(e) => setAddChildNomeResponsavel(e.target.value)}
+                                className="w-full mt-1.5 p-3.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm font-bold text-slate-900 dark:text-slate-200 outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                              />
+                            )}
                           </div>
                           <div>
                             <label className="text-[10px] font-black uppercase tracking-wider text-slate-450 dark:text-slate-500">Telefone do Responsável *</label>
@@ -2103,7 +2297,7 @@ export default function KidsModule() {
                               placeholder="Ex: (81) 98888-8888"
                               value={addChildTelefoneResponsavel}
                               onChange={(e) => setAddChildTelefoneResponsavel(e.target.value)}
-                              className="w-full mt-1.5 p-3.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm font-bold text-slate-900 dark:text-slate-200"
+                              className="w-full mt-1.5 p-3.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm font-bold text-slate-900 dark:text-slate-200 outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                             />
                           </div>
                         </div>
@@ -2293,7 +2487,8 @@ export default function KidsModule() {
                 </div>
 
                 {/* Right Column: Present kids list */}
-                <div className="lg:col-span-7 bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-[2rem] border border-slate-200/50 dark:border-slate-800/80 shadow-sm space-y-6">
+                <div className="lg:col-span-7 space-y-6">
+                  <div className="bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-[2rem] border border-slate-200/50 dark:border-slate-800/80 shadow-sm space-y-6">
                   <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
                     <div>
                       <h3 className="text-lg font-black uppercase tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
@@ -2594,6 +2789,74 @@ export default function KidsModule() {
                     )
                   )}
                 </div>
+
+                {/* Painel de Programação da Sala */}
+                {activeSalaObj && (
+                  <div className="bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-[2rem] border border-slate-200/50 dark:border-slate-800/80 shadow-sm space-y-4">
+                    <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                      <div>
+                        <h4 className="text-sm font-black uppercase tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
+                          <Calendar size={16} className="text-[#E4A232]" />
+                          Programação da Sala ({activeSalaObj.programacao?.length || 0})
+                        </h4>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                          Cronograma de atividades agendadas para esta sala.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenProgramacao(activeSalaObj)}
+                        className="px-3 py-1.5 bg-[#E4A232] hover:bg-amber-600 text-white text-[10px] font-black uppercase tracking-wider rounded-xl transition-all shadow-sm flex items-center gap-1 cursor-pointer"
+                      >
+                        <Plus size={12} /> Add Programação
+                      </button>
+                    </div>
+
+                    {!activeSalaObj.programacao || activeSalaObj.programacao.length === 0 ? (
+                      <div className="text-center py-6 bg-slate-50/50 dark:bg-slate-950/20 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800">
+                        <p className="text-xs text-slate-400 font-bold uppercase tracking-wide">Nenhuma atividade agendada</p>
+                        <p className="text-[10px] text-slate-400 max-w-xs mx-auto mt-1">Clique em "Add Programação" para agendar uma atividade para esta sala.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2.5 max-h-[300px] overflow-y-auto pr-1">
+                        {activeSalaObj.programacao.map((p) => (
+                          <div key={p.id} className="flex items-center justify-between p-3.5 bg-slate-50/50 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-800/80 rounded-2xl">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs font-black text-slate-900 dark:text-white truncate">{p.descricao}</p>
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wide flex items-center gap-1">
+                                  <Clock size={10} />
+                                  {new Date(p.data_hora).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
+                                </span>
+                                {p.id_agenda ? (
+                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[8px] uppercase font-black tracking-wider rounded-md border border-emerald-500/20">
+                                    <Check size={8} /> Agenda Oficial
+                                  </span>
+                                ) : (
+                                  <button
+                                    onClick={() => handleSyncWithMainAgenda(p)}
+                                    className="text-[8px] uppercase font-black tracking-wider text-amber-600 dark:text-amber-400 hover:underline cursor-pointer"
+                                    title="Sincronizar com agenda principal da igreja"
+                                  >
+                                    Sincronizar Agenda
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => handleRemoveProgramacao(p.id)}
+                              className="text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 p-2 rounded-xl transition-all cursor-pointer shrink-0 ml-2"
+                              title="Remover Atividade"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
               </div>
             </div>
           ) : (
@@ -3758,6 +4021,48 @@ export default function KidsModule() {
         
         const isA = badgeSize === 'A';
         
+        // Define dimension parameters based on standard Option A vs Custom Configuration
+        const getSheetDimensions = () => {
+          if (customTamanhoFolha === 'Letter') {
+            return { w: 21.59, h: 27.94 };
+          } else if (customTamanhoFolha === 'Térmico/Rolo' || badgePrintMode === 'single') {
+            return { w: customLargura, h: customComprimento };
+          }
+          return { w: 21.0, h: 29.7 }; // A4
+        };
+
+        const sheetSizeObj = getSheetDimensions();
+        const sheetWidth = sheetSizeObj.w;
+        const sheetHeight = sheetSizeObj.h;
+
+        let labelCols = 2;
+        let labelRows = 7;
+        let labelMargem = 0.4;
+        let labelWidth = 10.10;
+        let labelHeight = 3.39;
+
+        if (badgeSize === 'Custom') {
+          labelCols = Number(customColunas) || 1;
+          labelWidth = Number(customLargura) || 6.35;
+          labelHeight = Number(customComprimento) || 4.66;
+          labelMargem = Number(customMargem) || 0;
+
+          if (customTamanhoFolha === 'Térmico/Rolo' || badgePrintMode === 'single') {
+            labelCols = 1;
+            labelRows = 1;
+            labelMargem = 0;
+          } else {
+            const availH = sheetHeight - (2 * labelMargem);
+            labelRows = Math.max(1, Math.floor(availH / labelHeight));
+          }
+        }
+
+        const totalGridCells = isA ? 14 : (labelCols * labelRows);
+
+        // Aspect ratio calculations for visual on-screen preview
+        const previewWidth = 400; // Base width in pixels for screen preview
+        const previewHeight = previewWidth * (labelHeight / labelWidth);
+
         // Label renderers helper
         const renderLabelA = (child: SalaCrianca) => {
           const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(`KIDS_CHECKOUT|${child.id}|${child.nome_responsavel}`)}`;
@@ -3820,67 +4125,127 @@ export default function KidsModule() {
           );
         };
 
-        const renderLabelB = (child: SalaCrianca) => {
+        const renderLabelCustom = (child: SalaCrianca) => {
           const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(`KIDS_CHECKOUT|${child.id}|${child.nome_responsavel}`)}`;
+          const isWide = labelWidth / labelHeight > 1.8;
+
           return (
-            <div className="w-full h-full flex flex-col justify-between bg-white text-slate-900 border border-slate-300 rounded-xl overflow-hidden font-sans box-border" style={{ padding: '0.15cm', height: '100%', width: '100%', gap: '1px' }}>
-              <div className="flex justify-between items-center border-b border-slate-100 pb-0.5 leading-none">
-                <span className="text-[6.5px] font-black text-[#E4A232] uppercase truncate max-w-[4cm]">{activeSalaObj?.nome || 'Sala Kids'}</span>
-                <span className="text-[6px] font-black text-slate-400 uppercase">{child.tipo_crianca}</span>
-              </div>
-
-              <h3 className="text-[10px] font-black uppercase text-slate-950 truncate leading-tight">
-                {displayNome}
-              </h3>
-
-              <div className="flex gap-1.5 items-center min-w-0 flex-1">
-                <div className="flex-shrink-0 flex items-center justify-center border border-slate-200 rounded-md overflow-hidden bg-slate-50" style={{ width: '1.4cm', height: '1.4cm' }}>
-                  {hasPhoto ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={displayPhoto} alt={displayNome} className="w-full h-full object-cover animate-fade-in" referrerPolicy="no-referrer" />
-                  ) : (
-                    <div className="text-center">
-                      <Smile size={14} className="text-slate-400 mx-auto" />
-                      <span className="text-[5.5px] text-slate-400 font-bold block leading-none">Sem Foto</span>
-                    </div>
-                  )}
-                </div>
-                
-                <div className="flex-1 min-w-0 space-y-0.5 leading-none">
-                  <p className="text-[7.5px] font-bold text-slate-800">
-                    Idade: <span className="font-black text-slate-950">{getAgeFromBirthDate(child.data_nascimento)} anos</span>
-                  </p>
-                  <p className="text-[7px] text-slate-600 truncate">
-                    <span className="font-bold">Resp:</span> {child.nome_responsavel.split(' ')[0]}
-                  </p>
-                  <p className="text-[7px] text-slate-500 font-mono leading-none">
-                    {child.telefone_responsavel}
-                  </p>
-                  <p className="text-[7px] text-emerald-650 font-bold leading-none">
-                    Entrada: {new Date(child.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex justify-between items-end border-t border-slate-150 pt-0.5 leading-none">
-                {(child.necessidades_especiais || child.restricoes_alimentares || child.observacoes_medicas) ? (
-                  <div className="text-[5.5px] font-black text-rose-600 bg-rose-50 px-1 py-0.5 rounded-sm uppercase max-w-[3.2cm] truncate leading-none">
-                    ⚠ {child.necessidades_especiais || child.restricoes_alimentares || child.observacoes_medicas}
+            <div 
+              className="w-full h-full flex bg-white text-slate-900 border border-slate-300 rounded-xl overflow-hidden font-sans box-border relative" 
+              style={{ 
+                padding: '0.15cm', 
+                gap: '0.15cm', 
+                height: '100%', 
+                width: '100%',
+                flexDirection: isWide ? 'row' : 'column',
+                justifyContent: 'space-between'
+              }}
+            >
+              {isWide ? (
+                <>
+                  {/* Photo */}
+                  <div className="flex-shrink-0 flex items-center justify-center border border-slate-200 rounded-lg overflow-hidden bg-slate-50" style={{ width: '2.0cm', height: '2.0cm' }}>
+                    {hasPhoto ? (
+                      <img src={displayPhoto} alt={displayNome} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    ) : (
+                      <div className="text-center p-0.5">
+                        <Smile size={16} className="text-slate-400 mx-auto" />
+                        <span className="text-[6px] text-slate-450 font-bold block">Sem Foto</span>
+                      </div>
+                    )}
                   </div>
-                ) : (
-                  <span className="text-[5.5px] text-slate-400 uppercase font-black tracking-widest leading-none">Validação de Saída</span>
-                )}
 
-                <div className="flex-shrink-0 flex items-center justify-center bg-white" style={{ width: '1.3cm', height: '1.3cm' }}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={qrCodeUrl} alt="QR Code Checkout" style={{ width: '1.15cm', height: '1.15cm' }} referrerPolicy="no-referrer" />
-                </div>
-              </div>
+                  {/* Details */}
+                  <div className="flex-1 flex flex-col justify-between h-full min-w-0" style={{ gap: '2px' }}>
+                    <div>
+                      <div className="flex justify-between items-center leading-none">
+                        <span className="text-[6px] font-black tracking-wider text-slate-550 uppercase">Criança</span>
+                        <span className="text-[6px] font-black text-amber-600 bg-amber-500/10 px-1 rounded-sm uppercase">{child.tipo_crianca}</span>
+                      </div>
+                      <h3 className="text-[10px] font-black uppercase text-slate-950 truncate mt-0.5 leading-tight">
+                        {displayNome}
+                      </h3>
+                      <p className="text-[7.5px] font-bold text-slate-700">
+                        Idade: <span className="font-black text-slate-950">{getAgeFromBirthDate(child.data_nascimento)} anos</span>
+                      </p>
+                    </div>
+
+                    <div className="border-t border-slate-100 pt-1 space-y-0.5 leading-none">
+                      <p className="text-[7px] text-slate-600 truncate">
+                        <span className="font-bold">Resp:</span> {child.nome_responsavel}
+                      </p>
+                      <p className="text-[7px] font-mono text-slate-500">
+                        {child.telefone_responsavel}
+                      </p>
+                    </div>
+
+                    {(child.necessidades_especiais || child.restricoes_alimentares || child.observacoes_medicas) && (
+                      <div className="bg-rose-50 border border-rose-100 text-rose-600 text-[6px] font-black px-1 py-0.5 rounded-sm uppercase truncate leading-none">
+                        ⚠ {child.necessidades_especiais || child.restricoes_alimentares || child.observacoes_medicas}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* QR Code */}
+                  <div className="flex-shrink-0 flex flex-col items-center justify-center bg-white" style={{ width: '2.0cm', height: '2.0cm' }}>
+                    <img src={qrCodeUrl} alt="QR Code" style={{ width: '1.7cm', height: '1.7cm' }} referrerPolicy="no-referrer" />
+                    <span className="text-[5px] text-slate-400 uppercase font-black tracking-widest mt-0.5">Checkout</span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex justify-between items-center border-b border-slate-100 pb-0.5 leading-none w-full">
+                    <span className="text-[6px] font-black text-[#E4A232] uppercase truncate max-w-[3cm]">{activeSalaObj?.nome || 'Sala Kids'}</span>
+                    <span className="text-[5.5px] font-black text-slate-400 uppercase">{child.tipo_crianca}</span>
+                  </div>
+
+                  <h3 className="text-[9.5px] font-black uppercase text-slate-950 truncate leading-tight w-full">
+                    {displayNome}
+                  </h3>
+
+                  <div className="flex gap-1.5 items-center min-w-0 flex-1 w-full">
+                    <div className="flex-shrink-0 flex items-center justify-center border border-slate-200 rounded-md overflow-hidden bg-slate-50" style={{ width: '1.3cm', height: '1.3cm' }}>
+                      {hasPhoto ? (
+                        <img src={displayPhoto} alt={displayNome} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                      ) : (
+                        <div className="text-center">
+                          <Smile size={12} className="text-slate-450 mx-auto" />
+                          <span className="text-[5px] text-slate-450 font-bold block leading-none">Sem Foto</span>
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div className="flex-1 min-w-0 space-y-0.5 leading-none">
+                      <p className="text-[7px] font-bold text-slate-850">
+                        Idade: <span className="font-black text-slate-950">{getAgeFromBirthDate(child.data_nascimento)} anos</span>
+                      </p>
+                      <p className="text-[6.5px] text-slate-650 truncate">
+                        <span className="font-bold">Resp:</span> {child.nome_responsavel.split(' ')[0]}
+                      </p>
+                      <p className="text-[6.5px] text-slate-500 font-mono leading-none">
+                        {child.telefone_responsavel}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between items-end border-t border-slate-150 pt-0.5 leading-none w-full">
+                    {(child.necessidades_especiais || child.restricoes_alimentares || child.observacoes_medicas) ? (
+                      <div className="text-[5px] font-black text-rose-600 bg-rose-50 px-1 py-0.5 rounded-sm uppercase max-w-[2.5cm] truncate leading-none">
+                        ⚠ {child.necessidades_especiais || child.restricoes_alimentares || child.observacoes_medicas}
+                      </div>
+                    ) : (
+                      <span className="text-[5px] text-slate-400 uppercase font-black tracking-widest leading-none">Saída Autorizada</span>
+                    )}
+
+                    <div className="flex-shrink-0 flex items-center justify-center bg-white" style={{ width: '1.2cm', height: '1.2cm' }}>
+                      <img src={qrCodeUrl} alt="QR Code" style={{ width: '1.1cm', height: '1.1cm' }} referrerPolicy="no-referrer" />
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           );
         };
-
-        const totalGridCells = isA ? 14 : 18;
 
         return (
           <div className="fixed inset-0 bg-slate-900/65 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
@@ -3920,31 +4285,108 @@ export default function KidsModule() {
                         onClick={() => setBadgeSize('A')}
                         className={`p-4 rounded-2xl border-2 text-left transition-all cursor-pointer flex flex-col justify-between h-24 ${
                           isA 
-                            ? 'border-indigo-500 bg-indigo-500/5 text-indigo-700 dark:text-indigo-300' 
+                            ? 'border-indigo-500 bg-indigo-500/5 text-indigo-700 dark:text-indigo-300 font-black' 
                             : 'border-slate-150 dark:border-slate-800 hover:border-slate-300 text-slate-600 dark:text-slate-400'
                         }`}
                       >
-                        <span className="text-xs font-black uppercase tracking-wider">Opção A (14 p/ Folha)</span>
+                        <span className="text-xs font-black uppercase tracking-wider">Opção Padrão</span>
                         <span className="text-[10px] font-semibold leading-relaxed">
-                          3,39 cm x 10,10 cm<br/>2 etiquetas por linha
+                          3,39 cm x 10,10 cm<br/>2 colunas, 14 p/ Folha
                         </span>
                       </button>
 
                       <button
                         type="button"
-                        onClick={() => setBadgeSize('B')}
+                        onClick={() => setBadgeSize('Custom')}
                         className={`p-4 rounded-2xl border-2 text-left transition-all cursor-pointer flex flex-col justify-between h-24 ${
                           !isA 
-                            ? 'border-indigo-500 bg-indigo-500/5 text-indigo-700 dark:text-indigo-300' 
+                            ? 'border-indigo-500 bg-indigo-500/5 text-indigo-700 dark:text-indigo-300 font-black' 
                             : 'border-slate-150 dark:border-slate-800 hover:border-slate-300 text-slate-600 dark:text-slate-400'
                         }`}
                       >
-                        <span className="text-xs font-black uppercase tracking-wider">Opção B (18 p/ Folha)</span>
+                        <span className="text-xs font-black uppercase tracking-wider">Personalizada</span>
                         <span className="text-[10px] font-semibold leading-relaxed">
-                          4,66 cm x 6,35 cm<br/>3 etiquetas por linha
+                          Configurações salvas da igreja.
                         </span>
                       </button>
                     </div>
+
+                    {/* Custom configurations forms */}
+                    {!isA && (
+                      <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl border border-slate-150 dark:border-slate-800/80 space-y-4 animate-scale-in">
+                        <p className="text-[10px] font-black uppercase tracking-wider text-[#E4A232]">Dimensões Personalizadas</p>
+                        
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="text-[9px] font-black text-slate-450 dark:text-slate-500 uppercase">Largura (cm)</label>
+                            <input 
+                              type="number"
+                              step="0.01"
+                              value={customLargura}
+                              onChange={(e) => setCustomLargura(Number(e.target.value))}
+                              className="w-full mt-1 p-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[9px] font-black text-slate-450 dark:text-slate-500 uppercase">Altura/Comp (cm)</label>
+                            <input 
+                              type="number"
+                              step="0.01"
+                              value={customComprimento}
+                              onChange={(e) => setCustomComprimento(Number(e.target.value))}
+                              className="w-full mt-1 p-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="text-[9px] font-black text-slate-450 dark:text-slate-500 uppercase">Qtd Colunas</label>
+                            <input 
+                              type="number"
+                              min="1"
+                              max="10"
+                              value={customColunas}
+                              onChange={(e) => setCustomColunas(Number(e.target.value))}
+                              className="w-full mt-1 p-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[9px] font-black text-slate-450 dark:text-slate-500 uppercase">Tamanho Folha</label>
+                            <select
+                              value={customTamanhoFolha}
+                              onChange={(e) => setCustomTamanhoFolha(e.target.value)}
+                              className="w-full mt-1 p-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            >
+                              <option value="A4">A4 (21 x 29.7 cm)</option>
+                              <option value="Letter">Carta (21.6 x 27.9 cm)</option>
+                              <option value="Térmico/Rolo">Térmico / Rolo</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="text-[9px] font-black text-slate-450 dark:text-slate-500 uppercase">Margem Folha (cm)</label>
+                          <input 
+                            type="number"
+                            step="0.01"
+                            value={customMargem}
+                            onChange={(e) => setCustomMargem(Number(e.target.value))}
+                            className="w-full mt-1 p-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                          />
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={handleSaveCustomLabelConfig}
+                          disabled={isSavingCustomConfig}
+                          className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                        >
+                          {isSavingCustomConfig && <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></span>}
+                          Salvar Config da Igreja
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   {/* 2. Escolha de modo de preenchimento */}
@@ -3977,7 +4419,7 @@ export default function KidsModule() {
                         }`}
                       >
                         <div className="text-xs">
-                          <p className="font-black">Folha A4 Inteira</p>
+                          <p className="font-black">Folha Inteira</p>
                           <p className="text-[9px] text-slate-400 font-medium">Repete a mesma etiqueta em todas as {totalGridCells} posições</p>
                         </div>
                         {badgePrintMode === 'full' && <Check size={16} className="text-indigo-500" />}
@@ -3993,7 +4435,7 @@ export default function KidsModule() {
                         }`}
                       >
                         <div className="text-xs">
-                          <p className="font-black">Posição Específica na Folha A4</p>
+                          <p className="font-black">Posição Específica na Folha</p>
                           <p className="text-[9px] text-slate-400 font-medium">Imprime em apenas 1 etiqueta para evitar desperdício de papel</p>
                         </div>
                         {badgePrintMode === 'specific' && <Check size={16} className="text-indigo-500" />}
@@ -4009,9 +4451,10 @@ export default function KidsModule() {
                       </label>
                       <div className="p-4 bg-slate-50 dark:bg-slate-950/40 rounded-2xl border border-slate-150 dark:border-slate-850 flex items-center justify-center">
                         <div 
-                          className={`grid gap-1 bg-slate-200 dark:bg-slate-800 p-1.5 rounded-xl border border-slate-300 dark:border-slate-700 max-w-[200px] ${
-                            isA ? 'grid-cols-2' : 'grid-cols-3'
-                          }`}
+                          className="grid gap-1.5 bg-slate-250 dark:bg-slate-850 p-2 rounded-xl border border-slate-300 dark:border-slate-700 max-h-40 overflow-y-auto max-w-[250px]"
+                          style={{
+                            gridTemplateColumns: `repeat(${labelCols}, minmax(0, 1fr))`
+                          }}
                         >
                           {Array.from({ length: totalGridCells }).map((_, idx) => (
                             <button
@@ -4038,24 +4481,24 @@ export default function KidsModule() {
                   <div className="space-y-4">
                     <div className="flex justify-between items-center pb-2 border-b border-slate-200/50">
                       <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Pré-visualização em Tela</span>
-                      <span className="text-[9px] font-bold text-indigo-500 bg-indigo-500/10 px-2 py-0.5 rounded-full uppercase tracking-wider">Livre de Escala</span>
+                      <span className="text-[9px] font-bold text-indigo-500 bg-indigo-500/10 px-2 py-0.5 rounded-full uppercase tracking-wider">Visualização Proporcional</span>
                     </div>
 
-                    <div className="flex items-center justify-center py-6 min-h-[250px]">
+                    <div className="flex items-center justify-center py-6 min-h-[250px] overflow-auto max-w-full">
                       {/* Interactive size container preview */}
                       <div 
-                        className="shadow-xl rounded-2xl border border-slate-200 overflow-hidden bg-white max-w-full transition-all duration-300"
+                        className="shadow-xl rounded-2xl border border-slate-200 overflow-hidden bg-white max-w-full transition-all duration-300 flex-shrink-0"
                         style={{
-                          width: isA ? '420px' : '320px',
-                          height: isA ? '141px' : '235px'
+                          width: isA ? '420px' : `${previewWidth}px`,
+                          height: isA ? '141px' : `${previewHeight}px`
                         }}
                       >
-                        {isA ? renderLabelA(selectedChildForBadge) : renderLabelB(selectedChildForBadge)}
+                        {isA ? renderLabelA(selectedChildForBadge) : renderLabelCustom(selectedChildForBadge)}
                       </div>
                     </div>
 
                     <div className="bg-amber-500/5 border border-amber-500/10 p-3 rounded-2xl text-[10px] text-amber-700 dark:text-amber-300 font-medium leading-relaxed">
-                      💡 <span className="font-black uppercase">Instruções de Impressão:</span> Defina as margens da impressora como <span className="font-bold">Nenhuma</span> e o tamanho do papel como <span className="font-bold">A4</span> (ou correspondente térmico) no diálogo de impressão do navegador para manter o alinhamento perfeito.
+                      💡 <span className="font-black uppercase">Instruções de Impressão:</span> Defina as margens da impressora como <span className="font-bold">Nenhuma</span> e o tamanho do papel como <span className="font-bold">{isA ? 'A4' : customTamanhoFolha}</span> no diálogo de impressão do navegador para manter o alinhamento perfeito.
                     </div>
                   </div>
 
@@ -4075,8 +4518,8 @@ export default function KidsModule() {
                             position: absolute !important;
                             left: 0 !important;
                             top: 0 !important;
-                            width: 21.0cm !important;
-                            height: 29.7cm !important;
+                            width: ${sheetWidth}cm !important;
+                            height: ${sheetHeight}cm !important;
                             margin: 0 !important;
                             padding: 0 !important;
                             background: white !important;
@@ -4084,38 +4527,38 @@ export default function KidsModule() {
                             box-sizing: border-box !important;
                           }
                           @page {
-                            size: ${badgePrintMode === 'single' ? (isA ? '10.10cm 3.39cm' : '6.35cm 4.66cm') : 'A4 portrait'} !important;
+                            size: ${customTamanhoFolha === 'Térmico/Rolo' || badgePrintMode === 'single' ? `${labelWidth}cm ${labelHeight}cm` : (customTamanhoFolha === 'Letter' ? 'letter portrait' : 'A4 portrait')} !important;
                             margin: 0 !important;
                           }
                         }
                       `}} />
 
-                      {badgePrintMode === 'single' ? (
+                      {customTamanhoFolha === 'Térmico/Rolo' || badgePrintMode === 'single' ? (
                         <div 
                           style={{ 
-                            width: isA ? '10.10cm' : '6.35cm', 
-                            height: isA ? '3.39cm' : '4.66cm', 
+                            width: `${labelWidth}cm`, 
+                            height: `${labelHeight}cm`, 
                             padding: '0.05cm',
                             boxSizing: 'border-box',
                             backgroundColor: 'white'
                           }}
                         >
-                          {isA ? renderLabelA(selectedChildForBadge) : renderLabelB(selectedChildForBadge)}
+                          {isA ? renderLabelA(selectedChildForBadge) : renderLabelCustom(selectedChildForBadge)}
                         </div>
                       ) : (
                         <div 
                           className="grid"
                           style={{
-                            width: '21.0cm',
-                            height: '29.7cm',
-                            paddingLeft: isA ? '0.4cm' : '0.97cm',
-                            paddingRight: isA ? '0.4cm' : '0.97cm',
-                            paddingTop: isA ? '2.0cm' : '0.87cm',
-                            paddingBottom: isA ? '2.0cm' : '0.87cm',
+                            width: `${sheetWidth}cm`,
+                            height: `${sheetHeight}cm`,
+                            paddingLeft: `${labelMargem}cm`,
+                            paddingRight: `${labelMargem}cm`,
+                            paddingTop: `${labelMargem}cm`,
+                            paddingBottom: `${labelMargem}cm`,
                             columnGap: '0.0cm',
                             rowGap: '0.0cm',
-                            gridTemplateColumns: isA ? 'repeat(2, 10.10cm)' : 'repeat(3, 6.35cm)',
-                            gridAutoRows: isA ? '3.39cm' : '4.66cm',
+                            gridTemplateColumns: `repeat(${labelCols}, ${labelWidth}cm)`,
+                            gridAutoRows: `${labelHeight}cm`,
                             backgroundColor: 'white',
                             boxSizing: 'border-box'
                           }}
@@ -4126,8 +4569,8 @@ export default function KidsModule() {
                               <div 
                                 key={index} 
                                 style={{ 
-                                  width: isA ? '10.10cm' : '6.35cm', 
-                                  height: isA ? '3.39cm' : '4.66cm',
+                                  width: `${labelWidth}cm`, 
+                                  height: `${labelHeight}cm`,
                                   padding: '0.05cm', 
                                   display: 'flex',
                                   alignItems: 'center',
@@ -4137,7 +4580,7 @@ export default function KidsModule() {
                                 }}
                               >
                                 {shouldPrint ? (
-                                  isA ? renderLabelA(selectedChildForBadge) : renderLabelB(selectedChildForBadge)
+                                  isA ? renderLabelA(selectedChildForBadge) : renderLabelCustom(selectedChildForBadge)
                                 ) : (
                                   <div className="w-full h-full opacity-0" />
                                 )}
