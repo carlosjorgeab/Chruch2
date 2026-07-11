@@ -3662,113 +3662,8 @@ export default function KidsModule() {
             </div>
           )}
 
-          {/* Programação Manager Section (Only shown when active) */}
-          {programacaoSala && (
-            <div className="bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-[2.5rem] border-2 border-[#E4A232]/60 dark:border-slate-800 shadow-xl space-y-6 max-w-4xl mx-auto">
-              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
-                <div>
-                  <h3 className="text-xl font-black uppercase tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
-                    <Calendar size={22} className="text-[#E4A232]" />
-                    Programação & Atividades da Sala: <span className="text-[#E4A232]">{programacaoSala.nome}</span>
-                  </h3>
-                  <p className="text-xs text-slate-500 font-medium">Agende atividades da sala e integre com a agenda oficial da igreja.</p>
-                </div>
-                <button 
-                  onClick={() => setProgramacaoSala(null)}
-                  className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-all"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-
-              {/* Add Programming Inline Form */}
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl border border-slate-100 dark:border-slate-850 items-end">
-                <div className="md:col-span-6">
-                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-500">Descrição da Atividade</label>
-                  <input 
-                    type="text"
-                    placeholder="Ex: Louvor infantil, Teatrinho de fantoches"
-                    value={progDescricao}
-                    onChange={(e) => setProgDescricao(e.target.value)}
-                    className="w-full mt-1.5 p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-900 dark:text-slate-200"
-                  />
-                </div>
-                <div className="md:col-span-4">
-                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-500">Data & Hora</label>
-                  <input 
-                    type="datetime-local"
-                    value={progDataHora}
-                    onChange={(e) => setProgDataHora(e.target.value)}
-                    className="w-full mt-1.5 p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-900 dark:text-slate-200"
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <button 
-                    onClick={handleAddProgramacao}
-                    className="w-full py-3.5 bg-[#E4A232] hover:opacity-95 text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5"
-                  >
-                    <Plus size={14} /> Adicionar
-                  </button>
-                </div>
-              </div>
-
-              {/* Programming List */}
-              <div className="border border-slate-150 dark:border-slate-800 rounded-2xl overflow-hidden bg-white dark:bg-slate-900/60 shadow-inner">
-                {(!programacaoSala.programacao || programacaoSala.programacao.length === 0) ? (
-                  <div className="p-12 text-center text-sm text-slate-400 font-bold uppercase tracking-wide">
-                    Nenhuma atividade agendada para esta sala ainda.
-                  </div>
-                ) : (
-                  <table className="w-full text-left border-collapse text-sm">
-                    <thead>
-                      <tr className="bg-slate-50 dark:bg-slate-950 text-[10px] font-black uppercase tracking-widest text-slate-450 dark:text-slate-500 border-b border-slate-100 dark:border-slate-800">
-                        <th className="py-3 px-6">Atividade</th>
-                        <th className="py-3 px-6">Horário</th>
-                        <th className="py-3 px-6 text-center">Status Agenda</th>
-                        <th className="py-3 px-6 text-right">Ação</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-bold">
-                      {programacaoSala.programacao.map((p) => (
-                        <tr key={p.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-950/20 text-slate-800 dark:text-slate-250 transition-all">
-                          <td className="py-4 px-6 font-black">{p.descricao}</td>
-                          <td className="py-4 px-6 text-xs text-slate-500">
-                            {new Date(p.data_hora).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
-                          </td>
-                          <td className="py-4 px-6 text-center">
-                            {p.id_agenda ? (
-                              <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] uppercase font-black tracking-wider rounded-full border border-emerald-500/20">
-                                <Check size={10} /> Agendado Oficial
-                              </span>
-                            ) : (
-                              <button 
-                                onClick={() => handleSyncWithMainAgenda(p)}
-                                className="px-3 py-1 bg-amber-500 hover:bg-[#E4A232] text-white text-[10px] uppercase font-black tracking-wider rounded-full shadow-sm transition-all flex items-center gap-1 mx-auto"
-                              >
-                                <Calendar size={10} /> Agenda da Igreja
-                              </button>
-                            )}
-                          </td>
-                          <td className="py-4 px-6 text-right">
-                            <button 
-                              onClick={() => handleRemoveProgramacao(p.id)}
-                              className="text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 p-2 rounded-lg transition-all"
-                              title="Remover Programação"
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-            </div>
-          )}
-
           {/* Salas List (Grid) */}
-          {!showSalaForm && !programacaoSala && (
+          {!showSalaForm && (
             salas.length === 0 ? (
               <div className="text-center py-20 bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-200/50 dark:border-slate-800/80 shadow-sm space-y-4">
                 <DoorOpen size={48} className="text-slate-350 dark:text-slate-650 mx-auto" />
@@ -3857,6 +3752,113 @@ export default function KidsModule() {
       )}
 
       {/* MODALS SECTION */}
+
+      {/* 1. PROGRAMAÇÃO MODAL */}
+      {programacaoSala && (
+        <div className="fixed inset-0 bg-slate-900/65 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-[2.5rem] border-2 border-[#E4A232]/60 dark:border-slate-800 shadow-2xl space-y-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto animate-scale-in">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
+              <div>
+                <h3 className="text-xl font-black uppercase tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
+                  <Calendar size={22} className="text-[#E4A232]" />
+                  Programação & Atividades da Sala: <span className="text-[#E4A232]">{programacaoSala.nome}</span>
+                </h3>
+                <p className="text-xs text-slate-500 font-medium">Agende atividades da sala e integre com a agenda oficial da igreja.</p>
+              </div>
+              <button 
+                onClick={() => setProgramacaoSala(null)}
+                className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-all"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Add Programming Inline Form */}
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-4 bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl border border-slate-100 dark:border-slate-850 items-end">
+              <div className="md:col-span-6">
+                <label className="text-[10px] font-black uppercase tracking-wider text-slate-500">Descrição da Atividade</label>
+                <input 
+                  type="text"
+                  placeholder="Ex: Louvor infantil, Teatrinho de fantoches"
+                  value={progDescricao}
+                  onChange={(e) => setProgDescricao(e.target.value)}
+                  className="w-full mt-1.5 p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-900 dark:text-slate-200"
+                />
+              </div>
+              <div className="md:col-span-4">
+                <label className="text-[10px] font-black uppercase tracking-wider text-slate-500">Data & Hora</label>
+                <input 
+                  type="datetime-local"
+                  value={progDataHora}
+                  onChange={(e) => setProgDataHora(e.target.value)}
+                  className="w-full mt-1.5 p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-900 dark:text-slate-200"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <button 
+                  onClick={handleAddProgramacao}
+                  className="w-full py-3.5 bg-[#E4A232] hover:opacity-95 text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Plus size={14} /> Adicionar
+                </button>
+              </div>
+            </div>
+
+            {/* Programming List */}
+            <div className="border border-slate-150 dark:border-slate-800 rounded-2xl overflow-hidden bg-white dark:bg-slate-900/60 shadow-inner">
+              {(!programacaoSala.programacao || programacaoSala.programacao.length === 0) ? (
+                <div className="p-12 text-center text-sm text-slate-400 font-bold uppercase tracking-wide">
+                  Nenhuma atividade agendada para esta sala ainda.
+                </div>
+              ) : (
+                <table className="w-full text-left border-collapse text-sm">
+                  <thead>
+                    <tr className="bg-slate-50 dark:bg-slate-950 text-[10px] font-black uppercase tracking-widest text-slate-450 dark:text-slate-500 border-b border-slate-100 dark:border-slate-800">
+                      <th className="py-3 px-6">Atividade</th>
+                      <th className="py-3 px-6">Horário</th>
+                      <th className="py-3 px-6 text-center">Status Agenda</th>
+                      <th className="py-3 px-6 text-right">Ação</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-bold">
+                    {programacaoSala.programacao.map((p) => (
+                      <tr key={p.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-950/20 text-slate-800 dark:text-slate-250 transition-all">
+                        <td className="py-4 px-6 font-black">{p.descricao}</td>
+                        <td className="py-4 px-6 text-xs text-slate-500">
+                          {new Date(p.data_hora).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
+                        </td>
+                        <td className="py-4 px-6 text-center">
+                          {p.id_agenda ? (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] uppercase font-black tracking-wider rounded-full border border-emerald-500/20">
+                              <Check size={10} /> Agendado Oficial
+                            </span>
+                          ) : (
+                            <button 
+                              onClick={() => handleSyncWithMainAgenda(p)}
+                              className="px-3 py-1 bg-amber-500 hover:bg-[#E4A232] text-white text-[10px] uppercase font-black tracking-wider rounded-full shadow-sm transition-all flex items-center gap-1 mx-auto cursor-pointer"
+                            >
+                              <Calendar size={10} /> Agenda da Igreja
+                            </button>
+                          )}
+                        </td>
+                        <td className="py-4 px-6 text-right">
+                          <button 
+                            onClick={() => handleRemoveProgramacao(p.id)}
+                            className="text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 p-2 rounded-lg transition-all cursor-pointer"
+                            title="Remover Programação"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 2. CHECK-OUT MODAL */}
       {checkingOutChild && (
@@ -4318,22 +4320,22 @@ export default function KidsModule() {
                         
                         <div className="grid grid-cols-2 gap-3">
                           <div>
-                            <label className="text-[9px] font-black text-slate-450 dark:text-slate-500 uppercase">Largura (cm)</label>
-                            <input 
-                              type="number"
-                              step="0.01"
-                              value={customLargura}
-                              onChange={(e) => setCustomLargura(Number(e.target.value))}
-                              className="w-full mt-1 p-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                            />
-                          </div>
-                          <div>
                             <label className="text-[9px] font-black text-slate-450 dark:text-slate-500 uppercase">Altura/Comp (cm)</label>
                             <input 
                               type="number"
                               step="0.01"
                               value={customComprimento}
                               onChange={(e) => setCustomComprimento(Number(e.target.value))}
+                              className="w-full mt-1 p-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[9px] font-black text-slate-450 dark:text-slate-500 uppercase">Largura (cm)</label>
+                            <input 
+                              type="number"
+                              step="0.01"
+                              value={customLargura}
+                              onChange={(e) => setCustomLargura(Number(e.target.value))}
                               className="w-full mt-1 p-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                             />
                           </div>
@@ -4503,11 +4505,19 @@ export default function KidsModule() {
                   </div>
 
                   {/* Hidden print payload wrapper with complete stylesheet for print engine compatibility */}
-                  <div style={{ display: 'none' }}>
+                  <div className="print-only-wrapper">
                     <div id="print-section">
                       {/* Dynamic Print Stylesheet Injection */}
                       <style dangerouslySetInnerHTML={{ __html: `
+                        @media screen {
+                          .print-only-wrapper {
+                            display: none !important;
+                          }
+                        }
                         @media print {
+                          .print-only-wrapper {
+                            display: block !important;
+                          }
                           body * {
                             visibility: hidden !important;
                           }
