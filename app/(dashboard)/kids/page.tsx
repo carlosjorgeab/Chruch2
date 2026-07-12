@@ -4273,12 +4273,9 @@ export default function KidsModule() {
             const baseMargem = Number(customMargem) || 0;
             const availH = sheetHeight - (2 * baseMargem);
             labelRows = Math.max(1, Math.floor(availH / labelHeight));
-            // Calculate symmetrical margins to perfectly center the grid block on the physical paper
-            labelMargemX = (sheetWidth - (labelCols * labelWidth)) / 2;
-            labelMargemY = (sheetHeight - (labelRows * labelHeight)) / 2;
-            // Fallbacks to user-defined margins if calculated margins are negative or too small
-            if (labelMargemX < baseMargem) labelMargemX = baseMargem;
-            if (labelMargemY < baseMargem) labelMargemY = baseMargem;
+            // Strictly obey the configured margin parameter
+            labelMargemX = baseMargem;
+            labelMargemY = baseMargem;
           }
         }
 
@@ -4614,75 +4611,7 @@ export default function KidsModule() {
                     )}
                   </div>
 
-                  {/* 2. Escolha de modo de preenchimento */}
-                  <div className="space-y-3">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-450 dark:text-slate-500 block">Formato de Saída (Impressora)</label>
-                    <div className="space-y-2">
-                      <button
-                        type="button"
-                        onClick={() => setBadgePrintMode('single')}
-                        className={`w-full p-3.5 rounded-xl border text-left transition-all flex items-center justify-between cursor-pointer ${
-                          badgePrintMode === 'single'
-                            ? 'border-indigo-500 bg-indigo-500/5 text-indigo-950 dark:text-indigo-200 font-bold'
-                            : 'border-slate-100 dark:border-slate-850 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-950/30'
-                        }`}
-                      >
-                        <div className="text-xs">
-                          <p className="font-black">Etiqueta Única</p>
-                          <p className="text-[9px] text-slate-400 font-medium">Para impressoras térmicas / rolo de etiquetas</p>
-                        </div>
-                        {badgePrintMode === 'single' && <Check size={16} className="text-indigo-500" />}
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setBadgePrintMode('specific')}
-                        className={`w-full p-3.5 rounded-xl border text-left transition-all flex items-center justify-between cursor-pointer ${
-                          badgePrintMode === 'specific'
-                            ? 'border-indigo-500 bg-indigo-500/5 text-indigo-950 dark:text-indigo-200 font-bold'
-                            : 'border-slate-100 dark:border-slate-850 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-950/30'
-                        }`}
-                      >
-                        <div className="text-xs">
-                          <p className="font-black">Posição Específica na Folha</p>
-                          <p className="text-[9px] text-slate-400 font-medium">Imprime em apenas 1 etiqueta para evitar desperdício de papel</p>
-                        </div>
-                        {badgePrintMode === 'specific' && <Check size={16} className="text-indigo-500" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* 3. Seletor de posição na folha */}
-                  {badgePrintMode === 'specific' && (
-                    <div className="space-y-3 animate-fade-in">
-                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-450 dark:text-slate-500 block">
-                        Clique na posição que deseja imprimir:
-                      </label>
-                      <div className="p-4 bg-slate-50 dark:bg-slate-950/40 rounded-2xl border border-slate-150 dark:border-slate-850 flex items-center justify-center">
-                        <div 
-                          className="grid gap-1.5 bg-slate-250 dark:bg-slate-850 p-2 rounded-xl border border-slate-300 dark:border-slate-700 max-h-40 overflow-y-auto max-w-[250px]"
-                          style={{
-                            gridTemplateColumns: `repeat(${labelCols}, minmax(0, 1fr))`
-                          }}
-                        >
-                          {Array.from({ length: totalGridCells }).map((_, idx) => (
-                            <button
-                              key={idx}
-                              type="button"
-                              onClick={() => setBadgeSpecificPosition(idx)}
-                              className={`w-10 h-8 rounded-md text-[10px] font-black uppercase tracking-wider flex items-center justify-center transition-all cursor-pointer ${
-                                badgeSpecificPosition === idx
-                                  ? 'bg-indigo-600 text-white shadow-sm scale-105'
-                                  : 'bg-white dark:bg-slate-900 text-slate-450 dark:text-slate-550 hover:bg-indigo-50'
-                              }`}
-                            >
-                              {idx + 1}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                  {/* Print Mode is always single at position 0 by user request */}
                 </div>
 
                 {/* Right Column: Visual Preview Area */}
@@ -4781,7 +4710,7 @@ export default function KidsModule() {
                              page-break-inside: avoid !important;
                            }
                            @page {
-                             size: ${customTamanhoFolha === 'Térmico/Rolo' ? `${labelWidth}cm ${labelHeight}cm` : (customTamanhoFolha === 'Letter' ? 'letter portrait' : 'A4 portrait')} !important;
+                             size: ${isA ? 'A4 portrait' : (customTamanhoFolha === 'Térmico/Rolo' ? `${labelWidth}cm ${labelHeight}cm` : (customTamanhoFolha === 'Letter' ? 'letter portrait' : 'A4 portrait'))} !important;
                              margin: 0 !important;
                            }
                          }
@@ -4818,9 +4747,7 @@ export default function KidsModule() {
                            }}
                          >
                            {Array.from({ length: totalGridCells }).map((_, index) => {
-                             const shouldPrint = badgePrintMode === 'single'
-                               ? index === 0
-                               : (badgePrintMode === 'specific' && index === badgeSpecificPosition);
+                             const shouldPrint = index === 0;
                              return (
                                <div 
                                  key={index} 
