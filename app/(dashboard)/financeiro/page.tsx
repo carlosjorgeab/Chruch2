@@ -80,7 +80,18 @@ export default function FinanceiroPage() {
   // States specifically for the Reports Submodule
   const [reportDateInicio, setReportDateInicio] = useState<string>('');
   const [reportDateFim, setReportDateFim] = useState<string>('');
+  const [reportCentroCusto, setReportCentroCusto] = useState<string>('');
   const [selectedReportType, setSelectedReportType] = useState<'contas_pagar' | 'contas_receber' | 'fluxo_caixa'>('contas_pagar');
+
+  // States specifically for the Fluxo de Caixa Submodule
+  const [fluxoPeriodoOpt, setFluxoPeriodoOpt] = useState<string>('Todo Período');
+  const [fluxoPeriodoInicio, setFluxoPeriodoInicio] = useState<string>('');
+  const [fluxoPeriodoFim, setFluxoPeriodoFim] = useState<string>('');
+  const [fluxoCentroCusto, setFluxoCentroCusto] = useState<string>('');
+  const [fluxoRefDate, setFluxoRefDate] = useState<Date>(new Date());
+
+  // Checkbox selection state for batch actions
+  const [selectedTransactionIds, setSelectedTransactionIds] = useState<string[]>([]);
   
   // Transactions data states
   const [transacoes, setTransacoes] = useState<Transacao[]>([]);
@@ -154,9 +165,19 @@ export default function FinanceiroPage() {
     setVencimentoRefDate(new Date());
   }, [filterVencimentoOpt]);
 
+  // Reset fluxoRefDate when fluxoPeriodoOpt shifts
+  useEffect(() => {
+    setFluxoRefDate(new Date());
+  }, [fluxoPeriodoOpt]);
+
   // Pagination States
   const [pageSize, setPageSize] = useState<number>(25);
   const [currentPage, setCurrentPage] = useState<number>(1);
+
+  // Reset selected checkboxes when page, filters, or church changes
+  useEffect(() => {
+    setSelectedTransactionIds([]);
+  }, [filterText, filterTipo, filterVencimentoOpt, filterCategorias, filterFormasPagamento, filterCentroCusto, currentPage, pageSize, selectedIgreja]);
 
   // Reset page when filters or pageSize change
   useEffect(() => {
@@ -281,6 +302,11 @@ export default function FinanceiroPage() {
           if (!t.data_vencimento) return false;
           return t.data_vencimento <= reportDateFim;
         });
+      }
+
+      // Filter by Centro de Custo
+      if (reportCentroCusto) {
+        filtered = filtered.filter(t => t.id_centro_custo === reportCentroCusto);
       }
       
       // 2. Filter by type (Contas a Pagar: Débito/Saída, Contas a Receber: Crédito/Entrada, Fluxo Caixa: Todos)
@@ -1355,6 +1381,46 @@ export default function FinanceiroPage() {
     });
   };
 
+  // Batch Payment Actions
+  const handleBatchMarkPaid = async () => {
+    if (selectedTransactionIds.length === 0) return;
+    try {
+      const todayStr = new Date().toISOString().split('T')[0];
+      const { error: err } = await supabase
+        .from('transacoes')
+        .update({ data_pagamento: todayStr })
+        .in('id', selectedTransactionIds);
+
+      if (err) throw err;
+      
+      setSuccess(`${selectedTransactionIds.length} lançamento(s) registrado(s) como pago(s)!`);
+      setSelectedTransactionIds([]);
+      fetchTransacoes();
+    } catch (err: any) {
+      console.error(err);
+      setError('Erro ao registrar pagamentos: ' + (err.message || err));
+    }
+  };
+
+  const handleBatchMarkUnpaid = async () => {
+    if (selectedTransactionIds.length === 0) return;
+    try {
+      const { error: err } = await supabase
+        .from('transacoes')
+        .update({ data_pagamento: null })
+        .in('id', selectedTransactionIds);
+
+      if (err) throw err;
+
+      setSuccess(`${selectedTransactionIds.length} lançamento(s) alterado(s) para pendente(s)!`);
+      setSelectedTransactionIds([]);
+      fetchTransacoes();
+    } catch (err: any) {
+      console.error(err);
+      setError('Erro ao remover pagamentos: ' + (err.message || err));
+    }
+  };
+
   // Balances calculation
   const totalEntradas = transacoes
     .filter((t) => t.tipo === 'Entrada')
@@ -1383,6 +1449,106 @@ export default function FinanceiroPage() {
     }))
     .reverse()
     .slice(-8); // Get latest 8 active days;
+
+  // Filtered list of transactions specifically for Cash Flow Submodule
+  const getFilteredFluxoTransactions = () => {
+    let list = [...transacoes];
+
+    // Filter by selected church
+    if (selectedIgreja) {
+      list = list.filter(t => t.id_igreja === selectedIgreja.id);
+    }
+
+    // Filter by Centro de Custo
+    if (fluxoCentroCusto) {
+      list = list.filter(t => t.id_centro_custo === fluxoCentroCusto);
+    }
+
+    // Filter by Period
+    if (fluxoPeriodoOpt !== 'Todo Período') {
+      const ref = new Date(fluxoRefDate);
+      const year = ref.getFullYear();
+      const month = ref.getMonth();
+      const date = ref.getDate();
+
+      let startLimit = '';
+      let endLimit = '';
+
+      if (fluxoPeriodoOpt === 'Hoje') {
+        const todayStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(date).padStart(2, '0')}`;
+        startLimit = todayStr;
+        endLimit = todayStr;
+      } else if (fluxoPeriodoOpt === 'Semana') {
+        const startOfWeek = new Date(ref);
+        startOfWeek.setDate(date - ref.getDay());
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(startOfWeek.getDate() + 6);
+        startLimit = startOfWeek.toISOString().split('T')[0];
+        endLimit = endOfWeek.toISOString().split('T')[0];
+      } else if (fluxoPeriodoOpt === 'Mês') {
+        const startOfMonth = new Date(year, month, 1);
+        const endOfMonth = new Date(year, month + 1, 0);
+        startLimit = startOfMonth.toISOString().split('T')[0];
+        endLimit = endOfMonth.toISOString().split('T')[0];
+      } else if (fluxoPeriodoOpt === 'Ano') {
+        const startOfYear = new Date(year, 0, 1);
+        const endOfYear = new Date(year, 11, 31);
+        startLimit = startOfYear.toISOString().split('T')[0];
+        endLimit = endOfYear.toISOString().split('T')[0];
+      } else if (fluxoPeriodoOpt === '30 Últimos Dias') {
+        const start = new Date(ref);
+        start.setDate(date - 30);
+        startLimit = start.toISOString().split('T')[0];
+        endLimit = ref.toISOString().split('T')[0];
+      } else if (fluxoPeriodoOpt === '12 Últimos Meses') {
+        const start = new Date(ref);
+        start.setMonth(ref.getMonth() - 12);
+        startLimit = start.toISOString().split('T')[0];
+        endLimit = ref.toISOString().split('T')[0];
+      } else if (fluxoPeriodoOpt === 'Personalizado') {
+        startLimit = fluxoPeriodoInicio;
+        endLimit = fluxoPeriodoFim;
+      }
+
+      if (startLimit) {
+        list = list.filter(t => t.data_vencimento && t.data_vencimento >= startLimit);
+      }
+      if (endLimit) {
+        list = list.filter(t => t.data_vencimento && t.data_vencimento <= endLimit);
+      }
+    }
+
+    return list;
+  };
+
+  const fluxoList = getFilteredFluxoTransactions();
+  const fluxoTotalEntradas = fluxoList
+    .filter((t) => t.tipo === 'Entrada')
+    .reduce((sum, t) => sum + t.valor, 0);
+
+  const fluxoTotalSaidas = fluxoList
+    .filter((t) => t.tipo === 'Saída')
+    .reduce((sum, t) => sum + t.valor, 0);
+
+  const fluxoSaldoTotal = fluxoTotalEntradas - fluxoTotalSaidas;
+
+  // Chart data computation for Fluxo de Caixa
+  const fluxoDataMap: Record<string, { Entrada: number; Saída: number }> = {};
+  fluxoList.forEach((t) => {
+    const d = t.data ? t.data.substring(5, 10) : 'Geral'; // MM-DD format
+    if (!fluxoDataMap[d]) {
+      fluxoDataMap[d] = { Entrada: 0, Saída: 0 };
+    }
+    fluxoDataMap[d][t.tipo] += t.valor;
+  });
+
+  const fluxoChartData = Object.entries(fluxoDataMap)
+    .map(([data, values]) => ({
+      data: data.replace('-', '/'),
+      ...values,
+    }))
+    .reverse()
+    .slice(-10); // Get latest 10 active days for the flux
 
   if (!user?.id_master && !user?.is_admin && !hasPermission('/financeiro')) {
     return (
@@ -2111,10 +2277,10 @@ export default function FinanceiroPage() {
                     </div>
                   </div>
 
-                  {/* First row of filters: Search & Date Filter */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* c.2 Pesquisa de texto */}
-                    <div className="relative">
+                  {/* First row of filters: Search, Active Period Label, and Print Button */}
+                  <div className="flex flex-col md:flex-row gap-4 items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
+                    {/* Pesquisa de texto */}
+                    <div className="relative w-full md:flex-1 max-w-lg">
                       <input
                         type="text"
                         placeholder="Pesquisar em todos os campos..."
@@ -2125,103 +2291,8 @@ export default function FinanceiroPage() {
                       <Search size={14} className="absolute left-3 top-3 text-slate-400" />
                     </div>
 
-                    {/* c.1 Data Vencimento combo */}
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const newDate = new Date(vencimentoRefDate);
-                            if (filterVencimentoOpt === 'Hoje') {
-                              newDate.setDate(newDate.getDate() - 1);
-                            } else if (filterVencimentoOpt === 'Semana') {
-                              newDate.setDate(newDate.getDate() - 7);
-                            } else if (filterVencimentoOpt === 'Mês') {
-                              newDate.setMonth(newDate.getMonth() - 1);
-                            } else if (filterVencimentoOpt === 'Ano') {
-                              newDate.setFullYear(newDate.getFullYear() - 1);
-                            } else if (filterVencimentoOpt === '30 Últimos Dias') {
-                              newDate.setDate(newDate.getDate() - 30);
-                            } else if (filterVencimentoOpt === '12 Últimos Meses') {
-                              newDate.setMonth(newDate.getMonth() - 12);
-                            } else if (filterVencimentoOpt === 'Personalizado') {
-                              if (filterVencimentoInicio && filterVencimentoFim) {
-                                const start = new Date(filterVencimentoInicio + 'T00:00:00');
-                                const end = new Date(filterVencimentoFim + 'T00:00:00');
-                                const diffTime = Math.abs(end.getTime() - start.getTime());
-                                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
-                                const newStart = new Date(start);
-                                newStart.setDate(start.getDate() - diffDays);
-                                const newEnd = new Date(end);
-                                newEnd.setDate(end.getDate() - diffDays);
-                                setFilterVencimentoInicio(newStart.toISOString().split('T')[0]);
-                                setFilterVencimentoFim(newEnd.toISOString().split('T')[0]);
-                              }
-                            }
-                            setVencimentoRefDate(newDate);
-                          }}
-                          disabled={filterVencimentoOpt === 'Todo Período'}
-                          className="px-2 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 select-none cursor-pointer hover:border-amber-500 shrink-0 transition-colors h-[38px] flex items-center justify-center"
-                          title="Recuar data de vencimento"
-                        >
-                          <ChevronLeft size={16} />
-                        </button>
-
-                        <select
-                          value={filterVencimentoOpt}
-                          onChange={(e) => setFilterVencimentoOpt(e.target.value)}
-                          className="flex-1 min-w-0 px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-white outline-none focus:border-amber-500 transition-colors font-semibold h-[38px]"
-                        >
-                          <option value="Todo Período">Vencimento: Todo Período</option>
-                          <option value="Hoje">Hoje</option>
-                          <option value="Semana">Semana</option>
-                          <option value="Mês">Mês</option>
-                          <option value="Ano">Ano</option>
-                          <option value="30 Últimos Dias">30 Últimos Dias</option>
-                          <option value="12 Últimos Meses">12 Últimos Meses</option>
-                          <option value="Personalizado">Personalizado...</option>
-                        </select>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const newDate = new Date(vencimentoRefDate);
-                            if (filterVencimentoOpt === 'Hoje') {
-                              newDate.setDate(newDate.getDate() + 1);
-                            } else if (filterVencimentoOpt === 'Semana') {
-                              newDate.setDate(newDate.getDate() + 7);
-                            } else if (filterVencimentoOpt === 'Mês') {
-                              newDate.setMonth(newDate.getMonth() + 1);
-                            } else if (filterVencimentoOpt === 'Ano') {
-                              newDate.setFullYear(newDate.getFullYear() + 1);
-                            } else if (filterVencimentoOpt === '30 Últimos Dias') {
-                              newDate.setDate(newDate.getDate() + 30);
-                            } else if (filterVencimentoOpt === '12 Últimos Meses') {
-                              newDate.setMonth(newDate.getMonth() + 12);
-                            } else if (filterVencimentoOpt === 'Personalizado') {
-                              if (filterVencimentoInicio && filterVencimentoFim) {
-                                const start = new Date(filterVencimentoInicio + 'T00:00:00');
-                                const end = new Date(filterVencimentoFim + 'T00:00:00');
-                                const diffTime = Math.abs(end.getTime() - start.getTime());
-                                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
-                                const newStart = new Date(start);
-                                newStart.setDate(start.getDate() + diffDays);
-                                const newEnd = new Date(end);
-                                newEnd.setDate(end.getDate() + diffDays);
-                                setFilterVencimentoInicio(newStart.toISOString().split('T')[0]);
-                                setFilterVencimentoFim(newEnd.toISOString().split('T')[0]);
-                              }
-                            }
-                            setVencimentoRefDate(newDate);
-                          }}
-                          disabled={filterVencimentoOpt === 'Todo Período'}
-                          className="px-2 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 select-none cursor-pointer hover:border-amber-500 shrink-0 transition-colors h-[38px] flex items-center justify-center"
-                          title="Avançar data de vencimento"
-                        >
-                          <ChevronRight size={16} />
-                        </button>
-                      </div>
-
+                    {/* Active period label (Print do período) */}
+                    <div className="w-full md:w-auto flex flex-wrap items-center gap-2">
                       {filterVencimentoOpt !== 'Todo Período' && (() => {
                         const now = new Date(vencimentoRefDate);
                         
@@ -2252,39 +2323,28 @@ export default function FinanceiroPage() {
 
                         return (
                           <div 
-                            className="text-[10.5px] text-amber-600 dark:text-amber-450 font-black tracking-wide border border-slate-200/80 dark:border-slate-800/80 px-2 py-1 rounded-xl block max-w-full text-center animate-in fade-in duration-200 shadow-sm"
+                            className="text-[10px] text-amber-600 dark:text-amber-450 font-black tracking-wide border border-amber-200 dark:border-amber-800/80 px-3 py-1.5 rounded-xl animate-in fade-in duration-200 shadow-sm"
                             style={{ backgroundColor: 'var(--church-panel)' }}
                           >
+                            <span className="text-slate-400 font-normal uppercase tracking-wider text-[9px] mr-1">Período:</span>
                             <span>{periodLabel || 'Filtro ativo'}</span>
                           </div>
                         );
                       })()}
 
-                      {filterVencimentoOpt === 'Personalizado' && (
-                        <div className="grid grid-cols-2 gap-1 mt-1 animate-in slide-in-from-top-1 duration-200">
-                          <input
-                            type="date"
-                            value={filterVencimentoInicio}
-                            onChange={(e) => setFilterVencimentoInicio(e.target.value)}
-                            className="px-2 py-1 text-[10px] rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-white outline-none focus:border-amber-500"
-                            placeholder="Início"
-                            title="Vencimento Início"
-                          />
-                          <input
-                            type="date"
-                            value={filterVencimentoFim}
-                            onChange={(e) => setFilterVencimentoFim(e.target.value)}
-                            className="px-2 py-1 text-[10px] rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-white outline-none focus:border-amber-500"
-                            placeholder="Fim"
-                            title="Vencimento Fim"
-                          />
-                        </div>
-                      )}
+                      {/* Print action button */}
+                      <button
+                        onClick={handlePrintReport}
+                        className="flex items-center gap-1.5 bg-[#E4A232] hover:bg-[#c98e2a] text-white px-3.5 py-1.5 rounded-xl text-xs font-bold font-sans uppercase tracking-widest hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer shadow-sm h-[38px]"
+                      >
+                        <Printer size={13} />
+                        <span>Imprimir Período</span>
+                      </button>
                     </div>
                   </div>
 
-                  {/* Second row of filters: Tipo, Categorias, Formas de Pagamento, Centro de Custo */}
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  {/* Second row of filters: Tipo, Categorias, Formas de Pagamento, Centro de Custo, and Data Vencimento combo */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 pt-2">
                     {/* f. Tipo de Transação select */}
                     <div>
                       <select
@@ -2411,6 +2471,125 @@ export default function FinanceiroPage() {
                         ))}
                       </select>
                     </div>
+
+                    {/* Data Vencimento combo */}
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newDate = new Date(vencimentoRefDate);
+                            if (filterVencimentoOpt === 'Hoje') {
+                              newDate.setDate(newDate.getDate() - 1);
+                            } else if (filterVencimentoOpt === 'Semana') {
+                              newDate.setDate(newDate.getDate() - 7);
+                            } else if (filterVencimentoOpt === 'Mês') {
+                              newDate.setMonth(newDate.getMonth() - 1);
+                            } else if (filterVencimentoOpt === 'Ano') {
+                              newDate.setFullYear(newDate.getFullYear() - 1);
+                            } else if (filterVencimentoOpt === '30 Últimos Dias') {
+                              newDate.setDate(newDate.getDate() - 30);
+                            } else if (filterVencimentoOpt === '12 Últimos Meses') {
+                              newDate.setMonth(newDate.getMonth() - 12);
+                            } else if (filterVencimentoOpt === 'Personalizado') {
+                              if (filterVencimentoInicio && filterVencimentoFim) {
+                                const start = new Date(filterVencimentoInicio + 'T00:00:00');
+                                const end = new Date(filterVencimentoFim + 'T00:00:00');
+                                const diffTime = Math.abs(end.getTime() - start.getTime());
+                                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
+                                const newStart = new Date(start);
+                                newStart.setDate(start.getDate() - diffDays);
+                                const newEnd = new Date(end);
+                                newEnd.setDate(end.getDate() - diffDays);
+                                setFilterVencimentoInicio(newStart.toISOString().split('T')[0]);
+                                setFilterVencimentoFim(newEnd.toISOString().split('T')[0]);
+                              }
+                            }
+                            setVencimentoRefDate(newDate);
+                          }}
+                          disabled={filterVencimentoOpt === 'Todo Período'}
+                          className="px-2 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 select-none cursor-pointer hover:border-amber-500 shrink-0 transition-colors h-[38px] flex items-center justify-center"
+                          title="Recuar data de vencimento"
+                        >
+                          <ChevronLeft size={16} />
+                        </button>
+
+                        <select
+                          value={filterVencimentoOpt}
+                          onChange={(e) => setFilterVencimentoOpt(e.target.value)}
+                          className="flex-1 min-w-0 px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-white outline-none focus:border-amber-500 transition-colors font-semibold h-[38px]"
+                        >
+                          <option value="Todo Período">Todo Período</option>
+                          <option value="Hoje">Hoje</option>
+                          <option value="Semana">Semana</option>
+                          <option value="Mês">Mês</option>
+                          <option value="Ano">Ano</option>
+                          <option value="30 Últimos Dias">30 Últimos Dias</option>
+                          <option value="12 Últimos Meses">12 Últimos Meses</option>
+                          <option value="Personalizado">Personalizado...</option>
+                        </select>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newDate = new Date(vencimentoRefDate);
+                            if (filterVencimentoOpt === 'Hoje') {
+                              newDate.setDate(newDate.getDate() + 1);
+                            } else if (filterVencimentoOpt === 'Semana') {
+                              newDate.setDate(newDate.getDate() + 7);
+                            } else if (filterVencimentoOpt === 'Mês') {
+                              newDate.setMonth(newDate.getMonth() + 1);
+                            } else if (filterVencimentoOpt === 'Ano') {
+                              newDate.setFullYear(newDate.getFullYear() + 1);
+                            } else if (filterVencimentoOpt === '30 Últimos Dias') {
+                              newDate.setDate(newDate.getDate() + 30);
+                            } else if (filterVencimentoOpt === '12 Últimos Meses') {
+                              newDate.setMonth(newDate.getMonth() + 12);
+                            } else if (filterVencimentoOpt === 'Personalizado') {
+                              if (filterVencimentoInicio && filterVencimentoFim) {
+                                const start = new Date(filterVencimentoInicio + 'T00:00:00');
+                                const end = new Date(filterVencimentoFim + 'T00:00:00');
+                                const diffTime = Math.abs(end.getTime() - start.getTime());
+                                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
+                                const newStart = new Date(start);
+                                newStart.setDate(start.getDate() + diffDays);
+                                const newEnd = new Date(end);
+                                newEnd.setDate(end.getDate() + diffDays);
+                                setFilterVencimentoInicio(newStart.toISOString().split('T')[0]);
+                                setFilterVencimentoFim(newEnd.toISOString().split('T')[0]);
+                              }
+                            }
+                            setVencimentoRefDate(newDate);
+                          }}
+                          disabled={filterVencimentoOpt === 'Todo Período'}
+                          className="px-2 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 select-none cursor-pointer hover:border-amber-500 shrink-0 transition-colors h-[38px] flex items-center justify-center"
+                          title="Avançar data de vencimento"
+                        >
+                          <ChevronRight size={16} />
+                        </button>
+                      </div>
+
+                      {filterVencimentoOpt === 'Personalizado' && (
+                        <div className="grid grid-cols-2 gap-1 mt-1 animate-in slide-in-from-top-1 duration-200">
+                          <input
+                            type="date"
+                            value={filterVencimentoInicio}
+                            onChange={(e) => setFilterVencimentoInicio(e.target.value)}
+                            className="px-2 py-1 text-[10px] rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-white outline-none focus:border-amber-500"
+                            placeholder="Início"
+                            title="Vencimento Início"
+                          />
+                          <input
+                            type="date"
+                            value={filterVencimentoFim}
+                            onChange={(e) => setFilterVencimentoFim(e.target.value)}
+                            className="px-2 py-1 text-[10px] rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-white outline-none focus:border-amber-500"
+                            placeholder="Fim"
+                            title="Vencimento Fim"
+                          />
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   {/* Resumo de lançamentos filtrados */}
@@ -2496,10 +2675,61 @@ export default function FinanceiroPage() {
                   </div>
                 ) : (
                   <>
+                    {selectedTransactionIds.length > 0 && (
+                      <div className="mb-6 bg-amber-500/10 dark:bg-amber-500/5 border border-amber-500/30 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 animate-in fade-in slide-in-from-top-1 duration-200">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
+                          <p className="text-xs font-bold text-amber-800 dark:text-amber-400">
+                            {selectedTransactionIds.length} transações selecionadas para pagamento em lote
+                          </p>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={handleBatchMarkPaid}
+                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] rounded-xl transition cursor-pointer flex items-center gap-1.5 shadow-sm"
+                          >
+                            Marcar como Pago em Lote
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleBatchMarkUnpaid}
+                            className="px-4 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-850 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold text-[11px] rounded-xl transition cursor-pointer flex items-center gap-1.5"
+                          >
+                            Marcar como Pendente em Lote
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedTransactionIds([])}
+                            className="px-3 py-2 text-slate-500 dark:text-slate-400 hover:text-red-500 dark:hover:text-red-400 text-[11px] font-bold cursor-pointer"
+                          >
+                            Cancelar Seleção
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="overflow-x-auto md:overflow-x-visible">
                     <table className="w-full text-left border-collapse md:min-w-[800px] block md:table">
                       <thead className="hidden md:table-header-group">
                         <tr className="bg-slate-50/20 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800 text-slate-450 text-[10px] font-black uppercase tracking-widest">
+                          <th className="px-6 py-2.5 w-12 text-center">
+                            <input
+                              type="checkbox"
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  const ids = paginatedTransactions.map(t => t.id);
+                                  setSelectedTransactionIds(prev => Array.from(new Set([...prev, ...ids])));
+                                } else {
+                                  const ids = paginatedTransactions.map(t => t.id);
+                                  setSelectedTransactionIds(prev => prev.filter(id => !ids.includes(id)));
+                                }
+                              }}
+                              checked={paginatedTransactions.length > 0 && paginatedTransactions.every(t => selectedTransactionIds.includes(t.id))}
+                              className="rounded border-slate-300 dark:border-slate-700 text-amber-600 focus:ring-amber-500 cursor-pointer h-4 w-4"
+                              title="Selecionar todos desta página"
+                            />
+                          </th>
                           <th className="px-6 py-2.5">Lançamento</th>
                           <th className="px-6 py-2.5 md:w-36 min-w-[145px]">Vencimento</th>
                           <th className="px-6 py-2.5">Categoria</th>
@@ -2510,13 +2740,30 @@ export default function FinanceiroPage() {
                           <th className="px-6 py-2.5 text-right">Ações</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-100 dark:divide-slate-850 text-slate-700 dark:text-slate-350 font-medium block md:table-row-group">
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-850 text-slate-700 dark:text-slate-355 font-medium block md:table-row-group">
                         {paginatedTransactions.map((t) => {
                           // Find client/fornecedor name
                           const associatedForn = dbFornecedores.find(f => f.id === t.id_fornecedor);
 
                           return (
                             <tr key={t.id} className="block md:table-row hover:bg-slate-50/30 dark:hover:bg-slate-950/5 transition-all p-4 md:p-0 space-y-2 md:space-y-0 border-b border-slate-100 dark:border-slate-850 last:border-0">
+                              <td className="block md:table-cell px-6 py-1.5 md:py-2 md:w-12 text-center">
+                                <div className="flex md:block items-center justify-between md:justify-center">
+                                  <span className="inline-block md:hidden text-[9px] text-slate-400 font-black uppercase tracking-wider font-bold">Selecionar:</span>
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedTransactionIds.includes(t.id)}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setSelectedTransactionIds(prev => [...prev, t.id]);
+                                      } else {
+                                        setSelectedTransactionIds(prev => prev.filter(id => id !== t.id));
+                                      }
+                                    }}
+                                    className="rounded border-slate-300 dark:border-slate-700 text-amber-600 focus:ring-amber-500 cursor-pointer h-4 w-4"
+                                  />
+                                </div>
+                              </td>
                               <td className="block md:table-cell px-6 py-2 md:py-2">
                                 <div className="flex items-center gap-3">
                                   <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 bg-transparent ${
@@ -3010,7 +3257,6 @@ export default function FinanceiroPage() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                  <th className="p-4">ID</th>
                   <th className="p-4">Descrição da Forma de Pagamento</th>
                   <th className="p-4 text-right">Ações</th>
                 </tr>
@@ -3018,7 +3264,6 @@ export default function FinanceiroPage() {
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-sm">
                 {dbFormasPagamento.map((forma) => (
                   <tr key={forma.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/30">
-                    <td className="p-4 text-xs font-mono text-slate-500 max-w-[120px] truncate">{forma.id}</td>
                     <td className="p-4 font-bold text-slate-900 dark:text-white">{forma.nome}</td>
                     <td className="p-4 text-right">
                       <div className="flex justify-end gap-2">
@@ -3040,7 +3285,7 @@ export default function FinanceiroPage() {
                 ))}
                 {dbFormasPagamento.length === 0 && (
                   <tr>
-                    <td colSpan={3} className="p-8 text-center text-slate-400 italic">Nenhuma forma de pagamento cadastrada.</td>
+                    <td colSpan={2} className="p-8 text-center text-slate-400 italic">Nenhuma forma de pagamento cadastrada.</td>
                   </tr>
                 )}
               </tbody>
@@ -3117,7 +3362,6 @@ export default function FinanceiroPage() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                  <th className="p-4">ID</th>
                   <th className="p-4">Nome do Centro de Custo</th>
                   <th className="p-4">Sigla</th>
                   <th className="p-4 text-right">Ações</th>
@@ -3126,7 +3370,6 @@ export default function FinanceiroPage() {
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-sm">
                 {dbCentrosCusto.map((cc) => (
                   <tr key={cc.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/30">
-                    <td className="p-4 text-xs font-mono text-slate-500 max-w-[120px] truncate">{cc.id}</td>
                     <td className="p-4 font-bold text-slate-900 dark:text-white">{cc.nome}</td>
                     <td className="p-4 font-bold text-slate-500 dark:text-slate-400">{cc.sigla}</td>
                     <td className="p-4 text-right">
@@ -3149,7 +3392,7 @@ export default function FinanceiroPage() {
                 ))}
                 {dbCentrosCusto.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="p-8 text-center text-slate-400 italic">Nenhum centro de custo cadastrado.</td>
+                    <td colSpan={3} className="p-8 text-center text-slate-400 italic">Nenhum centro de custo cadastrado.</td>
                   </tr>
                 )}
               </tbody>
@@ -3161,12 +3404,228 @@ export default function FinanceiroPage() {
       {/* FLUXO DE CAIXA SUBMODULE TAB */}
       {activeTab === 'fluxo_caixa' && (
         <div className="space-y-8 animate-in fade-in duration-300">
-          {/* Bento-grid of balances */}
+          {/* Header section with description */}
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+              <h3 className="text-xl font-black font-headline uppercase tracking-tight text-slate-900 dark:text-white">
+                Submódulo de Fluxo de Caixa
+              </h3>
+              <p className="text-slate-500 text-sm mt-1">
+                Acompanhe o desempenho de entradas e saídas consolidadas por período e centro de custo.
+              </p>
+            </div>
+            {/* Clear filters shortcut for cash flow */}
+            {(fluxoPeriodoOpt !== 'Todo Período' || fluxoCentroCusto !== '') && (
+              <button
+                type="button"
+                onClick={() => {
+                  setFluxoPeriodoOpt('Todo Período');
+                  setFluxoCentroCusto('');
+                  setFluxoPeriodoInicio('');
+                  setFluxoPeriodoFim('');
+                }}
+                className="text-[10px] text-amber-600 dark:text-amber-450 hover:underline font-bold uppercase tracking-wider flex items-center gap-1 cursor-pointer"
+              >
+                Limpar Filtros do Fluxo
+              </button>
+            )}
+          </div>
+
+          {/* Filters panel inside Fluxo de Caixa */}
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm space-y-4">
+            <h4 className="text-xs font-black uppercase tracking-widest text-slate-400">Filtros do Fluxo de Caixa</h4>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+              {/* Centro de Custo Filter */}
+              <div>
+                <label className="block text-[10px] font-black text-slate-450 dark:text-slate-400 uppercase tracking-widest mb-1.5 ml-1">
+                  Filtrar por Centro de Custo
+                </label>
+                <select
+                  value={fluxoCentroCusto}
+                  onChange={(e) => setFluxoCentroCusto(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-white outline-none focus:border-amber-500 transition-colors font-semibold h-[38px] cursor-pointer"
+                >
+                  <option value="">Todos os Centros de Custo</option>
+                  {dbCentrosCusto.map(cc => (
+                    <option key={cc.id} value={cc.id}>{cc.nome} ({cc.sigla})</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Period Filter (Vencimento combo) */}
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-black text-slate-450 dark:text-slate-400 uppercase tracking-widest ml-1">
+                  Filtrar por Período (Vencimento)
+                </label>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newDate = new Date(fluxoRefDate);
+                      if (fluxoPeriodoOpt === 'Hoje') {
+                        newDate.setDate(newDate.getDate() - 1);
+                      } else if (fluxoPeriodoOpt === 'Semana') {
+                        newDate.setDate(newDate.getDate() - 7);
+                      } else if (fluxoPeriodoOpt === 'Mês') {
+                        newDate.setMonth(newDate.getMonth() - 1);
+                      } else if (fluxoPeriodoOpt === 'Ano') {
+                        newDate.setFullYear(newDate.getFullYear() - 1);
+                      } else if (fluxoPeriodoOpt === '30 Últimos Dias') {
+                        newDate.setDate(newDate.getDate() - 30);
+                      } else if (fluxoPeriodoOpt === '12 Últimos Meses') {
+                        newDate.setMonth(newDate.getMonth() - 12);
+                      } else if (fluxoPeriodoOpt === 'Personalizado') {
+                        if (fluxoPeriodoInicio && fluxoPeriodoFim) {
+                          const start = new Date(fluxoPeriodoInicio + 'T00:00:00');
+                          const end = new Date(fluxoPeriodoFim + 'T00:00:00');
+                          const diffTime = Math.abs(end.getTime() - start.getTime());
+                          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
+                          const newStart = new Date(start);
+                          newStart.setDate(start.getDate() - diffDays);
+                          const newEnd = new Date(end);
+                          newEnd.setDate(end.getDate() - diffDays);
+                          setFluxoPeriodoInicio(newStart.toISOString().split('T')[0]);
+                          setFluxoPeriodoFim(newEnd.toISOString().split('T')[0]);
+                        }
+                      }
+                      setFluxoRefDate(newDate);
+                    }}
+                    disabled={fluxoPeriodoOpt === 'Todo Período'}
+                    className="px-2 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 select-none cursor-pointer hover:border-amber-500 shrink-0 transition-colors h-[38px] flex items-center justify-center"
+                    title="Recuar período"
+                  >
+                    <ChevronLeft size={16} />
+                  </button>
+
+                  <select
+                    value={fluxoPeriodoOpt}
+                    onChange={(e) => setFluxoPeriodoOpt(e.target.value)}
+                    className="flex-1 min-w-0 px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-white outline-none focus:border-amber-500 transition-colors font-semibold h-[38px] cursor-pointer"
+                  >
+                    <option value="Todo Período">Todo Período</option>
+                    <option value="Hoje">Hoje</option>
+                    <option value="Semana">Semana</option>
+                    <option value="Mês">Mês</option>
+                    <option value="Ano">Ano</option>
+                    <option value="30 Últimos Dias">30 Últimos Dias</option>
+                    <option value="12 Últimos Meses">12 Últimos Meses</option>
+                    <option value="Personalizado">Personalizado...</option>
+                  </select>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newDate = new Date(fluxoRefDate);
+                      if (fluxoPeriodoOpt === 'Hoje') {
+                        newDate.setDate(newDate.getDate() + 1);
+                      } else if (fluxoPeriodoOpt === 'Semana') {
+                        newDate.setDate(newDate.getDate() + 7);
+                      } else if (fluxoPeriodoOpt === 'Mês') {
+                        newDate.setMonth(newDate.getMonth() + 1);
+                      } else if (fluxoPeriodoOpt === 'Ano') {
+                        newDate.setFullYear(newDate.getFullYear() + 1);
+                      } else if (fluxoPeriodoOpt === '30 Últimos Dias') {
+                        newDate.setDate(newDate.getDate() + 30);
+                      } else if (fluxoPeriodoOpt === '12 Últimos Meses') {
+                        newDate.setMonth(newDate.getMonth() + 12);
+                      } else if (fluxoPeriodoOpt === 'Personalizado') {
+                        if (fluxoPeriodoInicio && fluxoPeriodoFim) {
+                          const start = new Date(fluxoPeriodoInicio + 'T00:00:00');
+                          const end = new Date(fluxoPeriodoFim + 'T00:00:00');
+                          const diffTime = Math.abs(end.getTime() - start.getTime());
+                          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
+                          const newStart = new Date(start);
+                          newStart.setDate(start.getDate() + diffDays);
+                          const newEnd = new Date(end);
+                          newEnd.setDate(end.getDate() + diffDays);
+                          setFluxoPeriodoInicio(newStart.toISOString().split('T')[0]);
+                          setFluxoPeriodoFim(newEnd.toISOString().split('T')[0]);
+                        }
+                      }
+                      setFluxoRefDate(newDate);
+                    }}
+                    disabled={fluxoPeriodoOpt === 'Todo Período'}
+                    className="px-2 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 select-none cursor-pointer hover:border-amber-500 shrink-0 transition-colors h-[38px] flex items-center justify-center"
+                    title="Avançar período"
+                  >
+                    <ChevronRight size={16} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Active Period Display */}
+              <div className="flex items-center">
+                {fluxoPeriodoOpt !== 'Todo Período' && (() => {
+                  const now = new Date(fluxoRefDate);
+                  let periodLabel = '';
+                  if (fluxoPeriodoOpt === 'Hoje') {
+                    periodLabel = now.toLocaleDateString('pt-BR');
+                  } else if (fluxoPeriodoOpt === 'Semana') {
+                    const startOfWeek = new Date(now);
+                    startOfWeek.setDate(now.getDate() - now.getDay());
+                    const endOfWeek = new Date(startOfWeek);
+                    endOfWeek.setDate(startOfWeek.getDate() + 6);
+                    periodLabel = `${startOfWeek.toLocaleDateString('pt-BR')} a ${endOfWeek.toLocaleDateString('pt-BR')}`;
+                  } else if (fluxoPeriodoOpt === 'Mês') {
+                    periodLabel = now.toLocaleString('pt-BR', { month: 'short', year: 'numeric' });
+                  } else if (fluxoPeriodoOpt === 'Ano') {
+                    periodLabel = String(now.getFullYear());
+                  } else if (fluxoPeriodoOpt === '30 Últimos Dias') {
+                    const start = new Date(now);
+                    start.setDate(now.getDate() - 30);
+                    periodLabel = `${start.toLocaleDateString('pt-BR')} a ${now.toLocaleDateString('pt-BR')}`;
+                  } else if (fluxoPeriodoOpt === '12 Últimos Meses') {
+                    const start = new Date(now);
+                    start.setMonth(now.getMonth() - 12);
+                    periodLabel = `${start.toLocaleDateString('pt-BR')} a ${now.toLocaleDateString('pt-BR')}`;
+                  }
+
+                  if (!periodLabel && fluxoPeriodoOpt !== 'Personalizado') return null;
+
+                  return (
+                    <div 
+                      className="text-[10px] text-amber-600 dark:text-amber-450 font-black tracking-wide border border-amber-200 dark:border-amber-800/80 px-4 py-2.5 rounded-xl w-full text-center shadow-sm"
+                      style={{ backgroundColor: 'var(--church-panel)' }}
+                    >
+                      <span className="text-slate-400 font-normal uppercase tracking-wider text-[9px] mr-1">Periodo Ativo:</span>
+                      <span>{periodLabel || 'Filtro personalizado ativo'}</span>
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+
+            {/* Custom dates input */}
+            {fluxoPeriodoOpt === 'Personalizado' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-100 dark:border-slate-800 animate-in slide-in-from-top-1 duration-200">
+                <div>
+                  <label className="block text-[10px] font-black text-slate-450 dark:text-slate-400 uppercase tracking-widest mb-1 ml-1">Data Início</label>
+                  <input
+                    type="date"
+                    value={fluxoPeriodoInicio}
+                    onChange={(e) => setFluxoPeriodoInicio(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 text-black dark:text-white cursor-pointer"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-450 dark:text-slate-400 uppercase tracking-widest mb-1 ml-1">Data Fim</label>
+                  <input
+                    type="date"
+                    value={fluxoPeriodoFim}
+                    onChange={(e) => setFluxoPeriodoFim(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 text-black dark:text-white cursor-pointer"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Bento-grid of balances using filtered values */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 flex items-center justify-between shadow-sm relative overflow-hidden">
               <div className="space-y-1">
                 <span className="text-[10px] uppercase font-black tracking-widest text-slate-400">Total Receitas</span>
-                <p className="text-3xl font-black text-black dark:text-white">R$ {totalEntradas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                <p className="text-3xl font-black text-black dark:text-white">R$ {fluxoTotalEntradas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
               </div>
               <div className="w-12 h-12 bg-transparent text-green-600 dark:text-green-400 rounded-2xl flex items-center justify-center">
                 <TrendingUp size={24} />
@@ -3176,7 +3635,7 @@ export default function FinanceiroPage() {
             <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 flex items-center justify-between shadow-sm relative overflow-hidden">
               <div className="space-y-1">
                 <span className="text-[10px] uppercase font-black tracking-widest text-slate-400">Total Despesas</span>
-                <p className="text-3xl font-black text-black dark:text-white">R$ {totalSaidas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                <p className="text-3xl font-black text-black dark:text-white">R$ {fluxoTotalSaidas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
               </div>
               <div className="w-12 h-12 bg-transparent text-red-500 dark:text-red-400 rounded-2xl flex items-center justify-center">
                 <TrendingDown size={24} />
@@ -3186,7 +3645,7 @@ export default function FinanceiroPage() {
             <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 flex items-center justify-between shadow-sm relative overflow-hidden">
               <div className="space-y-1">
                 <span className="text-[10px] uppercase font-black tracking-widest text-slate-400">Saldo Consolidado</span>
-                <p className="text-3xl font-black text-black dark:text-white">R$ {saldoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                <p className="text-3xl font-black text-black dark:text-white">R$ {fluxoSaldoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
               </div>
               <div className="w-12 h-12 bg-transparent text-amber-600 dark:text-amber-400 rounded-2xl flex items-center justify-center">
                 <Wallet size={24} />
@@ -3194,12 +3653,12 @@ export default function FinanceiroPage() {
             </div>
           </div>
 
-          {/* Charts view */}
+          {/* Charts view using filtered values */}
           <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
             <h4 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-6 font-headline">Fluxo Diário / Histórico Próximo</h4>
-            {chartData.length > 0 ? (
+            {fluxoChartData.length > 0 ? (
               <div className="h-64 w-full">
-                <FinancialChart chartData={chartData} />
+                <FinancialChart chartData={fluxoChartData} />
               </div>
             ) : (
               <div className="h-64 w-full flex items-center justify-center text-slate-400 font-bold uppercase tracking-widest text-xs">Sem dados suficientes para exibição</div>
@@ -3252,6 +3711,22 @@ export default function FinanceiroPage() {
                       onChange={(e) => setReportDateFim(e.target.value)}
                       className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 text-black dark:text-white"
                     />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-450 dark:text-slate-400 uppercase tracking-widest mb-1.5 ml-1">
+                      Centro de Custo
+                    </label>
+                    <select
+                      value={reportCentroCusto}
+                      onChange={(e) => setReportCentroCusto(e.target.value)}
+                      className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 text-black dark:text-white font-semibold"
+                    >
+                      <option value="">Todos os Centros de Custo</option>
+                      {dbCentrosCusto.map(cc => (
+                        <option key={cc.id} value={cc.id}>{cc.nome} ({cc.sigla})</option>
+                      ))}
+                    </select>
                   </div>
                 </div>
               </div>
@@ -3471,6 +3946,9 @@ export default function FinanceiroPage() {
               }
               if (reportDateFim) {
                 prevList = prevList.filter(t => t.data_vencimento && t.data_vencimento <= reportDateFim);
+              }
+              if (reportCentroCusto) {
+                prevList = prevList.filter(t => t.id_centro_custo === reportCentroCusto);
               }
               if (selectedReportType === 'contas_pagar') {
                 prevList = prevList.filter(t => t.tipo === 'Saída');
