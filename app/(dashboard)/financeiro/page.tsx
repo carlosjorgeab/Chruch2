@@ -34,6 +34,7 @@ type Transacao = {
   id_forma_pagamento?: string | null;
   id_conta?: string | null;
   id_fornecedor?: string | null;
+  id_centro_custo?: string | null;
   data_vencimento?: string | null;
   data_pagamento?: string | null;
   arquivos_transacao?: { id: string }[];
@@ -58,6 +59,12 @@ type FormaPagamento = {
   nome: string;
 };
 
+type CentroCusto = {
+  id: string;
+  nome: string;
+  sigla: string;
+};
+
 type ArquivoAnexo = {
   id?: string;
   nome_arquivo: string;
@@ -68,7 +75,7 @@ export default function FinanceiroPage() {
   const { user, hasPermission } = useAuth();
   const { selectedIgreja } = useIgreja();
   const { confirmDelete } = useConfirm();
-  const [activeTab, setActiveTab] = useState<'lancamentos' | 'contas' | 'categorias' | 'formas_pagamento' | 'fluxo_caixa' | 'relatorios'>('lancamentos');
+  const [activeTab, setActiveTab] = useState<'lancamentos' | 'contas' | 'categorias' | 'formas_pagamento' | 'centro_custo' | 'fluxo_caixa' | 'relatorios'>('lancamentos');
   
   // States specifically for the Reports Submodule
   const [reportDateInicio, setReportDateInicio] = useState<string>('');
@@ -86,11 +93,13 @@ export default function FinanceiroPage() {
   const [dbFormasPagamento, setDbFormasPagamento] = useState<FormaPagamento[]>([]);
   const [dbContas, setDbContas] = useState<Conta[]>([]);
   const [dbFornecedores, setDbFornecedores] = useState<any[]>([]);
+  const [dbCentrosCusto, setDbCentrosCusto] = useState<CentroCusto[]>([]);
 
   // New submodules edit states
   const [editingConta, setEditingConta] = useState<Partial<Conta> | null>(null);
   const [editingCategoria, setEditingCategoria] = useState<Partial<Categoria> | null>(null);
   const [editingForma, setEditingForma] = useState<Partial<FormaPagamento> | null>(null);
+  const [editingCentroCusto, setEditingCentroCusto] = useState<Partial<CentroCusto> | null>(null);
 
   // Form entries for upgraded transactions
   const [currentTransacao, setCurrentTransacao] = useState<Partial<Transacao>>({
@@ -103,6 +112,7 @@ export default function FinanceiroPage() {
     id_forma_pagamento: '',
     id_conta: '',
     id_fornecedor: '',
+    id_centro_custo: '',
     data_vencimento: '',
     data_pagamento: ''
   });
@@ -119,16 +129,18 @@ export default function FinanceiroPage() {
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
 
-
-
   // Filter States
   const [filterTipo, setFilterTipo] = useState<string>('Todos');
-  const [filterVencimentoOpt, setFilterVencimentoOpt] = useState<string>('Todo Período');
+  const [filterVencimentoOpt, setFilterVencimentoOpt] = useState<string>('Hoje');
   const [filterVencimentoInicio, setFilterVencimentoInicio] = useState<string>('');
   const [filterVencimentoFim, setFilterVencimentoFim] = useState<string>('');
   const [filterText, setFilterText] = useState<string>('');
   const [filterCategorias, setFilterCategorias] = useState<string[]>([]);
   const [filterFormasPagamento, setFilterFormasPagamento] = useState<string[]>([]);
+  const [filterCentroCusto, setFilterCentroCusto] = useState<string>('');
+  const [showCatDropdown, setShowCatDropdown] = useState(false);
+  const [showFormaDropdown, setShowFormaDropdown] = useState(false);
+  const [showCCDropdown, setShowCCDropdown] = useState(false);
 
   // Navigation and Delete Confirm States
   const [vencimentoRefDate, setVencimentoRefDate] = useState<Date>(new Date());
@@ -149,11 +161,7 @@ export default function FinanceiroPage() {
   // Reset page when filters or pageSize change
   useEffect(() => {
     setCurrentPage(1);
-  }, [filterText, filterTipo, filterVencimentoOpt, filterCategorias, filterFormasPagamento, pageSize]);
-
-  // Toggles for Custom Multiple Select Combo Dropdowns
-  const [showCatDropdown, setShowCatDropdown] = useState(false);
-  const [showFormaDropdown, setShowFormaDropdown] = useState(false);
+  }, [filterText, filterTipo, filterVencimentoOpt, filterCategorias, filterFormasPagamento, filterCentroCusto, pageSize]);
 
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -193,6 +201,14 @@ export default function FinanceiroPage() {
         .eq('id_igreja', selectedIgreja.id)
         .order('razao_social');
       if (fornData) setDbFornecedores(fornData || []);
+
+      // 5. Fetch Centros de Custo
+      const { data: ccData } = await supabase
+        .from('centro_custos')
+        .select('*')
+        .eq('id_igreja', selectedIgreja.id)
+        .order('nome');
+      if (ccData) setDbCentrosCusto(ccData || []);
     } catch (e) {
       console.error('Error fetching submodules data:', e);
     }
@@ -758,25 +774,26 @@ export default function FinanceiroPage() {
     }
   }, [selectedIgreja]);
 
-  // Load registered attachments for a specific transaction
+  // Load registered attachments for a specific transaction and open immediately
   const loadAttachmentsForTransacao = async (transacaoId: string) => {
     try {
-      setSelectedTransacaoForAnexos(transacaoId);
       const { data, error } = await supabase
         .from('arquivos_transacao')
         .select('*')
         .eq('id_transacao', transacaoId);
-      if (data) {
-        setActiveTransacaoAnexos(data.map((item: any) => ({
-          id: item.id,
-          nome_arquivo: item.nome || item.nome_arquivo || '',
-          url_arquivo: item.url || item.url_arquivo || ''
-        })));
+      if (data && data.length > 0) {
+        const firstUrl = data[0].url || data[0].url_arquivo || '';
+        if (firstUrl) {
+          window.open(firstUrl, '_blank');
+        } else {
+          alert('Link do arquivo não encontrado.');
+        }
       } else {
-        setActiveTransacaoAnexos([]);
+        alert('Nenhum arquivo anexado a esta transação.');
       }
     } catch (e) {
       console.error(e);
+      alert('Erro ao carregar o arquivo.');
     }
   };
 
@@ -808,6 +825,7 @@ export default function FinanceiroPage() {
       id_forma_pagamento: transacao.id_forma_pagamento || '',
       id_conta: transacao.id_conta || '',
       id_fornecedor: transacao.id_fornecedor || '',
+      id_centro_custo: transacao.id_centro_custo || '',
       data_vencimento: transacao.data_vencimento || '',
       data_pagamento: transacao.data_pagamento || ''
     });
@@ -847,6 +865,7 @@ export default function FinanceiroPage() {
       id_forma_pagamento: transacao.id_forma_pagamento || '',
       id_conta: transacao.id_conta || '',
       id_fornecedor: transacao.id_fornecedor || '',
+      id_centro_custo: transacao.id_centro_custo || '',
       data_vencimento: transacao.data_vencimento || '',
       data_pagamento: transacao.data_pagamento || ''
     });
@@ -877,6 +896,7 @@ export default function FinanceiroPage() {
       id_forma_pagamento: dbFormasPagamento[0]?.id || '',
       id_conta: dbContas[0]?.id || '',
       id_fornecedor: '',
+      id_centro_custo: '',
       data_vencimento: '',
       data_pagamento: ''
     });
@@ -930,6 +950,7 @@ export default function FinanceiroPage() {
       id_forma_pagamento: currentTransacao.tipo === 'Saída' ? (currentTransacao.id_forma_pagamento || null) : null,
       id_conta: currentTransacao.id_conta || null,
       id_fornecedor: currentTransacao.id_fornecedor || null,
+      id_centro_custo: currentTransacao.id_centro_custo || null,
       data_vencimento: currentTransacao.data_vencimento || null,
       data_pagamento: currentTransacao.data_pagamento || null,
     };
@@ -1092,6 +1113,13 @@ export default function FinanceiroPage() {
       // 3. Payment Method filter
       if (filterFormasPagamento.length > 0) {
         if (!t.id_forma_pagamento || !filterFormasPagamento.includes(t.id_forma_pagamento)) {
+          return false;
+        }
+      }
+
+      // 3.5. Centro de Custo filter
+      if (filterCentroCusto) {
+        if (t.id_centro_custo !== filterCentroCusto) {
           return false;
         }
       }
@@ -1281,6 +1309,52 @@ export default function FinanceiroPage() {
     });
   };
 
+  // Submodule Centro de Custo CRUD Actions
+  const handleSaveCentroCusto = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingCentroCusto?.nome || !editingCentroCusto?.sigla || !selectedIgreja) return;
+    try {
+      const payload = { 
+        id_igreja: selectedIgreja.id,
+        nome: editingCentroCusto.nome,
+        sigla: editingCentroCusto.sigla
+      };
+      let saveError = null;
+
+      if (editingCentroCusto.id) {
+        const { error: err } = await supabase.from('centro_custos').update(payload).eq('id', editingCentroCusto.id);
+        saveError = err;
+      } else {
+        const { error: err } = await supabase.from('centro_custos').insert([payload]);
+        saveError = err;
+      }
+
+      if (saveError) {
+        alert('Erro ao salvar Centro de Custo.');
+      } else {
+        setEditingCentroCusto(null);
+        loadSubmodulesData();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleDeleteCentroCusto = (id: string) => {
+    confirmDelete({
+      message: 'Deseja realmente remover este Centro de Custo? Esta ação é irreversível.',
+      onConfirm: async () => {
+        try {
+          const { error: err } = await supabase.from('centro_custos').delete().eq('id', id);
+          if (err) throw err;
+          loadSubmodulesData();
+        } catch (err) {
+          console.error(err);
+        }
+      }
+    });
+  };
+
   // Balances calculation
   const totalEntradas = transacoes
     .filter((t) => t.tipo === 'Entrada')
@@ -1445,6 +1519,16 @@ export default function FinanceiroPage() {
                  Formas de Pagamento
                </button>
              )}
+            {(user?.id_master || user?.is_admin || hasPermission('/financeiro/centro_custo')) && (
+               <button
+                 onClick={() => setActiveTab('centro_custo')}
+                 className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${
+                   activeTab === 'centro_custo' ? 'bg-amber-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                 }`}
+               >
+                 Centro de Custo
+               </button>
+             )}
              <button
                onClick={() => setActiveTab('relatorios')}
                className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${
@@ -1607,6 +1691,22 @@ export default function FinanceiroPage() {
                         <option value="secundario">Conta Corrente de Apoio</option>
                       </>
                     )}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
+                    Centro de Custo
+                  </label>
+                  <select
+                    value={currentTransacao.id_centro_custo || ''}
+                    onChange={(e) => setCurrentTransacao({ ...currentTransacao, id_centro_custo: e.target.value })}
+                    className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-bold"
+                  >
+                    <option value="">Selecione um Centro de Custo</option>
+                    {dbCentrosCusto.map(cc => (
+                      <option key={cc.id} value={cc.id}>{cc.nome} ({cc.sigla})</option>
+                    ))}
                   </select>
                 </div>
 
@@ -1983,16 +2083,17 @@ export default function FinanceiroPage() {
                       Filtros de Pesquisa & Lançamentos
                     </span>
                     <div className="flex items-center gap-3">
-                      {(filterText || filterTipo !== 'Todos' || filterVencimentoOpt !== 'Todo Período' || filterCategorias.length > 0 || filterFormasPagamento.length > 0) && (
+                      {(filterText || filterTipo !== 'Todos' || filterVencimentoOpt !== 'Hoje' || filterCategorias.length > 0 || filterFormasPagamento.length > 0 || filterCentroCusto !== '') && (
                         <button
                           onClick={() => {
                             setFilterText('');
                             setFilterTipo('Todos');
-                            setFilterVencimentoOpt('Todo Período');
+                            setFilterVencimentoOpt('Hoje');
                             setFilterVencimentoInicio('');
                             setFilterVencimentoFim('');
                             setFilterCategorias([]);
                             setFilterFormasPagamento([]);
+                            setFilterCentroCusto('');
                           }}
                           className="text-[10px] text-amber-600 dark:text-amber-450 hover:underline font-bold uppercase tracking-wider flex items-center gap-1"
                         >
@@ -2010,21 +2111,8 @@ export default function FinanceiroPage() {
                     </div>
                   </div>
 
-                  {/* Filter grid row */}
-                  <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-                    {/* f. Tipo de Transação select */}
-                    <div>
-                      <select
-                        value={filterTipo}
-                        onChange={(e) => setFilterTipo(e.target.value)}
-                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-white outline-none focus:border-amber-500 transition-colors font-semibold"
-                      >
-                        <option value="Todos">Tipo: Todos</option>
-                        <option value="Entrada">Crédito (/ Entrada)</option>
-                        <option value="Saída">Débito (/ Saída)</option>
-                      </select>
-                    </div>
-
+                  {/* First row of filters: Search & Date Filter */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* c.2 Pesquisa de texto */}
                     <div className="relative">
                       <input
@@ -2032,9 +2120,9 @@ export default function FinanceiroPage() {
                         placeholder="Pesquisar em todos os campos..."
                         value={filterText}
                         onChange={(e) => setFilterText(e.target.value)}
-                        className="w-full pl-8 pr-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-white outline-none focus:border-amber-500 transition-colors"
+                        className="w-full pl-8 pr-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-white outline-none focus:border-amber-500 transition-colors h-[38px]"
                       />
-                      <Search size={12} className="absolute left-2.5 top-3 text-slate-400" />
+                      <Search size={14} className="absolute left-3 top-3 text-slate-400" />
                     </div>
 
                     {/* c.1 Data Vencimento combo */}
@@ -2073,16 +2161,16 @@ export default function FinanceiroPage() {
                             setVencimentoRefDate(newDate);
                           }}
                           disabled={filterVencimentoOpt === 'Todo Período'}
-                          className="px-2 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 select-none cursor-pointer hover:border-amber-500 shrink-0 transition-colors"
+                          className="px-2 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 select-none cursor-pointer hover:border-amber-500 shrink-0 transition-colors h-[38px] flex items-center justify-center"
                           title="Recuar data de vencimento"
                         >
-                          <ChevronLeft size={14} />
+                          <ChevronLeft size={16} />
                         </button>
 
                         <select
                           value={filterVencimentoOpt}
                           onChange={(e) => setFilterVencimentoOpt(e.target.value)}
-                          className="flex-1 min-w-0 px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-white outline-none focus:border-amber-500 transition-colors font-semibold"
+                          className="flex-1 min-w-0 px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-white outline-none focus:border-amber-500 transition-colors font-semibold h-[38px]"
                         >
                           <option value="Todo Período">Vencimento: Todo Período</option>
                           <option value="Hoje">Hoje</option>
@@ -2127,10 +2215,10 @@ export default function FinanceiroPage() {
                             setVencimentoRefDate(newDate);
                           }}
                           disabled={filterVencimentoOpt === 'Todo Período'}
-                          className="px-2 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 select-none cursor-pointer hover:border-amber-500 shrink-0 transition-colors"
+                          className="px-2 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 select-none cursor-pointer hover:border-amber-500 shrink-0 transition-colors h-[38px] flex items-center justify-center"
                           title="Avançar data de vencimento"
                         >
-                          <ChevronRight size={14} />
+                          <ChevronRight size={16} />
                         </button>
                       </div>
 
@@ -2164,7 +2252,7 @@ export default function FinanceiroPage() {
 
                         return (
                           <div 
-                            className="text-[10.5px] text-amber-600 dark:text-amber-450 font-black tracking-wide border border-slate-200/80 dark:border-slate-800/80 px-2 py-1.5 rounded-xl block max-w-full text-center animate-in fade-in duration-200 shadow-sm"
+                            className="text-[10.5px] text-amber-600 dark:text-amber-450 font-black tracking-wide border border-slate-200/80 dark:border-slate-800/80 px-2 py-1 rounded-xl block max-w-full text-center animate-in fade-in duration-200 shadow-sm"
                             style={{ backgroundColor: 'var(--church-panel)' }}
                           >
                             <span>{periodLabel || 'Filtro ativo'}</span>
@@ -2193,6 +2281,22 @@ export default function FinanceiroPage() {
                         </div>
                       )}
                     </div>
+                  </div>
+
+                  {/* Second row of filters: Tipo, Categorias, Formas de Pagamento, Centro de Custo */}
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                    {/* f. Tipo de Transação select */}
+                    <div>
+                      <select
+                        value={filterTipo}
+                        onChange={(e) => setFilterTipo(e.target.value)}
+                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-white outline-none focus:border-amber-500 transition-colors font-semibold h-[38px]"
+                      >
+                        <option value="Todos">Tipo: Todos</option>
+                        <option value="Entrada">Crédito (/ Entrada)</option>
+                        <option value="Saída">Débito (/ Saída)</option>
+                      </select>
+                    </div>
 
                     {/* c.3 Categoria Multi-select combo dropdown */}
                     <div className="relative">
@@ -2201,8 +2305,9 @@ export default function FinanceiroPage() {
                         onClick={() => {
                           setShowCatDropdown(!showCatDropdown);
                           setShowFormaDropdown(false);
+                          setShowCCDropdown(false);
                         }}
-                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-white outline-none flex justify-between items-center transition-all hover:bg-slate-50 dark:hover:bg-slate-850"
+                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-white outline-none flex justify-between items-center transition-all hover:bg-slate-50 dark:hover:bg-slate-850 h-[38px]"
                       >
                         <span className="truncate">
                           {filterCategorias.length === 0 
@@ -2250,8 +2355,9 @@ export default function FinanceiroPage() {
                         onClick={() => {
                           setShowFormaDropdown(!showFormaDropdown);
                           setShowCatDropdown(false);
+                          setShowCCDropdown(false);
                         }}
-                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-white outline-none flex justify-between items-center transition-all hover:bg-slate-50 dark:hover:bg-slate-850"
+                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-white outline-none flex justify-between items-center transition-all hover:bg-slate-50 dark:hover:bg-slate-850 h-[38px]"
                       >
                         <span className="truncate">
                           {filterFormasPagamento.length === 0 
@@ -2290,6 +2396,20 @@ export default function FinanceiroPage() {
                           })}
                         </div>
                       )}
+                    </div>
+
+                    {/* Centro de Custo select filter */}
+                    <div>
+                      <select
+                        value={filterCentroCusto}
+                        onChange={(e) => setFilterCentroCusto(e.target.value)}
+                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-white outline-none focus:border-amber-500 transition-colors font-semibold h-[38px]"
+                      >
+                        <option value="">Centro de Custo: Todos</option>
+                        {dbCentrosCusto.map(cc => (
+                          <option key={cc.id} value={cc.id}>Centro: {cc.nome} ({cc.sigla})</option>
+                        ))}
+                      </select>
                     </div>
                   </div>
 
@@ -2921,6 +3041,115 @@ export default function FinanceiroPage() {
                 {dbFormasPagamento.length === 0 && (
                   <tr>
                     <td colSpan={3} className="p-8 text-center text-slate-400 italic">Nenhuma forma de pagamento cadastrada.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* CENTRO DE CUSTO SUBMODULE TAB */}
+      {activeTab === 'centro_custo' && (
+        <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 p-8 space-y-6 animate-in fade-in duration-200">
+          <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-700 pb-4">
+            <div>
+              <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <Settings className="text-amber-500" />
+                Gerenciamento de Centros de Custo
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">Cadastre centros de custo para agrupar e organizar seus lançamentos (ex: Ministério de Louvor, Administrativo, Missões...)</p>
+            </div>
+            {!editingCentroCusto && (
+              <button
+                onClick={() => setEditingCentroCusto({ nome: '', sigla: '' })}
+                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl transition"
+              >
+                Cadastrar Centro de Custo
+              </button>
+            )}
+          </div>
+
+          {editingCentroCusto && (
+            <form onSubmit={handleSaveCentroCusto} className="bg-slate-50 dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-750 max-w-md space-y-4 animate-in slide-in-from-top-4 duration-200">
+              <h4 className="text-xs font-black uppercase text-amber-500">{editingCentroCusto.id ? 'Editar Centro de Custo' : 'Novo Centro de Custo'}</h4>
+              <div>
+                <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Nome do Centro de Custo *</label>
+                <input
+                  type="text"
+                  required
+                  value={editingCentroCusto.nome || ''}
+                  onChange={(e) => setEditingCentroCusto({...editingCentroCusto, nome: e.target.value})}
+                  className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-950 text-slate-900 dark:text-white font-bold"
+                  placeholder="Ex: Departamento Infantil"
+                />
+              </div>
+              <div>
+                <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Sigla / Abreviação *</label>
+                <input
+                  type="text"
+                  required
+                  value={editingCentroCusto.sigla || ''}
+                  onChange={(e) => setEditingCentroCusto({...editingCentroCusto, sigla: e.target.value.toUpperCase()})}
+                  className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-950 text-slate-900 dark:text-white font-bold"
+                  placeholder="Ex: DEP-INF"
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingCentroCusto(null)}
+                  className="px-3 py-1.5 text-xs text-slate-600 font-bold hover:bg-slate-200 rounded"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded"
+                >
+                  Salvar
+                </button>
+              </div>
+            </form>
+          )}
+
+          <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  <th className="p-4">ID</th>
+                  <th className="p-4">Nome do Centro de Custo</th>
+                  <th className="p-4">Sigla</th>
+                  <th className="p-4 text-right">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-sm">
+                {dbCentrosCusto.map((cc) => (
+                  <tr key={cc.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/30">
+                    <td className="p-4 text-xs font-mono text-slate-500 max-w-[120px] truncate">{cc.id}</td>
+                    <td className="p-4 font-bold text-slate-900 dark:text-white">{cc.nome}</td>
+                    <td className="p-4 font-bold text-slate-500 dark:text-slate-400">{cc.sigla}</td>
+                    <td className="p-4 text-right">
+                      <div className="flex justify-end gap-2">
+                        <button
+                          onClick={() => setEditingCentroCusto(cc)}
+                          className="p-1 text-slate-400 hover:text-amber-500 rounded"
+                        >
+                          <Edit2 size={14} />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteCentroCusto(cc.id)}
+                          className="p-1 text-slate-400 hover:text-red-500 rounded"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {dbCentrosCusto.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="p-8 text-center text-slate-400 italic">Nenhum centro de custo cadastrado.</td>
                   </tr>
                 )}
               </tbody>
