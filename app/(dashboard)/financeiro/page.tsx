@@ -75,8 +75,18 @@ export default function FinanceiroPage() {
   const { user, hasPermission } = useAuth();
   const { selectedIgreja } = useIgreja();
   const { confirmDelete } = useConfirm();
-  const [activeTab, setActiveTab] = useState<'lancamentos' | 'contas' | 'categorias' | 'formas_pagamento' | 'centro_custo' | 'fluxo_caixa' | 'relatorios'>('lancamentos');
+  const [activeTab, setActiveTab] = useState<'lancamentos' | 'contas' | 'categorias' | 'formas_pagamento' | 'centro_custo' | 'fluxo_caixa' | 'relatorios' | 'estatisticas_financeiras'>('lancamentos');
   
+  // States specifically for the "Estatísticas Financeiras" Submodule
+  const [statsDateInicio, setStatsDateInicio] = useState<string>(() => {
+    const now = new Date();
+    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+    return firstDay.toISOString().split('T')[0];
+  });
+  const [statsDateFim, setStatsDateFim] = useState<string>(() => {
+    return new Date().toISOString().split('T')[0];
+  });
+
   // States specifically for the Reports Submodule
   const [reportDateInicio, setReportDateInicio] = useState<string>('');
   const [reportDateFim, setReportDateFim] = useState<string>('');
@@ -1703,6 +1713,12 @@ export default function FinanceiroPage() {
              >
                Relatórios
              </button>
+              <button
+                onClick={() => setActiveTab('estatisticas_financeiras')}
+                className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${activeTab === 'estatisticas_financeiras' ? 'bg-amber-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'}`}
+              >
+                Estatísticas
+              </button>
            </div>
         )}
       </div>
@@ -4060,6 +4076,155 @@ export default function FinanceiroPage() {
           </div>
         </div>
       )}
+
+      {/* STATISTICS SUBMODULE TAB */}
+      {activeTab === 'estatisticas_financeiras' && (() => {
+        // Filter transactions for statistics
+        const statsFilteredTransacoes = transacoes.filter(t => {
+          if (!t.data) return false;
+          return t.data >= statsDateInicio && t.data <= statsDateFim;
+        });
+
+        // Calculate totals
+        const statsTotalEntradas = statsFilteredTransacoes
+          .filter(t => t.tipo === 'Entrada')
+          .reduce((sum, t) => sum + t.valor, 0);
+
+        const statsTotalSaidas = statsFilteredTransacoes
+          .filter(t => t.tipo === 'Saída')
+          .reduce((sum, t) => sum + t.valor, 0);
+
+        const statsSaldoConsolidado = statsTotalEntradas - statsTotalSaidas;
+
+        // Build chart data
+        const statsDataMap: Record<string, { Entrada: number; Saída: number }> = {};
+        statsFilteredTransacoes.forEach(t => {
+          // Format as DD/MM
+          const d = t.data ? t.data.substring(8, 10) + '/' + t.data.substring(5, 7) : 'Geral';
+          if (!statsDataMap[d]) {
+            statsDataMap[d] = { Entrada: 0, Saída: 0 };
+          }
+          statsDataMap[d][t.tipo] += t.valor;
+        });
+
+        const statsChartData = Object.entries(statsDataMap)
+          .map(([data, values]) => ({
+            data,
+            ...values,
+          }))
+          .sort((a, b) => {
+            // Sort DD/MM chronologically
+            const [dayA, monthA] = a.data.split('/').map(Number);
+            const [dayB, monthB] = b.data.split('/').map(Number);
+            if (monthA !== monthB) return monthA - monthB;
+            return dayA - dayB;
+          })
+          .slice(-15); // Get latest 15 active days for cleaner bar chart layout
+
+        return (
+          <div className="space-y-8 animate-in fade-in duration-300">
+            {/* Header section of sub-module */}
+            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <div>
+                <h3 className="text-xl font-black font-headline uppercase tracking-tight text-slate-900 dark:text-white">
+                  Estatísticas Financeiras
+                </h3>
+                <p className="text-slate-500 text-sm mt-1">
+                  Visualize o gráfico comparativo de receitas (entradas) e despesas (saídas) com filtros de período personalizados.
+                </p>
+              </div>
+
+              {/* Date Filters inside Header */}
+              <div className="flex flex-wrap items-center gap-3">
+                <div>
+                  <label className="block text-[9px] font-black text-slate-450 uppercase tracking-widest mb-1">
+                    De:
+                  </label>
+                  <input
+                    type="date"
+                    value={statsDateInicio}
+                    onChange={(e) => setStatsDateInicio(e.target.value)}
+                    className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 text-black dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[9px] font-black text-slate-450 uppercase tracking-widest mb-1">
+                    Até:
+                  </label>
+                  <input
+                    type="date"
+                    value={statsDateFim}
+                    onChange={(e) => setStatsDateFim(e.target.value)}
+                    className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 text-black dark:text-white"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Metrics cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm flex items-center justify-between">
+                <div className="space-y-1">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total de Receitas (Entradas)</span>
+                  <p className="text-2xl font-black font-headline text-green-600 dark:text-green-400">
+                    R$ {statsTotalEntradas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+                <div className="p-3 bg-green-50 dark:bg-green-950/30 text-green-600 dark:text-green-400 rounded-2xl">
+                  <TrendingUp size={24} />
+                </div>
+              </div>
+
+              <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm flex items-center justify-between">
+                <div className="space-y-1">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total de Despesas (Saídas)</span>
+                  <p className="text-2xl font-black font-headline text-red-500">
+                    R$ {statsTotalSaidas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+                <div className="p-3 bg-red-50 dark:bg-red-950/30 text-red-500 rounded-2xl">
+                  <TrendingDown size={24} />
+                </div>
+              </div>
+
+              <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm flex items-center justify-between">
+                <div className="space-y-1">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Saldo Consolidado</span>
+                  <p className={`text-2xl font-black font-headline ${statsSaldoConsolidado >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}`}>
+                    R$ {statsSaldoConsolidado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+                <div className={`p-3 rounded-2xl ${statsSaldoConsolidado >= 0 ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400' : 'bg-red-50 dark:bg-red-950/30 text-red-500'}`}>
+                  <Wallet size={24} />
+                </div>
+              </div>
+            </div>
+
+            {/* Chart Area */}
+            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
+              <div className="flex items-center justify-between mb-6">
+                <h4 className="text-sm font-black uppercase tracking-wider text-slate-850 dark:text-white flex items-center gap-2">
+                  <TrendingUp size={16} className="text-amber-500" />
+                  Gráfico Comparativo de Entradas vs Saídas
+                </h4>
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-full">
+                  Período Filtrado
+                </span>
+              </div>
+              
+              {statsChartData.length > 0 ? (
+                <div className="h-80 w-full">
+                  <FinancialChart chartData={statsChartData} />
+                </div>
+              ) : (
+                <div className="h-80 w-full flex items-center justify-center text-slate-400 font-bold uppercase tracking-widest text-xs">
+                  Sem dados para o período selecionado
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

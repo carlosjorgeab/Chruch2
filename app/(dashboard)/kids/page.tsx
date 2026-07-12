@@ -182,8 +182,6 @@ export default function KidsModule() {
 
   // Print format state: 'A' = Padrão (14 labels), 'Custom' = Personalizada
   const [badgeSize, setBadgeSize] = useState<'A' | 'Custom'>('A');
-  const [badgePrintMode, setBadgePrintMode] = useState<'single' | 'specific'>('single');
-  const [badgeSpecificPosition, setBadgeSpecificPosition] = useState<number>(0);
 
   // Custom label settings
   const [customLargura, setCustomLargura] = useState<number>(6.35);
@@ -447,6 +445,72 @@ export default function KidsModule() {
         }
       }
 
+      // Dispatch automated email notifications
+      try {
+        const emailsToSend: { email: string; childName: string; parentName: string }[] = [];
+        const salaObj = salas.find(s => s.id === selectedSalaId);
+        const salaName = salaObj ? salaObj.nome : '';
+
+        for (const childId of comunicadoCriancasIds) {
+          const child = criancasSala.find(c => c.id === childId);
+          if (!child) continue;
+
+          const childName = child.tipo_crianca === 'Membro'
+            ? (membrosIgreja.find(m => m.id === child.id_membro)?.nome || 'Membro')
+            : (child.nome_visitante || 'Visitante');
+
+          let email = '';
+          let parentName = child.nome_responsavel || '';
+
+          // 1. If child is Membro, check if child member has an email
+          if (child.tipo_crianca === 'Membro' && child.id_membro) {
+            const childMemberObj = membrosIgreja.find(m => m.id === child.id_membro);
+            if (childMemberObj && childMemberObj.email) {
+              email = childMemberObj.email;
+            }
+          }
+
+          // 2. If no email, check if parent matches a member in the church
+          if (!email && child.nome_responsavel) {
+            const parentMemberObj = membrosIgreja.find(m => m.nome?.toLowerCase() === child.nome_responsavel.toLowerCase());
+            if (parentMemberObj && parentMemberObj.email) {
+              email = parentMemberObj.email;
+              parentName = parentMemberObj.nome;
+            }
+          }
+
+          if (email) {
+            emailsToSend.push({ email, childName, parentName });
+          }
+        }
+
+        if (emailsToSend.length > 0 && selectedIgreja?.id) {
+          fetch('/api/kids/comunicado-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              emails: emailsToSend,
+              salaName,
+              comunicadoTipo,
+              comunicadoDescricao,
+              arquivos: comunicadoArquivos,
+              id_igreja: selectedIgreja.id
+            })
+          }).then(res => res.json())
+            .then(data => {
+              if (data.success) {
+                console.log('Notificações de comunicado enviadas por e-mail com sucesso!');
+              } else {
+                console.warn('Erro ao enviar notificações de comunicado por e-mail:', data.message);
+              }
+            }).catch(e => {
+              console.error('Falha de rede ao disparar notificações de comunicado por e-mail:', e);
+            });
+        }
+      } catch (mailErr) {
+        console.error('Erro na preparação do envio de e-mails do comunicado:', mailErr);
+      }
+
       showNotification('Comunicado criado com sucesso!', 'success');
       
       // Clear form states
@@ -538,7 +602,7 @@ export default function KidsModule() {
       // 1. Load Membros list for selectors
       const { data: members, error: memError } = await supabase
         .from('membros')
-        .select('id, nome, categoria, foto_url, data_nascimento, sexo, telefone')
+        .select('id, nome, categoria, foto_url, data_nascimento, sexo, telefone, email')
         .eq('id_igreja', selectedIgreja.id)
         .order('nome', { ascending: true });
 
@@ -1663,11 +1727,9 @@ export default function KidsModule() {
 
   // Generate QR code data
   const getQrCodeUrl = () => {
-    if (!activeSalaObj) return '';
-    const churchName = selectedIgreja?.nome || 'Igreja';
-    const associatedTurma = turmas.find(t => t.id === activeSalaObj.id_turma);
-    const qrText = `SALA_KIDS|Igreja: ${churchName}|Sala: ${activeSalaObj.nome}|Turma: ${associatedTurma?.nome || 'Não definida'}|Idades: ${activeSalaObj.idade_minima}-${activeSalaObj.idade_maxima} anos|Capacidade: ${activeSalaObj.capacidade}|Status: ${activeSalaObj.status}`;
-    return `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(qrText)}&color=0f172a&bgcolor=ffffff`;
+    if (!activeSalaObj || !selectedIgreja) return '';
+    const registerUrl = `${window.location.origin}/p/${selectedIgreja.slug}/kids/cadastro?sala=${activeSalaObj.id}`;
+    return `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(registerUrl)}&color=0f172a&bgcolor=ffffff`;
   };
 
   if (!canAccessPainel && !canAccessTurmas && !canAccessSalas) {
@@ -1856,14 +1918,26 @@ export default function KidsModule() {
                 </div>
 
                 {/* QR-CODE Container */}
-                <div className="bg-white dark:bg-slate-900 p-4 rounded-3xl shadow-lg border border-slate-100 dark:border-slate-800/80 flex flex-col items-center justify-center gap-3">
-                  <div className="relative w-44 h-44 bg-white rounded-2xl overflow-hidden shadow-inner flex items-center justify-center">
+                <div className="bg-white dark:bg-slate-900 p-4 rounded-3xl shadow-lg border border-slate-100 dark:border-slate-800/80 flex flex-col items-center justify-center gap-2 max-w-[200px]">
+                  <div className="relative w-40 h-40 bg-white rounded-2xl overflow-hidden shadow-inner flex items-center justify-center border border-slate-100">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={getQrCodeUrl()} alt="QR-CODE Sala Aberta" className="w-full h-full object-contain" />
                   </div>
-                  <span className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest flex items-center gap-1">
-                    <QrCode size={12} /> Scan para Check-in
+                  <span className="text-[9px] text-slate-450 dark:text-slate-500 font-black uppercase tracking-widest flex items-center gap-1">
+                    <QrCode size={11} /> QRCode de Cadastro
                   </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!activeSalaObj || !selectedIgreja) return;
+                      const registerUrl = `${window.location.origin}/p/${selectedIgreja.slug}/kids/cadastro?sala=${activeSalaObj.id}`;
+                      navigator.clipboard.writeText(registerUrl);
+                      showNotification('Link público de cadastro copiado!', 'success');
+                    }}
+                    className="text-[9px] font-black uppercase tracking-widest text-amber-500 hover:text-amber-600 transition-colors bg-amber-500/10 py-1 px-2.5 rounded-lg border border-amber-500/15"
+                  >
+                    Copiar Link
+                  </button>
                 </div>
               </div>
 
@@ -2749,15 +2823,6 @@ export default function KidsModule() {
                                       title="Editar Check-in"
                                     >
                                       <Edit3 size={14} />
-                                    </button>
-
-                                    {/* Checkout QR Code */}
-                                    <button 
-                                      onClick={() => setSelectedChildForQr(c)}
-                                      className="p-2 bg-amber-500/5 hover:bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 rounded-xl transition-all"
-                                      title="QR Code de Checkout"
-                                    >
-                                      <QrCode size={14} />
                                     </button>
 
                                     {/* Public Page QR Code & Link */}
