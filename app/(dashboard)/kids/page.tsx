@@ -8,7 +8,7 @@ import {
   Baby, Users, DoorOpen, Plus, Trash2, Calendar, Edit3, Check, X, 
   UploadCloud, ArrowRight, UserCheck, Smile, HelpCircle, QrCode, AlertCircle,
   Activity, Heart, ShieldAlert, Phone, User, Info, FileText, Printer, Clock,
-  MessageSquare, Paperclip, Megaphone
+  MessageSquare, Paperclip, Megaphone, Globe, ExternalLink
 } from 'lucide-react';
 
 interface TurmaMembro {
@@ -155,6 +155,14 @@ export default function KidsModule() {
   // Badges and QR code previews for children in room
   const [selectedChildForBadge, setSelectedChildForBadge] = useState<SalaCrianca | null>(null);
   const [selectedChildForQr, setSelectedChildForQr] = useState<SalaCrianca | null>(null);
+  const [selectedChildForPublicQr, setSelectedChildForPublicQr] = useState<SalaCrianca | null>(null);
+  const [publicUrlHost, setPublicUrlHost] = useState<string>('');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setPublicUrlHost(window.location.origin);
+    }
+  }, []);
 
   // Editing check-in state
   const [editingCheckin, setEditingCheckin] = useState<SalaCrianca | null>(null);
@@ -2752,6 +2760,16 @@ export default function KidsModule() {
                                       <QrCode size={14} />
                                     </button>
 
+                                    {/* Public Page QR Code & Link */}
+                                    <button 
+                                      onClick={() => setSelectedChildForPublicQr(c)}
+                                      className="p-2 bg-emerald-500/5 hover:bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-xl transition-all flex items-center gap-1 font-black uppercase text-[9px] tracking-wider"
+                                      title="Página Pública"
+                                    >
+                                      <Globe size={14} />
+                                      Público
+                                    </button>
+
                                     {/* Print Label Badge */}
                                     <button 
                                       onClick={() => setSelectedChildForBadge(c)}
@@ -4213,6 +4231,84 @@ export default function KidsModule() {
           </div>
         </div>
       )}
+
+      {/* Public Page QR Code Modal */}
+      {selectedChildForPublicQr && (() => {
+        const publicPageUrl = `${publicUrlHost}/p/kids/${selectedChildForPublicQr.id}`;
+        const displayNome = selectedChildForPublicQr.tipo_crianca === 'Membro' 
+          ? (membrosIgreja.find(m => m.id === selectedChildForPublicQr.id_membro)?.nome || 'Membro não encontrado')
+          : (selectedChildForPublicQr.nome_visitante || 'Visitante');
+
+        return (
+          <div className="fixed inset-0 bg-slate-900/65 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
+            <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-150 dark:border-slate-800 shadow-2xl w-full max-w-md overflow-hidden animate-scale-in">
+              <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-950/20">
+                <h3 className="text-md font-black uppercase tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
+                  <Globe size={18} className="text-emerald-500" />
+                  Página Pública da Criança
+                </h3>
+                <button 
+                  onClick={() => setSelectedChildForPublicQr(null)}
+                  className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl transition-all"
+                >
+                  <X size={18} className="text-slate-500" />
+                </button>
+              </div>
+
+              <div className="p-8 text-center space-y-6">
+                <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">
+                  Criança: <span className="text-slate-900 dark:text-white font-black">{displayNome}</span>
+                </p>
+
+                <div className="inline-block p-4 bg-white rounded-3xl border border-slate-100 shadow-sm">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img 
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(publicPageUrl)}`} 
+                    alt="Public Page QR Code" 
+                    className="w-48 h-48 mx-auto" 
+                  />
+                </div>
+
+                <div className="text-xs text-slate-500 dark:text-slate-400 space-y-2 text-left p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-100 dark:border-slate-850">
+                  <p className="font-black text-[9px] uppercase tracking-wider text-slate-400">Formação da URL Pública:</p>
+                  <p className="font-mono text-[10px] break-all bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-slate-100 dark:border-slate-800 text-slate-800 dark:text-slate-200">
+                    {publicPageUrl}
+                  </p>
+                </div>
+
+                <div className="flex gap-3">
+                  <button 
+                    onClick={() => {
+                      navigator.clipboard.writeText(publicPageUrl);
+                      showNotification('Link da página pública copiado!', 'success');
+                    }}
+                    className="flex-1 py-3 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-md cursor-pointer"
+                  >
+                    Copiar Link
+                  </button>
+
+                  <a 
+                    href={publicPageUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-250 text-xs font-black uppercase tracking-wider rounded-xl text-center transition-all inline-flex items-center justify-center gap-1 cursor-pointer"
+                  >
+                    <ExternalLink size={12} />
+                    Abrir Link
+                  </a>
+                </div>
+
+                <button 
+                  onClick={() => setSelectedChildForPublicQr(null)}
+                  className="w-full py-3 border border-slate-200 dark:border-slate-800 text-slate-650 dark:text-slate-300 text-xs font-black uppercase tracking-wider rounded-xl transition-all hover:bg-slate-50"
+                >
+                  Fechar
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* 4. PRINT BADGE PREVIEW MODAL */}
       {selectedChildForBadge && (() => {
