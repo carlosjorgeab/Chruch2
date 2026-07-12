@@ -2458,20 +2458,6 @@ export default function FinanceiroPage() {
                       )}
                     </div>
 
-                    {/* Centro de Custo select filter */}
-                    <div>
-                      <select
-                        value={filterCentroCusto}
-                        onChange={(e) => setFilterCentroCusto(e.target.value)}
-                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-white outline-none focus:border-amber-500 transition-colors font-semibold h-[38px]"
-                      >
-                        <option value="">Centro de Custo: Todos</option>
-                        {dbCentrosCusto.map(cc => (
-                          <option key={cc.id} value={cc.id}>Centro: {cc.nome} ({cc.sigla})</option>
-                        ))}
-                      </select>
-                    </div>
-
                     {/* Data Vencimento combo */}
                     <div className="space-y-1">
                       <div className="flex items-center gap-1">
@@ -2589,6 +2575,20 @@ export default function FinanceiroPage() {
                           />
                         </div>
                       )}
+                    </div>
+
+                    {/* Centro de Custo select filter */}
+                    <div>
+                      <select
+                        value={filterCentroCusto}
+                        onChange={(e) => setFilterCentroCusto(e.target.value)}
+                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-white outline-none focus:border-amber-500 transition-colors font-semibold h-[38px]"
+                      >
+                        <option value="">Centro de Custo: Todos</option>
+                        {dbCentrosCusto.map(cc => (
+                          <option key={cc.id} value={cc.id}>Centro: {cc.nome} ({cc.sigla})</option>
+                        ))}
+                      </select>
                     </div>
                   </div>
 
@@ -2709,11 +2709,11 @@ export default function FinanceiroPage() {
                       </div>
                     )}
 
-                    <div className="overflow-x-auto md:overflow-x-visible">
+                    <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse md:min-w-[800px] block md:table">
                       <thead className="hidden md:table-header-group">
                         <tr className="bg-slate-50/20 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800 text-slate-450 text-[10px] font-black uppercase tracking-widest">
-                          <th className="px-6 py-2.5 w-12 text-center">
+                          <th className="px-3 py-2.5 w-10 text-center">
                             <input
                               type="checkbox"
                               onChange={(e) => {
@@ -2730,14 +2730,14 @@ export default function FinanceiroPage() {
                               title="Selecionar todos desta página"
                             />
                           </th>
-                          <th className="px-6 py-2.5">Lançamento</th>
-                          <th className="px-6 py-2.5 md:w-36 min-w-[145px]">Vencimento</th>
-                          <th className="px-6 py-2.5">Categoria</th>
-                          <th className="px-6 py-2.5">Cliente / Fornecedor / Canal</th>
-                          <th className="px-6 py-2.5">Data Pagamento</th>
-                          <th className="px-6 py-2.5">Valor</th>
-                          <th className="px-6 py-2.5">Anexos</th>
-                          <th className="px-6 py-2.5 text-right">Ações</th>
+                          <th className="px-3 py-2.5">Lançamento</th>
+                          <th className="px-3 py-2.5 w-28 min-w-[100px]">Vencimento</th>
+                          <th className="px-3 py-2.5">Categoria</th>
+                          <th className="px-3 py-2.5">Cliente / Fornecedor / Canal</th>
+                          <th className="px-3 py-2.5">Data Pagamento</th>
+                          <th className="px-3 py-2.5">Valor</th>
+                          <th className="px-3 py-2.5">Anexos</th>
+                          <th className="px-3 py-2.5 text-right">Ações</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 dark:divide-slate-850 text-slate-700 dark:text-slate-355 font-medium block md:table-row-group">
@@ -2747,7 +2747,7 @@ export default function FinanceiroPage() {
 
                           return (
                             <tr key={t.id} className="block md:table-row hover:bg-slate-50/30 dark:hover:bg-slate-950/5 transition-all p-4 md:p-0 space-y-2 md:space-y-0 border-b border-slate-100 dark:border-slate-850 last:border-0">
-                              <td className="block md:table-cell px-6 py-1.5 md:py-2 md:w-12 text-center">
+                              <td className="block md:table-cell px-3 py-1.5 md:py-2 md:w-10 text-center">
                                 <div className="flex md:block items-center justify-between md:justify-center">
                                   <span className="inline-block md:hidden text-[9px] text-slate-400 font-black uppercase tracking-wider font-bold">Selecionar:</span>
                                   <input
@@ -2764,23 +2764,14 @@ export default function FinanceiroPage() {
                                   />
                                 </div>
                               </td>
-                              <td className="block md:table-cell px-6 py-2 md:py-2">
-                                <div className="flex items-center gap-3">
-                                  <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 bg-transparent ${
-                                    t.tipo === 'Entrada'
-                                      ? 'text-blue-600 dark:text-blue-450'
-                                      : 'text-red-500'
-                                  }`}>
-                                    <DollarSign size={16} />
-                                  </div>
-                                  <div className="flex flex-col">
-                                    <span className="font-bold text-slate-900 dark:text-white text-sm">{t.descricao}</span>
-                                    <span className="text-[10px] text-slate-400 font-normal">Doc: {t.data ? new Date(t.data + 'T00:00:00').toLocaleDateString('pt-BR') : '-'}</span>
-                                  </div>
+                              <td className="block md:table-cell px-3 py-2 md:py-2">
+                                <div className="flex flex-col w-full">
+                                  <span className="font-bold text-slate-900 dark:text-white text-sm">{t.descricao}</span>
+                                  <span className="text-[10px] text-slate-400 font-normal">Doc: {t.data ? new Date(t.data + 'T00:00:00').toLocaleDateString('pt-BR') : '-'}</span>
                                 </div>
                               </td>
 
-                              <td className="block md:table-cell px-6 py-1.5 md:py-2">
+                              <td className="block md:table-cell px-3 py-1.5 md:py-2">
                                 <div className="flex md:block items-center justify-between md:justify-start">
                                   <span className="inline-block md:hidden text-[9px] text-slate-400 font-black uppercase tracking-wider">Vencimento:</span>
                                   {t.data_vencimento ? (
@@ -2791,7 +2782,7 @@ export default function FinanceiroPage() {
                                 </div>
                               </td>
 
-                              <td className="block md:table-cell px-6 py-1.5 md:py-2">
+                              <td className="block md:table-cell px-3 py-1.5 md:py-2">
                                 <div className="flex md:block items-center justify-between md:justify-start">
                                   <span className="inline-block md:hidden text-[9px] text-slate-400 font-black uppercase tracking-wider">Categoria:</span>
                                   <span className={`text-[10px] font-black uppercase tracking-widest bg-transparent ${
@@ -2804,7 +2795,7 @@ export default function FinanceiroPage() {
                                 </div>
                               </td>
 
-                              <td className="block md:table-cell px-6 py-1.5 md:py-2">
+                              <td className="block md:table-cell px-3 py-1.5 md:py-2">
                                 <div className="flex md:block items-center justify-between md:justify-start">
                                   <span className="inline-block md:hidden text-[9px] text-slate-400 font-black uppercase tracking-wider">Origem/Destino:</span>
                                   {associatedForn ? (
@@ -2815,7 +2806,7 @@ export default function FinanceiroPage() {
                                 </div>
                               </td>
 
-                              <td className="block md:table-cell px-6 py-1.5 md:py-2">
+                              <td className="block md:table-cell px-3 py-1.5 md:py-2">
                                 <div className="flex md:block items-center justify-between md:justify-start">
                                   <span className="inline-block md:hidden text-[9px] text-slate-400 font-black uppercase tracking-wider">Pagamento:</span>
                                   {t.data_pagamento ? (
@@ -2826,7 +2817,7 @@ export default function FinanceiroPage() {
                                 </div>
                               </td>
 
-                              <td className="block md:table-cell px-6 py-1.5 md:py-2">
+                              <td className="block md:table-cell px-3 py-1.5 md:py-2">
                                 <div className="flex md:block items-center justify-between md:justify-start">
                                   <span className="inline-block md:hidden text-[9px] text-slate-400 font-black uppercase tracking-wider">Valor:</span>
                                   <span className={`font-black text-sm whitespace-nowrap ${
@@ -2837,7 +2828,7 @@ export default function FinanceiroPage() {
                                 </div>
                               </td>
 
-                              <td className="block md:table-cell px-6 py-1.5 md:py-2">
+                              <td className="block md:table-cell px-3 py-1.5 md:py-2">
                                 <div className="flex md:block items-center justify-between md:justify-start">
                                   <span className="inline-block md:hidden text-[9px] text-slate-400 font-black uppercase tracking-wider">Anexos:</span>
                                   {t.arquivos_transacao && t.arquivos_transacao.length > 0 ? (
@@ -2856,7 +2847,7 @@ export default function FinanceiroPage() {
                               </td>
 
                               <td 
-                                className="block md:table-cell px-6 py-2.5 md:py-2 text-right border-t md:border-t-0 border-slate-100 dark:border-slate-800 md:bg-transparent -mx-6 md:mx-0 px-6 mt-2 rounded-b-2xl"
+                                className="block md:table-cell px-3 py-2.5 md:py-2 text-right border-t md:border-t-0 border-slate-100 dark:border-slate-800 md:bg-transparent -mx-6 md:mx-0 px-6 mt-2 rounded-b-2xl"
                                 style={{ backgroundColor: 'var(--church-panel)' }}
                               >
                                 <div className="flex justify-between md:justify-end items-center gap-1.5">
