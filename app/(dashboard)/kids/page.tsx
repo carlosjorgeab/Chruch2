@@ -8,7 +8,7 @@ import {
   Baby, Users, DoorOpen, Plus, Trash2, Calendar, Edit3, Check, X, 
   UploadCloud, ArrowRight, UserCheck, Smile, HelpCircle, QrCode, AlertCircle,
   Activity, Heart, ShieldAlert, Phone, User, Info, FileText, Printer, Clock,
-  MessageSquare, Paperclip, Megaphone, Globe, ExternalLink
+  MessageSquare, Paperclip, Megaphone, Globe, ExternalLink, RefreshCw
 } from 'lucide-react';
 
 interface TurmaMembro {
@@ -177,7 +177,9 @@ export default function KidsModule() {
   const [editChildFotoUrl, setEditChildFotoUrl] = useState<string>('');
 
   // Checking out child state
+  const [refreshingActiveSala, setRefreshingActiveSala] = useState<boolean>(false);
   const [checkingOutChild, setCheckingOutChild] = useState<SalaCrianca | null>(null);
+  const [selectedComunicadoForWhatsappShare, setSelectedComunicadoForWhatsappShare] = useState<any | null>(null);
   const [checkoutObservation, setCheckoutObservation] = useState<string>('');
 
   // Print format state: 'A' = Padrão (14 labels), 'Custom' = Personalizada
@@ -534,6 +536,79 @@ export default function KidsModule() {
     } else {
       setComunicadoCriancasIds([]);
     }
+  };
+
+  const handleRefreshActiveSala = async () => {
+    if (!selectedSalaId) return;
+    setRefreshingActiveSala(true);
+    try {
+      await Promise.all([
+        loadAllData(),
+        loadComunicados(selectedSalaId),
+        loadSalaMembros(selectedSalaId)
+      ]);
+      showNotification('Todos os dados da sala, check-ins, comunicados e equipes foram atualizados!', 'success');
+    } catch (err) {
+      console.error('Erro ao atualizar dados da sala:', err);
+      showNotification('Erro ao atualizar dados da sala.', 'error');
+    } finally {
+      setRefreshingActiveSala(false);
+    }
+  };
+
+  const sendWhatsAppMessage = (phone: string, text: string) => {
+    if (!phone) {
+      showNotification('Telefone não cadastrado para este responsável.', 'error');
+      return;
+    }
+    let cleanPhone = phone.replace(/\D/g, '');
+    if (cleanPhone.length >= 10 && !cleanPhone.startsWith('55')) {
+      cleanPhone = '55' + cleanPhone;
+    }
+    const url = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(text)}`;
+    window.open(url, '_blank');
+  };
+
+  const handleSendWhatsAppCheckin = (child: SalaCrianca) => {
+    const salaName = activeSalaObj ? activeSalaObj.nome : 'Sala Kids';
+    const childName = child.tipo_crianca === 'Membro'
+      ? (membrosIgreja.find(m => m.id === child.id_membro)?.nome || 'Criança')
+      : (child.nome_visitante || 'Criança');
+    const publicUrl = typeof window !== 'undefined' ? `${window.location.origin}/p/kids/${child.id}` : '';
+
+    const text = `Olá ${child.nome_responsavel || 'Responsável'}! Informamos que o check-in de *${childName}* foi realizado com sucesso na sala *${salaName}*. \n\nVocê pode acompanhar o status em tempo real, ver fotos e os comunicados clicando no link abaixo:\n🔗 ${publicUrl}\n\nDeus abençoe!`;
+    sendWhatsAppMessage(child.telefone_responsavel, text);
+  };
+
+  const handleSendWhatsAppAlert = (child: SalaCrianca) => {
+    const salaName = activeSalaObj ? activeSalaObj.nome : 'Sala Kids';
+    const childName = child.tipo_crianca === 'Membro'
+      ? (membrosIgreja.find(m => m.id === child.id_membro)?.nome || 'Criança')
+      : (child.nome_visitante || 'Criança');
+
+    const text = `⚠️ *Chamado de Responsável - Ministério Infantil* ⚠️\n\nOlá ${child.nome_responsavel || 'Responsável'}, precisamos de sua presença na sala *${salaName}* referente a(o) *${childName}*. \n\nPor favor, compareça à sala infantil o quanto antes. Obrigado pela colaboração!`;
+    sendWhatsAppMessage(child.telefone_responsavel, text);
+  };
+
+  const handleSendWhatsAppCheckout = (child: SalaCrianca) => {
+    const salaName = activeSalaObj ? activeSalaObj.nome : 'Sala Kids';
+    const childName = child.tipo_crianca === 'Membro'
+      ? (membrosIgreja.find(m => m.id === child.id_membro)?.nome || 'Criança')
+      : (child.nome_visitante || 'Criança');
+
+    const text = `Olá ${child.nome_responsavel || 'Responsável'}! O check-out de *${childName}* foi concluído na sala *${salaName}* com segurança.\n\nAgradecemos a confiança e desejamos uma excelente semana!`;
+    sendWhatsAppMessage(child.telefone_responsavel, text);
+  };
+
+  const handleSendWhatsAppComunicado = (child: SalaCrianca, comunicado: any) => {
+    const salaName = activeSalaObj ? activeSalaObj.nome : 'Sala Kids';
+    const childName = child.tipo_crianca === 'Membro'
+      ? (membrosIgreja.find(m => m.id === child.id_membro)?.nome || 'Criança')
+      : (child.nome_visitante || 'Criança');
+    const publicUrl = typeof window !== 'undefined' ? `${window.location.origin}/p/kids/${child.id}` : '';
+
+    const text = `📢 *Novo Comunicado - Ministério Infantil (Sala: ${salaName})* 📢\n\nOlá ${child.nome_responsavel || 'Responsável'}, temos um novo comunicado importante referente a(o) *${childName}*:\n\n*Tipo:* ${comunicado.tipo}\n*Detalhes:* ${comunicado.descricao}\n\nVocê pode ver todos os anexos e acompanhar a programação pelo link abaixo:\n🔗 ${publicUrl}\n\nDeus abençoe!`;
+    sendWhatsAppMessage(child.telefone_responsavel, text);
   };
 
   useEffect(() => {
@@ -1873,12 +1948,22 @@ export default function KidsModule() {
                       await saveSalasToDb(updated);
                       showNotification(`Status da sala alterado para ${newStatus}.`, 'success');
                     }}
-                    className="p-1.5 px-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                    className="p-1.5 px-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-amber-500 mr-1"
                   >
                     <option value="Aberto">🟢 Aberto</option>
                     <option value="Fechado">🔴 Fechado</option>
                     <option value="Encerrado">🔒 Encerrado</option>
                   </select>
+
+                  <button
+                    onClick={handleRefreshActiveSala}
+                    disabled={refreshingActiveSala}
+                    className="p-1.5 px-3 bg-amber-500 hover:bg-amber-600 text-white disabled:opacity-50 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                    title="Atualizar dados da sala"
+                  >
+                    <RefreshCw size={12} className={refreshingActiveSala ? 'animate-spin' : ''} />
+                    {refreshingActiveSala ? 'Atualizando...' : 'Atualizar Sala'}
+                  </button>
                 </div>
               </div>
 
@@ -2844,6 +2929,36 @@ export default function KidsModule() {
                                       <Printer size={14} />
                                       Etiqueta
                                     </button>
+
+                                    {/* WhatsApp Actions */}
+                                    <button 
+                                      onClick={() => handleSendWhatsAppCheckin(c)}
+                                      className="p-2 bg-emerald-500/5 hover:bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-xl transition-all flex items-center gap-1 font-black uppercase text-[9px] tracking-wider"
+                                      title="Enviar link de acompanhamento via WhatsApp"
+                                    >
+                                      <MessageSquare size={14} className="text-emerald-500" />
+                                      WhatsApp
+                                    </button>
+
+                                    {c.status !== 'Saída' ? (
+                                      <button 
+                                        onClick={() => handleSendWhatsAppAlert(c)}
+                                        className="p-2 bg-amber-500/5 hover:bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 rounded-xl transition-all flex items-center gap-1 font-black uppercase text-[9px] tracking-wider"
+                                        title="Chamar responsável via WhatsApp"
+                                      >
+                                        <Phone size={14} className="text-amber-500" />
+                                        Chamar
+                                      </button>
+                                    ) : (
+                                      <button 
+                                        onClick={() => handleSendWhatsAppCheckout(c)}
+                                        className="p-2 bg-rose-500/5 hover:bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 rounded-xl transition-all flex items-center gap-1 font-black uppercase text-[9px] tracking-wider"
+                                        title="Enviar comprovante de saída via WhatsApp"
+                                      >
+                                        <MessageSquare size={14} className="text-rose-500" />
+                                        Comprovante
+                                      </button>
+                                    )}
                                   </div>
                                 </td>
 
@@ -2973,6 +3088,17 @@ export default function KidsModule() {
                                   </div>
                                 </div>
                               )}
+
+                              {/* WhatsApp Share Action */}
+                              <div className="pt-2 flex justify-end">
+                                <button
+                                  onClick={() => setSelectedComunicadoForWhatsappShare(comunicado)}
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 rounded-lg text-[10px] font-black uppercase tracking-wider transition cursor-pointer"
+                                >
+                                  <MessageSquare size={12} className="text-emerald-500" />
+                                  Disparar no WhatsApp
+                                </button>
+                              </div>
                             </div>
                           );
                         })}
@@ -5188,6 +5314,121 @@ export default function KidsModule() {
           </div>
         </div>
       )}
+
+      {/* 3. WHATSAPP BROADCAST MODAL */}
+      {selectedComunicadoForWhatsappShare && (() => {
+        let ids: string[] = [];
+        try {
+          ids = typeof selectedComunicadoForWhatsappShare.criancas_ids === 'string'
+            ? JSON.parse(selectedComunicadoForWhatsappShare.criancas_ids)
+            : (selectedComunicadoForWhatsappShare.criancas_ids || []);
+        } catch {
+          ids = selectedComunicadoForWhatsappShare.criancas_ids || [];
+        }
+
+        const kidsToNotify = ids.includes('all')
+          ? childrenInActiveSala
+          : childrenInActiveSala.filter(c => ids.includes(c.id));
+
+        return (
+          <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md flex items-center justify-center z-[60] p-4 animate-fade-in">
+            <div className="bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 shadow-2xl space-y-6 w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col animate-scale-in">
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4 flex-shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-emerald-500/10 text-emerald-500 rounded-2xl">
+                    <MessageSquare size={24} className="text-emerald-500" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-black uppercase tracking-tight text-slate-900 dark:text-white">
+                      Disparar Comunicado via WhatsApp
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                      Compartilhe este comunicado com os pais/responsáveis das crianças selecionadas.
+                    </p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setSelectedComunicadoForWhatsappShare(null)}
+                  className="p-2.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-all cursor-pointer text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                  title="Fechar"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Message Preview */}
+              <div className="p-4 bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500/20 rounded-2xl flex-shrink-0 space-y-2">
+                <span className="text-[9px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-950 px-2 py-0.5 rounded-full">
+                  Prévia da Mensagem (padrão)
+                </span>
+                <p className="text-xs text-slate-700 dark:text-slate-300 italic leading-relaxed whitespace-pre-wrap font-medium">
+                  📢 *Novo Comunicado - Ministério Infantil (Sala: {activeSalaObj?.nome})* 📢
+                  {"\n\n"}Olá [Responsável], temos um novo comunicado importante referente a(o) *[Criança]*:
+                  {"\n\n"}*Tipo:* {selectedComunicadoForWhatsappShare.tipo}
+                  {"\n"}*Detalhes:* {selectedComunicadoForWhatsappShare.descricao}
+                  {"\n\n"}Você pode ver todos os anexos e acompanhar a programação pelo link abaixo:
+                  {"\n"}🔗 [Link de Acompanhamento]
+                </p>
+              </div>
+
+              {/* List of parents */}
+              <div className="flex-1 overflow-y-auto pr-1 space-y-3">
+                <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                  Responsáveis a Notificar ({kidsToNotify.length})
+                </h4>
+
+                {kidsToNotify.length === 0 ? (
+                  <p className="text-xs text-slate-450 italic py-4 text-center">Nenhum responsável disponível na lista para esta comunicação.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {kidsToNotify.map((child) => {
+                      const childName = child.tipo_crianca === 'Membro'
+                        ? (membrosIgreja.find(m => m.id === child.id_membro)?.nome || 'Criança')
+                        : (child.nome_visitante || 'Criança');
+
+                      return (
+                        <div key={child.id} className="p-3 bg-slate-50 dark:bg-slate-950/40 rounded-xl border border-slate-100 dark:border-slate-800 flex items-center justify-between gap-4">
+                          <div className="space-y-1">
+                            <p className="text-xs font-black text-slate-900 dark:text-white uppercase">
+                              {childName}
+                            </p>
+                            <p className="text-[10px] text-slate-500 dark:text-slate-400 font-bold">
+                              Pai/Mãe: <span className="text-slate-750 dark:text-slate-200">{child.nome_responsavel}</span>
+                            </p>
+                            <p className="text-[9px] font-mono text-slate-400">
+                              Fone: {child.telefone_responsavel || 'Sem telefone'}
+                            </p>
+                          </div>
+
+                          <button
+                            onClick={() => handleSendWhatsAppComunicado(child, selectedComunicadoForWhatsappShare)}
+                            disabled={!child.telefone_responsavel}
+                            className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-200 dark:disabled:bg-slate-800 text-white disabled:text-slate-450 text-[10px] font-black uppercase tracking-wider rounded-xl shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <MessageSquare size={12} />
+                            Enviar
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="flex justify-end pt-4 border-t border-slate-100 dark:border-slate-800 flex-shrink-0">
+                <button 
+                  onClick={() => setSelectedComunicadoForWhatsappShare(null)}
+                  className="px-6 py-2.5 bg-slate-150 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-800 dark:text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all cursor-pointer"
+                >
+                  Fechar
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
     </div>
   );

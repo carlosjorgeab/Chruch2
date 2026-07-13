@@ -55,6 +55,7 @@ export default function PublicChildOverview() {
   
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Helper to calculate age from birth date
   const getAgeFromBirthDate = (birthDateStr: string): string => {
@@ -84,118 +85,127 @@ export default function PublicChildOverview() {
     return [];
   }
 
-  useEffect(() => {
-    if (!id) return;
-
-    async function loadPublicChildData() {
-      try {
+  const loadPublicChildData = async (isRefresh = false) => {
+    try {
+      if (isRefresh) {
+        setRefreshing(true);
+      } else {
         setLoading(true);
-        setErrorMsg(null);
+      }
+      setErrorMsg(null);
 
-        // 1. Fetch child check-in from kids_sala_criancas
-        const { data: childData, error: errChild } = await supabase
-          .from('kids_sala_criancas')
+      if (!id) return;
+
+      // 1. Fetch child check-in from kids_sala_criancas
+      const { data: childData, error: errChild } = await supabase
+        .from('kids_sala_criancas')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle();
+
+      if (errChild || !childData) {
+        setErrorMsg('Cadastro da criança não encontrado.');
+        setLoading(false);
+        setRefreshing(false);
+        return;
+      }
+
+      setChild(childData);
+
+      // 2. Fetch parent members details if tipo_crianca === 'Membro'
+      if (childData.tipo_crianca === 'Membro' && childData.id_membro) {
+        const { data: memData } = await supabase
+          .from('membros')
           .select('*')
-          .eq('id', id)
+          .eq('id', childData.id_membro)
           .maybeSingle();
+        if (memData) {
+          setMember(memData);
+        }
+      }
 
-        if (errChild || !childData) {
-          setErrorMsg('Cadastro da criança não encontrado.');
+      // 3. Fetch Sala (room) details
+      const { data: salaData } = await supabase
+        .from('kids_salas')
+        .select('*')
+        .eq('id', childData.id_sala)
+        .maybeSingle();
+
+      if (salaData) {
+        if (salaData.status === 'Fechado' || salaData.status === 'Encerrado') {
+          setErrorMsg('Acesso indisponível. A sala correspondente a esta criança está fechada ou encerrada.');
           setLoading(false);
+          setRefreshing(false);
           return;
         }
+        setSala(salaData);
 
-        setChild(childData);
-
-        // 2. Fetch parent members details if tipo_crianca === 'Membro'
-        if (childData.tipo_crianca === 'Membro' && childData.id_membro) {
-          const { data: memData } = await supabase
-            .from('membros')
-            .select('*')
-            .eq('id', childData.id_membro)
-            .maybeSingle();
-          if (memData) {
-            setMember(memData);
-          }
-        }
-
-        // 3. Fetch Sala (room) details
-        const { data: salaData } = await supabase
-          .from('kids_salas')
+        // Fetch Turma (class) details
+        const { data: turmaData } = await supabase
+          .from('kids_turmas')
           .select('*')
-          .eq('id', childData.id_sala)
+          .eq('id', salaData.id_turma)
           .maybeSingle();
+        if (turmaData) {
+          setTurma(turmaData);
 
-        if (salaData) {
-          if (salaData.status === 'Fechado' || salaData.status === 'Encerrado') {
-            setErrorMsg('Acesso indisponível. A sala correspondente a esta criança está fechada ou encerrada.');
-            setLoading(false);
-            return;
-          }
-          setSala(salaData);
-
-          // Fetch Turma (class) details
-          const { data: turmaData } = await supabase
-            .from('kids_turmas')
-            .select('*')
-            .eq('id', salaData.id_turma)
-            .maybeSingle();
-          if (turmaData) {
-            setTurma(turmaData);
-
-            // Fetch Igreja details to style correctly
-            if (turmaData.id_igreja) {
-              const { data: chData } = await supabase
-                .from('igrejas')
-                .select('*')
-                .eq('id', turmaData.id_igreja)
-                .maybeSingle();
-              if (chData) {
-                setIgreja(chData);
-              }
+          // Fetch Igreja details to style correctly
+          if (turmaData.id_igreja) {
+            const { data: chData } = await supabase
+              .from('igrejas')
+              .select('*')
+              .eq('id', turmaData.id_igreja)
+              .maybeSingle();
+            if (chData) {
+              setIgreja(chData);
             }
           }
-
-          // 4. Fetch Room schedule/programming from kids_programacao_sala
-          const { data: progData } = await supabase
-            .from('kids_programacao_sala')
-            .select('*')
-            .eq('id_sala', salaData.id)
-            .order('data_hora', { ascending: true });
-          if (progData) {
-            setProgramacoes(progData);
-          }
-
-          // 5. Fetch communications from kids_comunicados
-          const { data: comsData } = await supabase
-            .from('kids_comunicados')
-            .select('*')
-            .eq('id_sala', salaData.id)
-            .order('created_at', { ascending: false });
-
-          if (comsData) {
-            const unified: Comunicado[] = [];
-
-            comsData.forEach((com: any) => {
-              const targetIds = parseCriancasIds(com.criancas_ids);
-              if (targetIds.includes('all') || targetIds.includes(childData.id)) {
-                unified.push(com);
-              }
-            });
-
-            setComunicados(unified);
-          }
         }
 
-      } catch (err) {
-        console.error('Error loading public child profile:', err);
-        setErrorMsg('Erro inesperado ao carregar dados públicos.');
-      } finally {
-        setLoading(false);
-      }
-    }
+        // 4. Fetch Room schedule/programming from kids_programacao_sala
+        const { data: progData } = await supabase
+          .from('kids_programacao_sala')
+          .select('*')
+          .eq('id_sala', salaData.id)
+          .order('data_hora', { ascending: true });
+        if (progData) {
+          setProgramacoes(progData);
+        }
 
-    loadPublicChildData();
+        // 5. Fetch communications from kids_comunicados
+        const { data: comsData } = await supabase
+          .from('kids_comunicados')
+          .select('*')
+          .eq('id_sala', salaData.id)
+          .order('created_at', { ascending: false });
+
+        if (comsData) {
+          const unified: Comunicado[] = [];
+
+          comsData.forEach((com: any) => {
+            const targetIds = parseCriancasIds(com.criancas_ids);
+            if (targetIds.includes('all') || targetIds.includes(childData.id)) {
+              unified.push(com);
+            }
+          });
+
+          setComunicados(unified);
+        }
+      }
+
+    } catch (err) {
+      console.error('Error loading public child profile:', err);
+      setErrorMsg('Erro inesperado ao carregar dados públicos.');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    if (id) {
+      loadPublicChildData();
+    }
   }, [id]);
 
   if (loading) {
@@ -632,6 +642,18 @@ export default function PublicChildOverview() {
                 })}
               </div>
             )}
+          </div>
+
+          {/* Refresh Page Button */}
+          <div className="flex justify-center pt-2 pb-4">
+            <button
+              onClick={() => loadPublicChildData(true)}
+              disabled={refreshing}
+              className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-bold rounded-2xl text-xs uppercase tracking-widest transition flex items-center gap-2 cursor-pointer shadow-md shadow-indigo-200 dark:shadow-none"
+            >
+              <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+              {refreshing ? 'Atualizando...' : 'Atualizar Página'}
+            </button>
           </div>
 
           {/* Footer watermark */}
