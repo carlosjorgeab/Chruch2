@@ -2827,7 +2827,6 @@ export default function KidsModule() {
                           <tr className="bg-slate-50 dark:bg-slate-950 text-[10px] font-black uppercase tracking-widest text-slate-450 dark:text-slate-500 border-b border-slate-100 dark:border-slate-800">
                             <th className="py-4 px-4">Identificação</th>
                             <th className="py-4 px-4">Responsável</th>
-                            <th className="py-4 px-4">Status</th>
                             <th className="py-4 px-4 text-center">Ações</th>
                             <th className="py-4 px-4 text-right">Check-out</th>
                           </tr>
@@ -2838,9 +2837,9 @@ export default function KidsModule() {
                             let displayPhoto = '';
                             
                             if (c.tipo_crianca === 'Membro') {
-                              const foundMembro = membrosIgreja.find(m => m.id === c.id_membro);
-                              displayNome = foundMembro?.nome || 'Membro não encontrado';
-                              displayPhoto = c.foto_url || foundMembro?.foto_url || '';
+                                const foundMembro = membrosIgreja.find(m => m.id === c.id_membro);
+                                displayNome = foundMembro?.nome || 'Membro não encontrado';
+                                displayPhoto = c.foto_url || foundMembro?.foto_url || '';
                             } else {
                               displayNome = c.nome_visitante || 'Visitante';
                               displayPhoto = c.foto_url || '';
@@ -2887,18 +2886,6 @@ export default function KidsModule() {
                                   <p className="text-[9px] text-slate-400 mt-0.5 font-mono">{c.telefone_responsavel}</p>
                                 </td>
 
-                                <td className="py-3.5 px-4">
-                                  {c.status === 'Saída' ? (
-                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase bg-rose-500/10 text-rose-600 dark:text-rose-400">
-                                      Saída
-                                    </span>
-                                  ) : (
-                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 animate-pulse">
-                                      Ativo
-                                    </span>
-                                  )}
-                                </td>
-
                                 <td className="py-3.5 px-4 text-center">
                                   <div className="flex items-center justify-center gap-2">
                                     {/* Edit check-in */}
@@ -2910,55 +2897,23 @@ export default function KidsModule() {
                                       <Edit3 size={14} />
                                     </button>
 
-                                    {/* Public Page QR Code & Link */}
+                                    {/* Public Page QR Code */}
                                     <button 
                                       onClick={() => setSelectedChildForPublicQr(c)}
-                                      className="p-2 bg-emerald-500/5 hover:bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-xl transition-all flex items-center gap-1 font-black uppercase text-[9px] tracking-wider"
-                                      title="Página Pública"
+                                      className="p-2 bg-emerald-500/5 hover:bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-xl transition-all"
+                                      title="Página Pública (QR Code)"
                                     >
-                                      <Globe size={14} />
-                                      Público
+                                      <QrCode size={14} />
                                     </button>
 
                                     {/* Print Label Badge */}
                                     <button 
                                       onClick={() => setSelectedChildForBadge(c)}
-                                      className="p-2 bg-indigo-500/5 hover:bg-indigo-500/10 border border-indigo-500/20 text-indigo-600 dark:text-indigo-400 rounded-xl transition-all flex items-center gap-1 font-black uppercase text-[9px] tracking-wider"
+                                      className="p-2 bg-indigo-500/5 hover:bg-indigo-500/10 border border-indigo-500/20 text-indigo-600 dark:text-indigo-400 rounded-xl transition-all"
                                       title="Imprimir Etiqueta"
                                     >
                                       <Printer size={14} />
-                                      Etiqueta
                                     </button>
-
-                                    {/* WhatsApp Actions */}
-                                    <button 
-                                      onClick={() => handleSendWhatsAppCheckin(c)}
-                                      className="p-2 bg-emerald-500/5 hover:bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-xl transition-all flex items-center gap-1 font-black uppercase text-[9px] tracking-wider"
-                                      title="Enviar link de acompanhamento via WhatsApp"
-                                    >
-                                      <MessageSquare size={14} className="text-emerald-500" />
-                                      WhatsApp
-                                    </button>
-
-                                    {c.status !== 'Saída' ? (
-                                      <button 
-                                        onClick={() => handleSendWhatsAppAlert(c)}
-                                        className="p-2 bg-amber-500/5 hover:bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 rounded-xl transition-all flex items-center gap-1 font-black uppercase text-[9px] tracking-wider"
-                                        title="Chamar responsável via WhatsApp"
-                                      >
-                                        <Phone size={14} className="text-amber-500" />
-                                        Chamar
-                                      </button>
-                                    ) : (
-                                      <button 
-                                        onClick={() => handleSendWhatsAppCheckout(c)}
-                                        className="p-2 bg-rose-500/5 hover:bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 rounded-xl transition-all flex items-center gap-1 font-black uppercase text-[9px] tracking-wider"
-                                        title="Enviar comprovante de saída via WhatsApp"
-                                      >
-                                        <MessageSquare size={14} className="text-rose-500" />
-                                        Comprovante
-                                      </button>
-                                    )}
                                   </div>
                                 </td>
 
@@ -2975,10 +2930,10 @@ export default function KidsModule() {
                                   ) : (
                                     <button 
                                       onClick={() => handleOpenCheckout(c)}
-                                      className="px-3 py-1.5 bg-rose-500 hover:bg-rose-600 text-white text-[10px] font-black uppercase tracking-wider rounded-xl shadow-sm transition-all"
+                                      className="p-2 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-600 dark:text-rose-400 rounded-xl transition-all inline-flex items-center justify-center"
                                       title="Registrar Check-out"
                                     >
-                                      Check-out
+                                      <DoorOpen size={14} />
                                     </button>
                                   )}
                                 </td>
