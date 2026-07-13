@@ -127,6 +127,11 @@ export default function PublicChildOverview() {
           .maybeSingle();
 
         if (salaData) {
+          if (salaData.status === 'Fechado' || salaData.status === 'Encerrado') {
+            setErrorMsg('Acesso indisponível. A sala correspondente a esta criança está fechada ou encerrada.');
+            setLoading(false);
+            return;
+          }
           setSala(salaData);
 
           // Fetch Turma (class) details
@@ -627,34 +632,6 @@ export default function PublicChildOverview() {
                 })}
               </div>
             )}
-          </div>
-
-          {/* Checkout Block */}
-          <div className="child-panel border rounded-[2.5rem] p-8 shadow-sm space-y-6 flex flex-col items-center text-center">
-            <div className="max-w-md mx-auto space-y-4">
-              <div className="inline-flex p-3 bg-amber-500/10 text-amber-600 rounded-2xl">
-                <Clock size={24} />
-              </div>
-              <h3 className="text-lg font-black uppercase tracking-tight text-slate-900 dark:text-white">
-                Retirada / Checkout de Saída
-              </h3>
-              <p className="text-slate-500 dark:text-slate-400 text-xs leading-relaxed font-semibold">
-                Apresente o QR Code abaixo ao líder do Módulo Kids no momento de retirar a criança da sala para realizar a saída com segurança.
-              </p>
-              
-              <div className="p-4 bg-white dark:bg-slate-950 rounded-3xl border border-slate-150 dark:border-slate-800 shadow-sm inline-block">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(`KIDS_CHECKOUT|${child.id}|${child.nome_responsavel}`)}`}
-                  alt="QR Code de Checkout"
-                  className="w-48 h-48 mx-auto"
-                />
-              </div>
-
-              <div className="text-[10px] text-slate-450 font-black uppercase tracking-widest bg-slate-150/30 dark:bg-slate-800/40 py-2 px-4 rounded-xl">
-                ID da Criança: {child.id.substring(0, 8)}...
-              </div>
-            </div>
           </div>
 
           {/* Footer watermark */}

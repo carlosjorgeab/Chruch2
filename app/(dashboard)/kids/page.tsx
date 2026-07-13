@@ -4190,20 +4190,6 @@ export default function KidsModule() {
                 </div>
               </div>
 
-              {/* QR-CODE of Checkout */}
-              <div className="text-center space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">Código QR de Verificação</label>
-                <div className="inline-block p-4 bg-white dark:bg-white rounded-2xl border border-slate-100 shadow-sm">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img 
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(`KIDS_CHECKOUT|${checkingOutChild.id}|${checkingOutChild.nome_responsavel}`)}`} 
-                    alt="Checkout QR Code" 
-                    className="w-32 h-32" 
-                  />
-                </div>
-                <p className="text-[9px] text-slate-450 font-medium">Escaneie para validar a liberação de segurança</p>
-              </div>
-
               {/* Entry Time Info */}
               <div className="p-4 bg-amber-500/5 rounded-2xl border border-amber-500/10 flex justify-between items-center text-xs font-bold">
                 <span className="text-slate-500">Hora de Entrada (Check-in):</span>

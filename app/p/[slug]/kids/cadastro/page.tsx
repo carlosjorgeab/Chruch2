@@ -13,7 +13,10 @@ import {
   Calendar, 
   Shield, 
   Clock, 
-  Activity 
+  Activity,
+  Copy,
+  ExternalLink,
+  Globe 
 } from 'lucide-react';
 
 export default function PublicKidsRegistration() {
@@ -42,6 +45,8 @@ export default function PublicKidsRegistration() {
   const [autorizaImagem, setAutorizaImagem] = useState(false);
 
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [registeredChildId, setRegisteredChildId] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (!slug) return;
@@ -135,7 +140,7 @@ export default function PublicKidsRegistration() {
       setSubmitting(true);
 
       // Insert new kid check-in / student record as "Visitante"
-      const { error: insertErr } = await supabase
+      const { data: insertedChild, error: insertErr } = await supabase
         .from('kids_sala_criancas')
         .insert({
           id_sala: sala.id,
@@ -149,13 +154,16 @@ export default function PublicKidsRegistration() {
           restricoes_alimentares: restricoesAlimentares.trim() || null,
           observacoes_medicas: observacoesMedicas.trim() || null,
           autoriza_imagem: autorizaImagem
-        });
+        })
+        .select('id')
+        .single();
 
-      if (insertErr) {
+      if (insertErr || !insertedChild) {
         console.error('Database insert error:', insertErr);
         throw new Error('Falha ao salvar o cadastro.');
       }
 
+      setRegisteredChildId(insertedChild.id);
       setSuccess(true);
     } catch (err: any) {
       setValidationError('Erro ao registrar a criança. Por favor, tente novamente.');
@@ -282,6 +290,55 @@ export default function PublicKidsRegistration() {
                   </p>
                 </div>
 
+                {/* Acompanhamento / Follow up Section */}
+                {(() => {
+                  const publicPageUrl = typeof window !== 'undefined' && registeredChildId ? `${window.location.origin}/p/kids/${registeredChildId}` : '';
+                  if (!publicPageUrl) return null;
+                  
+                  return (
+                    <div className="p-6 bg-amber-500/5 dark:bg-amber-500/10 rounded-3xl border border-amber-500/20 text-left space-y-4 max-w-md mx-auto">
+                      <div className="flex items-center gap-2">
+                        <Globe size={18} className="text-amber-500" />
+                        <h3 className="text-xs font-black uppercase tracking-widest text-slate-900 dark:text-white">
+                          Página de Acompanhamento Online
+                        </h3>
+                      </div>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed font-semibold">
+                        Use o link exclusivo abaixo para acompanhar o status da criança em tempo real, visualizar os comunicados, avisos, cardápio e as programações.
+                      </p>
+                      
+                      <div className="font-mono text-[10px] break-all bg-white dark:bg-slate-950 p-3 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-850 dark:text-slate-200">
+                        {publicPageUrl}
+                      </div>
+
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(publicPageUrl);
+                            setCopied(true);
+                            setTimeout(() => setCopied(false), 2000);
+                          }}
+                          className="flex-1 py-2 px-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-white font-bold rounded-lg text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                        >
+                          <Copy size={12} />
+                          {copied ? 'Copiado!' : 'Copiar Link'}
+                        </button>
+
+                        <a
+                          href={publicPageUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex-1 py-2 px-3 register-btn-primary font-bold rounded-lg text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all text-center shadow-sm"
+                        >
+                          <ExternalLink size={12} />
+                          Acessar Página
+                        </a>
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 <div className="pt-4 flex flex-col sm:flex-row gap-3 justify-center">
                   <button
                     onClick={() => {
@@ -292,6 +349,7 @@ export default function PublicKidsRegistration() {
                       setRestricoesAlimentares('');
                       setObservacoesMedicas('');
                       setAutorizaImagem(false);
+                      setRegisteredChildId(null);
                     }}
                     className="px-6 py-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-white font-bold rounded-xl text-xs uppercase tracking-widest transition"
                   >
