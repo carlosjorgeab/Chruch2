@@ -311,7 +311,7 @@ export default function LoginPage() {
             <div className="flex flex-col items-center justify-center">
               <Logo className="w-16 h-16 mb-4" />
               <h1 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight text-center">
-                Church Management
+                Supremme
               </h1>
               <p className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-widest mt-1 text-center">
                 Acesso ao Painel

@@ -904,7 +904,7 @@ export default function PublicChurchOverview() {
           {/* Footer watermark */}
           <footer className="text-center pt-4 pb-8">
             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
-              Powered by Church Management &copy; {new Date().getFullYear()}
+              Powered by Supremme &copy; {new Date().getFullYear()}
             </p>
           </footer>
 

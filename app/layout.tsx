@@ -5,8 +5,8 @@ import { AuthProvider } from '@/context/AuthContext';
 import { LanguageProvider } from '@/context/LanguageContext';
 
 export const metadata: Metadata = {
-  title: 'Church Management',
-  description: 'Church management system',
+  title: 'Supremme',
+  description: 'Supremme Management System',
 };
 
 export default function RootLayout({children}: {children: React.ReactNode}) {

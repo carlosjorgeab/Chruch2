@@ -1,13 +1,23 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Users, UsersRound, BookOpen, ClipboardCheck, Wallet, Settings, LogOut, Shield, Building, Briefcase, Megaphone, Calendar, Ticket, Baby } from 'lucide-react';
+import { LayoutDashboard, Users, UsersRound, BookOpen, ClipboardCheck, Wallet, Settings, LogOut, Shield, Building, Briefcase, Megaphone, Calendar, Ticket, Baby, ChevronLeft } from 'lucide-react';
 import { useIgreja } from '@/context/IgrejaContext';
 import { useAuth } from '@/context/AuthContext';
 import { Logo } from '@/components/Logo';
 import { useLanguage } from '@/context/LanguageContext';
 
-export function Sidebar({ isOpen = false, setIsOpen }: { isOpen?: boolean, setIsOpen?: (v: boolean) => void }) {
+export function Sidebar({ 
+  isOpen = false, 
+  setIsOpen, 
+  isCollapsed = false, 
+  onToggleCollapse 
+}: { 
+  isOpen?: boolean; 
+  setIsOpen?: (v: boolean) => void; 
+  isCollapsed?: boolean; 
+  onToggleCollapse?: () => void; 
+}) {
   const pathname = usePathname();
   const { selectedIgreja } = useIgreja();
   const { logout, hasPermission, user } = useAuth();
@@ -49,7 +59,7 @@ export function Sidebar({ isOpen = false, setIsOpen }: { isOpen?: boolean, setIs
   };
 
   return (
-    <aside className={`h-screen w-64 fixed left-0 top-0 pt-16 z-50 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-white flex flex-col justify-between py-6 border-r border-slate-200 dark:border-slate-800 font-['Inter'] text-sm font-medium transition-all duration-300 overflow-y-auto ${isOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}>
+    <aside className={`h-screen w-64 fixed left-0 top-0 pt-16 z-50 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-white flex flex-col justify-between py-6 border-r border-slate-200 dark:border-slate-800 font-['Inter'] text-sm font-medium transition-all duration-300 overflow-y-auto ${isOpen ? 'translate-x-0' : '-translate-x-full'} ${isCollapsed ? 'md:-translate-x-full' : 'md:translate-x-0'}`}>
       <div className="px-4 space-y-2">
         <div className="mb-8 px-2 flex items-center gap-3 justify-between">
           <div className="h-12 w-12 rounded-xl bg-[#E4A232] flex items-center justify-end text-white flex-shrink-0 shadow-md overflow-hidden">
@@ -113,7 +123,17 @@ export function Sidebar({ isOpen = false, setIsOpen }: { isOpen?: boolean, setIs
         </nav>
       </div>
       
-      <div className="px-4 space-y-1 mt-6">
+      <div className="px-4 space-y-1 mt-6 border-t border-slate-200/50 dark:border-slate-800/50 pt-4">
+        {onToggleCollapse && (
+          <button 
+            type="button"
+            onClick={onToggleCollapse} 
+            className="w-full flex items-center gap-3 px-4 py-3 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5 rounded-lg cursor-pointer transition-all text-sm font-bold"
+          >
+            <ChevronLeft size={20} />
+            <span>Recolher Menu</span>
+          </button>
+        )}
         <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 text-slate-500 dark:text-slate-400 hover:text-red-650 dark:hover:text-white hover:bg-red-50/50 dark:hover:bg-white/5 rounded-lg cursor-pointer transition-all text-sm font-bold">
           <LogOut size={20} />
           <span>{t('logout')}</span>

@@ -12,6 +12,7 @@ import { ConfirmProvider } from '@/context/ConfirmContext';
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const { user, loading, hasPermission } = useAuth();
   const { selectedIgreja, loading: depLoading } = useIgreja();
   const router = useRouter();
@@ -28,9 +29,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       document.documentElement.classList.remove('dark');
     }
 
+    const savedCollapsed = localStorage.getItem('sidebar_collapsed') === 'true';
+    setIsSidebarCollapsed(savedCollapsed);
+
     const timer = setTimeout(() => setMounted(true), 0);
     return () => clearTimeout(timer);
   }, []);
+
+  const toggleSidebarCollapse = () => {
+    const newVal = !isSidebarCollapsed;
+    setIsSidebarCollapsed(newVal);
+    localStorage.setItem('sidebar_collapsed', String(newVal));
+  };
 
   if (!mounted || loading || depLoading) {
     return <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900">Carregando...</div>;
@@ -70,9 +80,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   if (baseRoute !== '/' && !hasPermission(baseRoute)) {
     return (
       <>
-        <Sidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />
+        <Sidebar 
+          isOpen={isSidebarOpen} 
+          setIsOpen={setIsSidebarOpen} 
+          isCollapsed={isSidebarCollapsed} 
+          onToggleCollapse={toggleSidebarCollapse} 
+        />
         <Topbar />
-        <main className="md:ml-64 pt-16 min-h-screen transition-all duration-300 flex items-center justify-center">
+        <main className={`${isSidebarCollapsed ? 'md:ml-0' : 'md:ml-64'} pt-16 min-h-screen transition-all duration-300 flex items-center justify-center`}>
           <div className="text-center p-8 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
             <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Acesso Negado</h2>
             <p className="text-slate-500 dark:text-slate-400">Você não tem permissão para acessar esta página.</p>
@@ -120,7 +135,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         />
       )}
 
-      <Sidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />
+      <Sidebar 
+        isOpen={isSidebarOpen} 
+        setIsOpen={setIsSidebarOpen} 
+        isCollapsed={isSidebarCollapsed} 
+        onToggleCollapse={toggleSidebarCollapse} 
+      />
       <Topbar />
       
       {(() => {
@@ -369,9 +389,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         );
       })()}
 
-      <main className="md:ml-64 pt-16 min-h-screen transition-all duration-300 relative z-10">
+      <main className={`${isSidebarCollapsed ? 'md:ml-0' : 'md:ml-64'} pt-16 min-h-screen transition-all duration-300 relative z-10`}>
         {children}
       </main>
+
+      {/* Floating Menu button to restore sidebar when collapsed (only on desktop) */}
+      {isSidebarCollapsed && (
+        <button
+          type="button"
+          onClick={toggleSidebarCollapse}
+          className="hidden md:flex fixed bottom-5 left-5 z-[55] p-3.5 bg-[#E4A232] text-white rounded-full shadow-lg hover:scale-110 active:scale-95 transition-all duration-200 cursor-pointer border border-white/20"
+          title="Mostrar Menu"
+        >
+          <Menu size={20} />
+        </button>
+      )}
     </ConfirmProvider>
   );
 }

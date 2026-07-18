@@ -26,7 +26,7 @@ export const defaultTranslations: Record<string, Record<string, string>> = {
     "access_denied": "Acesso Negado",
     "no_permission": "Você não tem permissão para acessar esta página.",
     "back_to_login": "Voltar ao Login",
-    "church_management": "Gestão de Igreja",
+    "church_management": "Supremme",
     "select_church": "Selecione uma Igreja",
     "general_configs": "Configurações Gerais"
   },
@@ -57,7 +57,7 @@ export const defaultTranslations: Record<string, Record<string, string>> = {
     "access_denied": "Acceso Denegado",
     "no_permission": "No tienes permiso para acceder a esta página.",
     "back_to_login": "Volver al Login",
-    "church_management": "Gestión de Iglesia",
+    "church_management": "Supremme",
     "select_church": "Seleccione una Iglesia",
     "general_configs": "Configuraciones Generales"
   },
@@ -88,7 +88,7 @@ export const defaultTranslations: Record<string, Record<string, string>> = {
     "access_denied": "Access Denied",
     "no_permission": "You do not have permission to access this page.",
     "back_to_login": "Back to Login",
-    "church_management": "Church Management",
+    "church_management": "Supremme",
     "select_church": "Select a Church",
     "general_configs": "General Settings"
   }

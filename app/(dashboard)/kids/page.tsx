@@ -1437,6 +1437,12 @@ export default function KidsModule() {
     const currentSala = salas.find(s => s.id === selectedSalaId);
     if (!currentSala) return;
 
+    // Only Admin can reopen a room that is closed or ended
+    if ((currentSala.status === 'Fechado' || currentSala.status === 'Encerrado') && !isMasterOrAdmin) {
+      showNotification('Apenas administradores podem reabrir uma sala fechada ou encerrada.', 'error');
+      return;
+    }
+
     // Update status to 'Aberto' inside the DB list
     const updatedSalas = salas.map(s => {
       if (s.id === selectedSalaId) {
@@ -1457,11 +1463,11 @@ export default function KidsModule() {
 
   const handleFecharSala = async () => {
     if (!selectedSalaId) return;
-    if (!confirm('Deseja realmente fechar esta sala? O status passará para "Fechado".')) return;
+    if (!confirm('Deseja realmente encerrar esta sala? O status passará para "Encerrado".')) return;
 
     const updatedSalas = salas.map(s => {
       if (s.id === selectedSalaId) {
-        return { ...s, status: 'Fechado' as const };
+        return { ...s, status: 'Encerrado' as const };
       }
       return s;
     });
@@ -1477,6 +1483,12 @@ export default function KidsModule() {
   };
 
   const handleChangeSalaStatus = async (salaId: string, newStatus: 'Aberto' | 'Fechado' | 'Encerrado') => {
+    const currentSala = salas.find(s => s.id === salaId);
+    if (newStatus === 'Aberto' && currentSala && (currentSala.status === 'Fechado' || currentSala.status === 'Encerrado') && !isMasterOrAdmin) {
+      showNotification('Apenas administradores podem reabrir uma sala fechada ou encerrada.', 'error');
+      return;
+    }
+
     const updatedSalas = salas.map(s => {
       if (s.id === salaId) {
         return { ...s, status: newStatus };
@@ -2011,7 +2023,7 @@ export default function KidsModule() {
                       onClick={handleFecharSala}
                       className="px-5 py-3 bg-rose-500 hover:bg-rose-600 text-white text-xs uppercase tracking-wider font-black rounded-xl shadow-md transition-all"
                     >
-                      Encerrar Atendimento / Fechar Sala
+                      Encerrar Atendimento
                     </button>
                   </div>
                 </div>
@@ -2136,33 +2148,71 @@ export default function KidsModule() {
                             </button>
                           </div>
                         </div>
-                        <div className="max-h-40 overflow-y-auto border border-slate-200 dark:border-slate-800 rounded-xl p-3 bg-slate-50 dark:bg-slate-950 space-y-2">
+                        <div className="max-h-52 overflow-y-auto border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-950">
                           {childrenInActiveSala.length === 0 ? (
-                            <p className="text-xs text-slate-400 text-center font-bold py-2">Nenhuma criança presente na sala ainda.</p>
+                            <p className="text-xs text-slate-400 text-center font-bold py-4">Nenhuma criança presente na sala ainda.</p>
                           ) : (
-                            childrenInActiveSala.map(c => {
-                              const name = c.tipo_crianca === 'Membro' 
-                                ? (membrosIgreja.find(m => m.id === c.id_membro)?.nome || 'Membro')
-                                : (c.nome_visitante || 'Visitante');
-                              const isChecked = comunicadoCriancasIds.includes(c.id);
-                              return (
-                                <label key={c.id} className="flex items-center gap-2 cursor-pointer select-none">
-                                  <input
-                                    type="checkbox"
-                                    checked={isChecked}
-                                    onChange={() => {
-                                      if (isChecked) {
-                                        setComunicadoCriancasIds(comunicadoCriancasIds.filter(id => id !== c.id));
-                                      } else {
-                                        setComunicadoCriancasIds([...comunicadoCriancasIds, c.id]);
-                                      }
-                                    }}
-                                    className="h-4 w-4 rounded text-amber-500 border-slate-300 focus:ring-amber-500"
-                                  />
-                                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300">{name}</span>
-                                </label>
-                              );
-                            })
+                            <table className="w-full text-left border-collapse">
+                              <thead>
+                                <tr className="bg-slate-100 dark:bg-slate-900/50 text-[9px] font-black uppercase tracking-widest text-slate-450 dark:text-slate-500 border-b border-slate-200 dark:border-slate-800">
+                                  <th className="py-2 px-3 w-10 text-center">Sel.</th>
+                                  <th className="py-2 px-3">Criança</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-150 dark:divide-slate-800/40 text-xs font-bold">
+                                {childrenInActiveSala.map(c => {
+                                  const isChecked = comunicadoCriancasIds.includes(c.id);
+                                  
+                                  let displayNome = '';
+                                  let displayPhoto = '';
+                                  
+                                  if (c.tipo_crianca === 'Membro') {
+                                      const foundMembro = membrosIgreja.find(m => m.id === c.id_membro);
+                                      displayNome = foundMembro?.nome || 'Membro';
+                                      displayPhoto = c.foto_url || foundMembro?.foto_url || '';
+                                  } else {
+                                    displayNome = c.nome_visitante || 'Visitante';
+                                    displayPhoto = c.foto_url || '';
+                                  }
+
+                                  return (
+                                    <tr 
+                                      key={c.id} 
+                                      className={`text-slate-850 dark:text-slate-200 hover:bg-slate-100/50 dark:hover:bg-slate-900/10 cursor-pointer transition-all ${isChecked ? 'bg-amber-500/5 dark:bg-amber-500/5' : ''}`}
+                                      onClick={() => {
+                                        if (isChecked) {
+                                          setComunicadoCriancasIds(comunicadoCriancasIds.filter(id => id !== c.id));
+                                        } else {
+                                          setComunicadoCriancasIds([...comunicadoCriancasIds, c.id]);
+                                        }
+                                      }}
+                                    >
+                                      <td className="py-2 px-3 w-10 text-center">
+                                        <input
+                                          type="checkbox"
+                                          checked={isChecked}
+                                          readOnly
+                                          className="h-4 w-4 rounded text-amber-500 border-slate-300 focus:ring-amber-500 cursor-pointer"
+                                        />
+                                      </td>
+                                      <td className="py-2 px-3">
+                                        <div className="flex items-center gap-2">
+                                          <div className="h-7 w-7 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden flex items-center justify-center border border-slate-300 dark:border-slate-700 shrink-0">
+                                            {c.autoriza_imagem && displayPhoto ? (
+                                              // eslint-disable-next-line @next/next/no-img-element
+                                              <img src={displayPhoto} alt={displayNome} className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                                            ) : (
+                                              <Smile size={14} className="text-slate-400" />
+                                            )}
+                                          </div>
+                                          <span className="font-extrabold truncate text-xs text-slate-800 dark:text-slate-250">{displayNome}</span>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
                           )}
                         </div>
                         <p className="text-[9px] text-slate-400 font-bold uppercase mt-1">{comunicadoCriancasIds.length} de {childrenInActiveSala.length} selecionadas</p>
@@ -2174,7 +2224,7 @@ export default function KidsModule() {
                         <select
                           value={comunicadoTipo}
                           onChange={(e) => setComunicadoTipo(e.target.value as any)}
-                          className="w-full mt-1.5 p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-900 dark:text-slate-200 focus:ring-1 focus:ring-amber-500"
+                          className="w-full mt-1.5 p-3 bg-slate-50 dark:bg-slate-955 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-900 dark:text-slate-200 focus:ring-1 focus:ring-amber-500"
                         >
                           <option value="Observação">📝 Observação</option>
                           <option value="Ocorrências">⚠️ Ocorrência</option>
@@ -2182,20 +2232,6 @@ export default function KidsModule() {
                           <option value="Evidências">📸 Evidências / Fotos</option>
                           <option value="Outros">🔔 Outros</option>
                         </select>
-                      </div>
-
-                      {/* Enviar para Responsáveis */}
-                      <div className="flex items-center gap-2 p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200/50 dark:border-slate-850">
-                        <input
-                          type="checkbox"
-                          id="comunicadoEnviarResponsaveis"
-                          checked={comunicadoEnviarResponsaveis}
-                          onChange={(e) => setComunicadoEnviarResponsaveis(e.target.checked)}
-                          className="h-4 w-4 rounded text-amber-500 border-slate-300 focus:ring-amber-500 cursor-pointer"
-                        />
-                        <label htmlFor="comunicadoEnviarResponsaveis" className="text-xs font-bold text-slate-700 dark:text-slate-300 cursor-pointer select-none">
-                          Notificar Responsáveis por WhatsApp/Painel
-                        </label>
                       </div>
 
                       {/* Descrição */}
@@ -3477,6 +3513,10 @@ export default function KidsModule() {
                           <button 
                             onClick={async () => {
                               // Automatically set open status if they click to operate/check-in
+                              if (s.status !== 'Aberto' && (s.status === 'Fechado' || s.status === 'Encerrado') && !isMasterOrAdmin) {
+                                showNotification('Apenas administradores podem reabrir uma sala fechada ou encerrada.', 'error');
+                                return;
+                              }
                               let updatedSalas = [...salas];
                               if (s.status !== 'Aberto') {
                                 updatedSalas = salas.map(item => item.id === s.id ? { ...item, status: 'Aberto' as const } : item);
@@ -3492,7 +3532,7 @@ export default function KidsModule() {
                             <DoorOpen size={14} /> Atendimento (Check-In)
                           </button>
 
-                          <div className="grid grid-cols-3 gap-2">
+                          <div className="grid grid-cols-2 gap-2">
                             {/* Change status to open */}
                             <button 
                               onClick={() => handleChangeSalaStatus(s.id, 'Aberto')}
@@ -3500,14 +3540,6 @@ export default function KidsModule() {
                               className="py-1.5 bg-green-500/5 hover:bg-green-500/10 text-green-600 disabled:opacity-40 disabled:hover:bg-transparent rounded-lg text-[9px] font-black uppercase tracking-wider transition border border-green-500/10 cursor-pointer"
                             >
                               Abrir
-                            </button>
-                            {/* Change status to close */}
-                            <button 
-                              onClick={() => handleChangeSalaStatus(s.id, 'Fechado')}
-                              disabled={s.status === 'Fechado'}
-                              className="py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 disabled:opacity-40 disabled:hover:bg-transparent dark:bg-slate-800 dark:text-slate-400 rounded-lg text-[9px] font-black uppercase tracking-wider transition border border-transparent cursor-pointer"
-                            >
-                              Fechar
                             </button>
                             {/* Change status to end */}
                             <button 

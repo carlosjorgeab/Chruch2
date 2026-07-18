@@ -87,8 +87,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     initConfigs();
 
     // Check local storage for session
-    const storedUser = localStorage.getItem('democracia_user');
-    const storedSession = localStorage.getItem('democracia_session_id');
+    const storedUser = localStorage.getItem('supremme_user');
+    const storedSession = localStorage.getItem('supremme_session_id');
     const storedTheme = localStorage.getItem('theme');
 
     if (storedTheme === 'dark') {
@@ -124,7 +124,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               perfil: data.perfil
             };
             setUser(userData);
-            localStorage.setItem('democracia_user', JSON.stringify(userData));
+            localStorage.setItem('supremme_user', JSON.stringify(userData));
           }
         } catch (err) {
           console.error('Error re-fetching user profile in background:', err);
@@ -312,9 +312,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(userData);
       setSessionId(newSessionId);
       console.log(newSessionId);
-      localStorage.setItem('democracia_user', JSON.stringify(userData));
-      localStorage.setItem('democracia_session_id', newSessionId);
-      console.log('democracia_user');
+      localStorage.setItem('supremme_user', JSON.stringify(userData));
+      localStorage.setItem('supremme_session_id', newSessionId);
+      console.log('supremme_user');
       setLoading(false);
       router.push('/');
       return { error: null };
@@ -327,8 +327,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = () => {
     setUser(null);
     setSessionId(null);
-    localStorage.removeItem('democracia_user');
-    localStorage.removeItem('democracia_session_id');
+    localStorage.removeItem('supremme_user');
+    localStorage.removeItem('supremme_session_id');
     router.push('/login');
   };
 
