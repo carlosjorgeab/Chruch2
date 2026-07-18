@@ -2905,7 +2905,7 @@ export default function KidsModule() {
                                     {/* Edit check-in */}
                                     <button 
                                       onClick={() => handleOpenEditCheckin(c)}
-                                      className="p-2 bg-blue-500/5 hover:bg-blue-500/10 border border-blue-500/20 text-blue-600 dark:text-blue-400 rounded-xl transition-all"
+                                      className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-blue-600 dark:text-blue-400 rounded-lg transition-all"
                                       title="Editar Check-in"
                                     >
                                       <Edit3 size={14} />
@@ -2914,7 +2914,7 @@ export default function KidsModule() {
                                     {/* Public Page QR Code */}
                                     <button 
                                       onClick={() => setSelectedChildForPublicQr(c)}
-                                      className="p-2 bg-emerald-500/5 hover:bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-xl transition-all"
+                                      className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-emerald-600 dark:text-emerald-400 rounded-lg transition-all"
                                       title="Página Pública (QR Code)"
                                     >
                                       <QrCode size={14} />
@@ -2923,7 +2923,7 @@ export default function KidsModule() {
                                     {/* Print Label Badge */}
                                     <button 
                                       onClick={() => setSelectedChildForBadge(c)}
-                                      className="p-2 bg-indigo-500/5 hover:bg-indigo-500/10 border border-indigo-500/20 text-indigo-600 dark:text-indigo-400 rounded-xl transition-all"
+                                      className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-indigo-600 dark:text-indigo-400 rounded-lg transition-all"
                                       title="Imprimir Etiqueta"
                                     >
                                       <Printer size={14} />
@@ -2944,10 +2944,10 @@ export default function KidsModule() {
                                   ) : (
                                     <button 
                                       onClick={() => handleOpenCheckout(c)}
-                                      className="p-2 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-600 dark:text-rose-400 rounded-xl transition-all inline-flex items-center justify-center"
+                                      className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-rose-600 dark:text-rose-400 rounded-lg transition-all inline-flex items-center justify-center"
                                       title="Registrar Check-out"
                                     >
-                                      <DoorOpen size={14} />
+                                      <Check size={14} />
                                     </button>
                                   )}
                                 </td>

@@ -1,4 +1,4 @@
-'use client';
+  'use client';
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter, usePathname } from 'next/navigation';
@@ -307,11 +307,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           document.documentElement.classList.remove('dark');
         }
       }
-
+      
+      console.log(userData);
       setUser(userData);
       setSessionId(newSessionId);
+      console.log(newSessionId);
       localStorage.setItem('democracia_user', JSON.stringify(userData));
       localStorage.setItem('democracia_session_id', newSessionId);
+      console.log('democracia_user');
       setLoading(false);
       router.push('/');
       return { error: null };

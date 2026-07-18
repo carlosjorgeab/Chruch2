@@ -161,6 +161,9 @@ CREATE TABLE IF NOT EXISTS transacoes (
   categoria VARCHAR(50) NOT NULL,
   descricao TEXT NOT NULL,
   valor NUMERIC(15, 2) NOT NULL,
+  juros NUMERIC(15, 2) DEFAULT 0,
+  acrescimos NUMERIC(15, 2) DEFAULT 0,
+  valor_pago NUMERIC(15, 2) DEFAULT 0,
   data DATE NOT NULL,
   membro_contribuinte VARCHAR(255),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL

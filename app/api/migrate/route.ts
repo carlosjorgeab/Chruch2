@@ -94,6 +94,9 @@ export async function GET(req: NextRequest) {
     ALTER TABLE transacoes ADD COLUMN IF NOT EXISTS id_fornecedor UUID;
     ALTER TABLE transacoes ADD COLUMN IF NOT EXISTS data_vencimento DATE;
     ALTER TABLE transacoes ADD COLUMN IF NOT EXISTS data_pagamento DATE;
+    ALTER TABLE transacoes ADD COLUMN IF NOT EXISTS juros NUMERIC(15, 2) DEFAULT 0;
+    ALTER TABLE transacoes ADD COLUMN IF NOT EXISTS acrescimos NUMERIC(15, 2) DEFAULT 0;
+    ALTER TABLE transacoes ADD COLUMN IF NOT EXISTS valor_pago NUMERIC(15, 2) DEFAULT 0;
 
     -- 6. Add col to 'usuarios'
     ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS foto_url TEXT;

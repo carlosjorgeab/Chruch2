@@ -27,6 +27,9 @@ type Transacao = {
   categoria: string;
   descricao: string;
   valor: number;
+  juros?: number;
+  acrescimos?: number;
+  valor_pago?: number;
   data: string;
   membro_contribuinte?: string;
   
@@ -91,7 +94,8 @@ export default function FinanceiroPage() {
   const [reportDateInicio, setReportDateInicio] = useState<string>('');
   const [reportDateFim, setReportDateFim] = useState<string>('');
   const [reportCentroCusto, setReportCentroCusto] = useState<string>('');
-  const [selectedReportType, setSelectedReportType] = useState<'contas_pagar' | 'contas_receber' | 'fluxo_caixa'>('contas_pagar');
+  const [reportConta, setReportConta] = useState<string>('');
+  const [selectedReportType, setSelectedReportType] = useState<'contas_pagar' | 'contas_receber' | 'fluxo_caixa' | 'consolidado'>('contas_pagar');
 
   // States specifically for the Fluxo de Caixa Submodule
   const [fluxoPeriodoOpt, setFluxoPeriodoOpt] = useState<string>('Todo Período');
@@ -128,6 +132,9 @@ export default function FinanceiroPage() {
     categoria: '',
     descricao: '',
     valor: 0,
+    juros: 0,
+    acrescimos: 0,
+    valor_pago: 0,
     data: '',
     membro_contribuinte: '',
     id_forma_pagamento: '',
@@ -296,7 +303,7 @@ export default function FinanceiroPage() {
     return '';
   };
 
-  const handleGenerateFinanceReport = async (type: 'contas_pagar' | 'contas_receber' | 'fluxo_caixa') => {
+  const handleGenerateFinanceReport = async (type: 'contas_pagar' | 'contas_receber' | 'fluxo_caixa' | 'consolidado') => {
     try {
       // 1. Filter transactions by date period boundaries using due date as requested
       let filtered = [...transacoes];
@@ -318,8 +325,13 @@ export default function FinanceiroPage() {
       if (reportCentroCusto) {
         filtered = filtered.filter(t => t.id_centro_custo === reportCentroCusto);
       }
+
+      // Filter by Conta
+      if (reportConta) {
+        filtered = filtered.filter(t => t.id_conta === reportConta);
+      }
       
-      // 2. Filter by type (Contas a Pagar: Débito/Saída, Contas a Receber: Crédito/Entrada, Fluxo Caixa: Todos)
+      // 2. Filter by type (Contas a Pagar: Débito/Saída, Contas a Receber: Crédito/Entrada, Fluxo Caixa/Consolidado: Todos)
       if (type === 'contas_pagar') {
         filtered = filtered.filter(t => t.tipo === 'Saída');
       } else if (type === 'contas_receber') {
@@ -374,8 +386,10 @@ export default function FinanceiroPage() {
         docTitle = 'RELATÓRIO DE CONTAS A PAGAR';
       } else if (type === 'contas_receber') {
         docTitle = 'RELATÓRIO DE CONTAS A RECEBER';
-      } else {
+      } else if (type === 'fluxo_caixa') {
         docTitle = 'RELATÓRIO DE FLUXO DE CAIXA CONSOLIDADO';
+      } else {
+        docTitle = 'RELATÓRIO CONSOLIDADO DE ENTRADAS E SAÍDAS';
       }
 
       const periodStr = `${reportDateInicio ? new Date(reportDateInicio + 'T00:00:00').toLocaleDateString('pt-BR') : 'Início'} à ${reportDateFim ? new Date(reportDateFim + 'T00:00:00').toLocaleDateString('pt-BR') : 'Hoje'}`;
@@ -417,10 +431,24 @@ export default function FinanceiroPage() {
       doc.setFontSize(9);
       doc.text(docTitle, textStartX, 23);
 
+      // Create subtitled string containing the filters if selected
+      let subtitleText = `Gerado em: ${generationDate}  |  Registros: ${filtered.length}`;
+      
+      const selectedCcObj = reportCentroCusto ? dbCentrosCusto.find(cc => cc.id === reportCentroCusto) : null;
+      const selectedContaObj = reportConta ? dbContas.find(c => c.id === reportConta) : null;
+      
+      const headerFilters: string[] = [];
+      if (selectedCcObj) headerFilters.push(`Centro de Custo: ${selectedCcObj.nome}`);
+      if (selectedContaObj) headerFilters.push(`Conta: ${selectedContaObj.nome}`);
+      
+      if (headerFilters.length > 0) {
+        subtitleText += `  |  Filtros - ${headerFilters.join(', ')}`;
+      }
+
       doc.setTextColor(80, 80, 80); // Dark Gray
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(7.5);
-      doc.text(`Gerado em: ${generationDate}  |  Total de Registros: ${filtered.length}`, textStartX, 29);
+      doc.text(subtitleText, textStartX, 29);
 
       // 5. Build Columns and rows
       let tableHeaders: string[] = [];
@@ -486,7 +514,7 @@ export default function FinanceiroPage() {
           `R$ ${totalSum.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
         ]);
 
-      } else { // fluxo_caixa
+      } else if (type === 'fluxo_caixa') {
         tableHeaders = ['Vencimento', 'Lançamento (Descrição / Doc)', 'Categoria', 'Cliente / Fornecedor', 'Tipo', 'Valor'];
         let totalEntradas = 0;
         let totalSaidas = 0;
@@ -540,6 +568,89 @@ export default function FinanceiroPage() {
           '',
           `${netBalance >= 0 ? '+' : '-'} R$ ${Math.abs(netBalance).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
         ]);
+      } else if (type === 'consolidado') {
+        // Report 4: Consolidated Report
+        tableHeaders = ['Vencimento', 'Lançamento (Descrição / Doc)', 'C. Custo / Conta', 'Tipo', 'Valor', 'Saldo Acum.'];
+        let runningBalance = 0;
+
+        // Groupings for subtotaling by Cost Center & Account
+        const groupings: { [key: string]: { ccName: string; contaName: string; totalCredito: number; totalDebito: number } } = {};
+
+        tableRows = filtered.map(t => {
+          const vencStr = t.data_vencimento ? new Date(t.data_vencimento + 'T00:00:00').toLocaleDateString('pt-BR') : '-';
+          const docDateStr = t.data ? new Date(t.data + 'T00:00:00').toLocaleDateString('pt-BR') : '-';
+          const descAndDoc = `${t.descricao} (Doc: ${docDateStr})`;
+
+          const cc = dbCentrosCusto.find(c => c.id === t.id_centro_custo);
+          const ccSigla = cc ? cc.sigla : 'S/CC';
+          const ccName = cc ? cc.nome : 'Sem Centro de Custo';
+
+          const c = dbContas.find(ac => ac.id === t.id_conta);
+          const contaName = c ? c.nome : 'Sem Conta';
+
+          const ccContaLabel = `${ccSigla} | ${contaName}`;
+          const val = t.valor || 0;
+          const change = t.tipo === 'Entrada' ? val : -val;
+          runningBalance += change;
+
+          // Add to groupings
+          const gKey = `${t.id_centro_custo || 'none'}_${t.id_conta || 'none'}`;
+          if (!groupings[gKey]) {
+            groupings[gKey] = {
+              ccName,
+              contaName,
+              totalCredito: 0,
+              totalDebito: 0
+            };
+          }
+          if (t.tipo === 'Entrada') {
+            groupings[gKey].totalCredito += val;
+          } else {
+            groupings[gKey].totalDebito += val;
+          }
+
+          return [
+            vencStr,
+            descAndDoc,
+            ccContaLabel,
+            t.tipo === 'Entrada' ? 'Crédito' : 'Débito',
+            `${t.tipo === 'Entrada' ? '+' : '-'} R$ ${val.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+            `R$ ${runningBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+          ];
+        });
+
+        // Add subtotal marker row
+        tableRows.push([
+          'SUBTOTAIS POR CENTRO DE CUSTO E CONTA',
+          '',
+          '',
+          '',
+          '',
+          ''
+        ]);
+
+        // Push subtotal rows
+        Object.values(groupings).forEach(g => {
+          const subtotalNet = g.totalCredito - g.totalDebito;
+          tableRows.push([
+            `• ${g.ccName} / ${g.contaName}`,
+            `Rec: R$ ${g.totalCredito.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+            `Desp: R$ ${g.totalDebito.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+            'Saldo:',
+            `${subtotalNet >= 0 ? '+' : '-'} R$ ${Math.abs(subtotalNet).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+            ''
+          ]);
+        });
+
+        // Add final consolidated balance
+        tableRows.push([
+          'SALDO FINAL CONSOLIDADO',
+          '',
+          '',
+          '',
+          '',
+          `R$ ${runningBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+        ]);
       }
 
       autoTable(doc, {
@@ -569,7 +680,32 @@ export default function FinanceiroPage() {
         },
         willDrawCell: (data) => {
           // Highlight total rows nicely
-          const isTotalRow = data.row.index >= tableRows.length - (type === 'fluxo_caixa' ? 3 : 1);
+          let totalRowsCount = 1;
+          if (type === 'fluxo_caixa') {
+            totalRowsCount = 3;
+          } else if (type === 'consolidado') {
+            const rawArr = data.row.raw as any;
+            const isMarkerRow = Array.isArray(rawArr) && rawArr[0] === 'SUBTOTAIS POR CENTRO DE CUSTO E CONTA';
+            const isSubtotalRow = Array.isArray(rawArr) && typeof rawArr[0] === 'string' && rawArr[0].startsWith('•');
+            const isFinalRow = Array.isArray(rawArr) && rawArr[0] === 'SALDO FINAL CONSOLIDADO';
+            
+            if (isMarkerRow) {
+              doc.setFont('helvetica', 'bold');
+              data.cell.styles.fontStyle = 'bold';
+              data.cell.styles.fillColor = [235, 235, 235];
+            } else if (isSubtotalRow) {
+              doc.setFont('helvetica', 'normal');
+              data.cell.styles.fontStyle = 'normal';
+              data.cell.styles.fillColor = [250, 250, 250];
+            } else if (isFinalRow) {
+              doc.setFont('helvetica', 'bold');
+              data.cell.styles.fontStyle = 'bold';
+              data.cell.styles.fillColor = [220, 240, 255]; // Soft blue for final consolidated balance
+            }
+            return;
+          }
+
+          const isTotalRow = data.row.index >= tableRows.length - totalRowsCount;
           if (isTotalRow) {
             doc.setFont('helvetica', 'bold');
             data.cell.styles.fontStyle = 'bold';
@@ -580,13 +716,13 @@ export default function FinanceiroPage() {
             }
           }
         },
-        columnStyles: type === 'fluxo_caixa' ? {
+        columnStyles: (type === 'fluxo_caixa' || type === 'consolidado') ? {
           0: { cellWidth: 20 }, // Vencimento
           1: { cellWidth: 'auto' }, // Lançamento
-          2: { cellWidth: 23 }, // Categoria
-          3: { cellWidth: 35 }, // Contato
-          4: { cellWidth: 20 }, // Tipo
-          5: { cellWidth: 35, fontStyle: 'bold', halign: 'right' }, // Valor
+          2: { cellWidth: 25 }, // Categoria or CC/Conta
+          3: { cellWidth: 20 }, // Contato or Tipo
+          4: { cellWidth: 25, fontStyle: 'bold', halign: 'right' }, // Tipo or Valor
+          5: { cellWidth: 25, fontStyle: 'bold', halign: 'right' }, // Valor or Saldo Acum
         } : {
           0: { cellWidth: 22 }, // Vencimento
           1: { cellWidth: 'auto' }, // Lançamento
@@ -599,7 +735,8 @@ export default function FinanceiroPage() {
       const nameMap = {
         contas_pagar: 'contas_a_pagar',
         contas_receber: 'contas_a_receber',
-        fluxo_caixa: 'fluxo_caixa_consolidado'
+        fluxo_caixa: 'fluxo_caixa_consolidado',
+        consolidado: 'consolidado_geral'
       };
 
       doc.save(`relatorio_financeiro_${nameMap[type]}_${new Date().toISOString().substring(0, 10)}.pdf`);
@@ -896,6 +1033,9 @@ export default function FinanceiroPage() {
       categoria: transacao.categoria || '',
       descricao: transacao.descricao,
       valor: transacao.valor || 0,
+      juros: transacao.juros || 0,
+      acrescimos: transacao.acrescimos || 0,
+      valor_pago: transacao.valor_pago || 0,
       data: transacao.data || new Date().toISOString().split('T')[0],
       membro_contribuinte: transacao.membro_contribuinte || '',
       id_forma_pagamento: transacao.id_forma_pagamento || '',
@@ -927,6 +1067,9 @@ export default function FinanceiroPage() {
       categoria: initialCategory,
       descricao: '',
       valor: 0,
+      juros: 0,
+      acrescimos: 0,
+      valor_pago: 0,
       data: todayStr,
       membro_contribuinte: '',
       id_forma_pagamento: dbFormasPagamento[0]?.id || '',
@@ -973,12 +1116,19 @@ export default function FinanceiroPage() {
       }
     }
 
+    const jurosNum = Number(currentTransacao.juros) || 0;
+    const acrescimosNum = Number(currentTransacao.acrescimos) || 0;
+    const valorPagoNum = valorNum + jurosNum + acrescimosNum;
+
     const payload: any = {
       id_igreja: selectedIgreja.id,
       tipo: currentTransacao.tipo || 'Entrada',
       categoria: chosenCat,
       descricao: currentTransacao.descricao,
       valor: valorNum,
+      juros: jurosNum,
+      acrescimos: acrescimosNum,
+      valor_pago: valorPagoNum,
       data: currentTransacao.data || new Date().toISOString().split('T')[0],
       membro_contribuinte: currentTransacao.membro_contribuinte || null,
       
@@ -1839,19 +1989,58 @@ export default function FinanceiroPage() {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
-                    Valor do Lançamento (R$) *
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required
-                    value={currentTransacao.valor || ''}
-                    onChange={(e) => setCurrentTransacao({ ...currentTransacao, valor: parseFloat(e.target.value) || 0 })}
-                    className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-black text-lg"
-                    placeholder="0.00"
-                  />
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:col-span-2 bg-slate-50/50 dark:bg-slate-950/20 p-4 rounded-2xl border border-slate-100 dark:border-slate-850/60">
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
+                      Valor Principal (R$) *
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      required
+                      value={currentTransacao.valor || ''}
+                      onChange={(e) => setCurrentTransacao({ ...currentTransacao, valor: parseFloat(e.target.value) || 0 })}
+                      className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-bold"
+                      placeholder="0.00"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
+                      Juros (R$)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={currentTransacao.juros || ''}
+                      onChange={(e) => setCurrentTransacao({ ...currentTransacao, juros: parseFloat(e.target.value) || 0 })}
+                      className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-bold"
+                      placeholder="0.00"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
+                      Acréscimos (R$)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={currentTransacao.acrescimos || ''}
+                      onChange={(e) => setCurrentTransacao({ ...currentTransacao, acrescimos: parseFloat(e.target.value) || 0 })}
+                      className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-bold"
+                      placeholder="0.00"
+                    />
+                  </div>
+
+                  <div className="md:col-span-3 pt-2 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
+                    <span className="text-[10px] font-black text-slate-450 dark:text-slate-400 uppercase tracking-widest">
+                      Valor Pago (Campo Não Editável):
+                    </span>
+                    <span className="text-xl font-mono font-black text-slate-900 dark:text-amber-400">
+                      R$ {((currentTransacao.valor || 0) + (currentTransacao.juros || 0) + (currentTransacao.acrescimos || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
                 </div>
 
                 <div>
@@ -3735,6 +3924,22 @@ export default function FinanceiroPage() {
                       ))}
                     </select>
                   </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-450 dark:text-slate-400 uppercase tracking-widest mb-1.5 ml-1">
+                      Conta Bancária
+                    </label>
+                    <select
+                      value={reportConta}
+                      onChange={(e) => setReportConta(e.target.value)}
+                      className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 text-black dark:text-white font-semibold"
+                    >
+                      <option value="">Todas as Contas</option>
+                      {dbContas.map(c => (
+                        <option key={c.id} value={c.id}>{c.nome} {c.banco ? `(${c.banco})` : ''}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               </div>
 
@@ -3800,7 +4005,7 @@ export default function FinanceiroPage() {
             {/* Reports Cards Grid (2/3 of the screen width on large devices) */}
             <div className="lg:col-span-2 space-y-6">
               <h4 className="text-xs font-black text-slate-450 dark:text-slate-400 uppercase tracking-widest pl-1">
-                Selecione um dos 3 Relatórios
+                Selecione um dos 4 Relatórios
               </h4>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -3865,7 +4070,7 @@ export default function FinanceiroPage() {
                 </div>
 
                 {/* 3) Consolidated Cash Flow */}
-                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-3xl shadow-sm flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition space-y-4 md:col-span-2">
+                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-3xl shadow-sm flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition space-y-4">
                   <div className="space-y-2">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 bg-transparent text-amber-600 dark:text-amber-450 rounded-2xl flex items-center justify-center">
@@ -3891,6 +4096,36 @@ export default function FinanceiroPage() {
                   >
                     <Printer size={15} />
                     Compilar Relatório de Fluxo Consolidado
+                  </button>
+                </div>
+
+                {/* 4) General Consolidated Report */}
+                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-3xl shadow-sm flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition space-y-4">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-transparent text-indigo-600 dark:text-indigo-400 rounded-2xl flex items-center justify-center">
+                        <FileText size={20} />
+                      </div>
+                      <div>
+                        <h5 className="font-bold text-slate-900 dark:text-white text-sm">
+                          4) Relatório Consolidado
+                        </h5>
+                        <p className="text-[9px] text-slate-450 uppercase tracking-widest font-black">
+                          Subtotais e Saldo Linha a Linha
+                        </p>
+                      </div>
+                    </div>
+                    <p className="text-xs text-slate-500 leading-relaxed pt-1">
+                      Apresenta as transações de crédito e débito ordenadas por vencimento, com saldo acumulado linha a linha, e subtotais agrupados por Centro de Custo e por Conta Bancária.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleGenerateFinanceReport('consolidado')}
+                    className="w-full mt-2 flex items-center justify-center gap-2 bg-amber-600 hover:bg-amber-700 text-white font-bold py-3.5 px-4 rounded-2xl text-xs transition shadow-sm cursor-pointer"
+                  >
+                    <Printer size={15} />
+                    Imprimir Relatório Consolidado
                   </button>
                 </div>
               </div>
@@ -3940,6 +4175,17 @@ export default function FinanceiroPage() {
                       : 'text-slate-500 hover:text-slate-700'
                   }`}
                 >
+                  Fluxo Caixa
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedReportType('consolidado')}
+                  className={`px-3 py-1.5 text-[10px] font-black rounded-lg transition-all cursor-pointer ${
+                    selectedReportType === 'consolidado'
+                      ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm'
+                      : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
                   Consolidado
                 </button>
               </div>
@@ -3957,6 +4203,9 @@ export default function FinanceiroPage() {
               if (reportCentroCusto) {
                 prevList = prevList.filter(t => t.id_centro_custo === reportCentroCusto);
               }
+              if (reportConta) {
+                prevList = prevList.filter(t => t.id_conta === reportConta);
+              }
               if (selectedReportType === 'contas_pagar') {
                 prevList = prevList.filter(t => t.tipo === 'Saída');
               } else if (selectedReportType === 'contas_receber') {
@@ -3971,7 +4220,7 @@ export default function FinanceiroPage() {
               });
 
               const printSum = prevList.reduce((acc, current) => {
-                if (selectedReportType === 'fluxo_caixa') {
+                if (selectedReportType === 'fluxo_caixa' || selectedReportType === 'consolidado') {
                   return acc + (current.tipo === 'Entrada' ? current.valor : -current.valor);
                 }
                 return acc + current.valor;
@@ -3985,6 +4234,8 @@ export default function FinanceiroPage() {
                 );
               }
 
+              let previewRunningBalance = 0;
+
               return (
                 <div className="space-y-4">
                   <div className="overflow-x-auto rounded-2xl border border-slate-150 dark:border-slate-800">
@@ -3993,7 +4244,9 @@ export default function FinanceiroPage() {
                         <tr className="bg-slate-100 dark:bg-slate-850 text-slate-800 dark:text-slate-200 uppercase font-black text-[9px] tracking-widest border-b border-slate-150 dark:border-slate-800">
                           <th className="p-4">Vencimento</th>
                           <th className="p-4">Descrição / Doc</th>
-                          <th className="p-4">Categoria</th>
+                          <th className="p-4">
+                            {selectedReportType === 'consolidado' ? 'Centro Custo / Conta' : 'Categoria'}
+                          </th>
                           <th className="p-4">
                             {selectedReportType === 'contas_pagar'
                               ? 'Fornecedor'
@@ -4001,13 +4254,24 @@ export default function FinanceiroPage() {
                                 ? 'Cliente'
                                 : 'Cliente / Fornecedor'}
                           </th>
-                          {selectedReportType === 'fluxo_caixa' && <th className="p-4">Tipo</th>}
+                          {(selectedReportType === 'fluxo_caixa' || selectedReportType === 'consolidado') && <th className="p-4">Tipo</th>}
+                          {selectedReportType === 'consolidado' && <th className="p-4 text-right">Saldo Acum.</th>}
                           <th className="p-4 text-right">Valor</th>
                         </tr>
                       </thead>
                       <tbody>
                         {prevList.map((t) => {
                           const contactName = dbFornecedores.find(f => f.id === t.id_fornecedor)?.razao_social || t.membro_contribuinte || 'Coletivo / Caixa';
+                          
+                          const cc = dbCentrosCusto.find(c => c.id === t.id_centro_custo);
+                          const ccSigla = cc ? cc.sigla : 'S/CC';
+                          const cObj = dbContas.find(ac => ac.id === t.id_conta);
+                          const contaName = cObj ? cObj.nome : 'Sem Conta';
+                          const ccContaLabel = `${ccSigla} | ${contaName}`;
+
+                          const change = t.tipo === 'Entrada' ? t.valor : -t.valor;
+                          previewRunningBalance += change;
+
                           return (
                             <tr
                               key={t.id}
@@ -4024,13 +4288,13 @@ export default function FinanceiroPage() {
                               </td>
                               <td className="p-4">
                                 <span className="px-2 py-0.5 rounded-md bg-slate-250 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold uppercase text-[9px]">
-                                  {t.categoria}
+                                  {selectedReportType === 'consolidado' ? ccContaLabel : t.categoria}
                                 </span>
                               </td>
                               <td className="p-4 font-bold text-slate-800 dark:text-slate-200">
                                 {contactName}
                               </td>
-                              {selectedReportType === 'fluxo_caixa' && (
+                              {(selectedReportType === 'fluxo_caixa' || selectedReportType === 'consolidado') && (
                                 <td className="p-4">
                                   <span className={`px-2 py-0.5 rounded-md font-bold text-[9px] uppercase ${
                                     t.tipo === 'Entrada'
@@ -4039,6 +4303,11 @@ export default function FinanceiroPage() {
                                   }`}>
                                     {t.tipo === 'Entrada' ? 'Crédito' : 'Débito'}
                                   </span>
+                                </td>
+                              )}
+                              {selectedReportType === 'consolidado' && (
+                                <td className="p-4 text-right font-mono font-bold text-slate-600 dark:text-slate-400">
+                                  R$ {previewRunningBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                 </td>
                               )}
                               <td className={`p-4 text-right font-mono font-bold text-sm ${
@@ -4057,12 +4326,12 @@ export default function FinanceiroPage() {
                   <div className="flex justify-end p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-150 dark:border-slate-800">
                     <div className="flex items-baseline gap-2">
                       <span className="text-xs uppercase font-black tracking-widest text-slate-450">
-                        {selectedReportType === 'fluxo_caixa'
+                        {(selectedReportType === 'fluxo_caixa' || selectedReportType === 'consolidado')
                           ? 'Saldo Líquido Previsto:'
                           : 'Soma Total Prevista:'}
                       </span>
                       <span className={`text-xl font-mono font-black ${
-                        selectedReportType === 'fluxo_caixa' 
+                        (selectedReportType === 'fluxo_caixa' || selectedReportType === 'consolidado')
                           ? (printSum >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500' )
                           : 'text-slate-900 dark:text-white'
                       }`}>
