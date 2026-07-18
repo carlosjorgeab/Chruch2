@@ -235,6 +235,7 @@ export default function KidsModule() {
       selectedIgreja.config_etiqueta = configObj;
 
       showNotification('Configurações de etiqueta personalizadas salvas com sucesso!', 'success');
+      setIsLabelConfigModalOpen(false);
     } catch (err: any) {
       console.error('Error saving custom label config:', err);
       showNotification('Erro ao salvar as configurações de etiqueta.', 'error');
@@ -252,6 +253,7 @@ export default function KidsModule() {
   const [isLoadingSalaMembros, setIsLoadingSalaMembros] = useState<boolean>(false);
   const [isHelpModalOpen, setIsHelpModalOpen] = useState<boolean>(false);
   const [activeHelpTopic, setActiveHelpTopic] = useState<string>('turmas');
+  const [isLabelConfigModalOpen, setIsLabelConfigModalOpen] = useState<boolean>(false);
 
   const loadSalaMembros = async (salaId: string) => {
     if (!salaId) return;
@@ -1898,19 +1900,31 @@ export default function KidsModule() {
           )}
         </div>
 
-        {/* Interactive Help button (?) */}
-        <button
-          type="button"
-          onClick={() => {
-            setActiveHelpTopic('turmas');
-            setIsHelpModalOpen(true);
-          }}
-          className="px-4 py-2.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-slate-900 dark:hover:bg-slate-800 border border-indigo-100 dark:border-slate-800 text-indigo-600 dark:text-indigo-400 text-xs font-black uppercase tracking-widest rounded-2xl transition-all flex items-center gap-2 cursor-pointer shadow-sm"
-          title="Central de Ajuda (?)"
-        >
-          <HelpCircle size={16} className="text-[#E4A232]" />
-          Ajuda (?)
-        </button>
+        {/* Interactive Actions (Help & Label Config) */}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setIsLabelConfigModalOpen(true)}
+            className="px-4 py-2.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-slate-900 dark:hover:bg-slate-800 border border-indigo-100 dark:border-slate-800 text-indigo-600 dark:text-indigo-400 text-xs font-black uppercase tracking-widest rounded-2xl transition-all flex items-center gap-2 cursor-pointer shadow-sm"
+            title="Configurar Dimensões da Etiqueta"
+          >
+            <Printer size={16} className="text-[#E4A232]" />
+            Configurar Etiqueta
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setActiveHelpTopic('turmas');
+              setIsHelpModalOpen(true);
+            }}
+            className="px-4 py-2.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-slate-900 dark:hover:bg-slate-800 border border-indigo-100 dark:border-slate-800 text-indigo-600 dark:text-indigo-400 text-xs font-black uppercase tracking-widest rounded-2xl transition-all flex items-center gap-2 cursor-pointer shadow-sm"
+            title="Central de Ajuda (?)"
+          >
+            <HelpCircle size={16} className="text-[#E4A232]" />
+            Ajuda (?)
+          </button>
+        </div>
       </div>
 
       {/* ------------------------------------------------------------- */}
@@ -5378,6 +5392,369 @@ export default function KidsModule() {
                   className="px-6 py-2.5 bg-slate-150 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-800 dark:text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all cursor-pointer"
                 >
                   Fechar
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* 4. LABEL CONFIGURATION MODAL */}
+      {isLabelConfigModalOpen && (() => {
+        // Calculations for preview
+        const getSheetDimensions = () => {
+          if (customTamanhoFolha === 'Térmico/Rolo') {
+            return { w: customLargura || 6.35, h: customComprimento || 4.66 };
+          }
+          if (customTamanhoFolha === 'Letter') {
+            return { w: 21.59, h: 27.94 };
+          }
+          return { w: 21.0, h: 29.7 }; // A4
+        };
+
+        const sheetSizeObj = getSheetDimensions();
+        const sheetWidth = sheetSizeObj.w;
+        const sheetHeight = sheetSizeObj.h;
+
+        let labelCols = 1;
+        let labelRows = 1;
+
+        if (customTamanhoFolha === 'Térmico/Rolo') {
+          labelCols = 1;
+          labelRows = 1;
+        } else {
+          labelCols = Number(customColunas) || 1;
+          const baseMargem = Number(customMargem) || 0;
+          const availH = sheetHeight - (2 * baseMargem);
+          labelRows = Math.max(1, Math.floor(availH / (customComprimento || 4.66)));
+        }
+
+        const totalLabels = labelCols * labelRows;
+
+        // Apply pre-configured presets
+        const applyPreset = (preset: 'pimaco' | 'thermal8x4' | 'thermal6x4') => {
+          if (preset === 'pimaco') {
+            setCustomTamanhoFolha('A4');
+            setCustomLargura(10.10);
+            setCustomComprimento(3.39);
+            setCustomColunas(2);
+            setCustomMargem(0.87);
+          } else if (preset === 'thermal8x4') {
+            setCustomTamanhoFolha('Térmico/Rolo');
+            setCustomLargura(8.00);
+            setCustomComprimento(4.00);
+            setCustomColunas(1);
+            setCustomMargem(0);
+          } else if (preset === 'thermal6x4') {
+            setCustomTamanhoFolha('Térmico/Rolo');
+            setCustomLargura(6.00);
+            setCustomComprimento(4.00);
+            setCustomColunas(1);
+            setCustomMargem(0);
+          }
+        };
+
+        return (
+          <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md flex items-center justify-center z-[60] p-4 animate-fade-in">
+            <div className="bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 shadow-2xl space-y-6 w-full max-w-5xl max-h-[92vh] overflow-hidden flex flex-col animate-scale-in">
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4 flex-shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-indigo-500/10 text-indigo-500 rounded-2xl">
+                    <Printer size={24} className="text-indigo-600 dark:text-indigo-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-black uppercase tracking-tight text-slate-900 dark:text-white">
+                      Configurar Dimensões das Etiquetas
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                      Configure as dimensões das etiquetas para o processo de impressão da igreja ativa: <span className="text-indigo-600 dark:text-indigo-400 font-bold">{selectedIgreja?.nome}</span>
+                    </p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setIsLabelConfigModalOpen(false)}
+                  className="p-2.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-all cursor-pointer text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                  title="Fechar"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Main Workspace split */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 overflow-hidden flex-1 min-h-0">
+                {/* Left panel: configurations */}
+                <div className="lg:col-span-5 flex flex-col gap-5 overflow-y-auto pr-1">
+                  
+                  {/* Presets shortcut section */}
+                  <div className="space-y-2">
+                    <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400">Atalhos e Modelos Prontos</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => applyPreset('pimaco')}
+                        className="px-3 py-2 text-left bg-slate-50 hover:bg-slate-100 dark:bg-slate-950/40 dark:hover:bg-slate-950/85 border border-slate-200 dark:border-slate-850 rounded-xl transition cursor-pointer flex flex-col gap-0.5"
+                      >
+                        <span className="text-[10px] font-black text-slate-900 dark:text-white uppercase">Pimaco 14</span>
+                        <span className="text-[8px] text-slate-450 dark:text-slate-500 font-bold">A4, 10.1x3.39 cm</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => applyPreset('thermal8x4')}
+                        className="px-3 py-2 text-left bg-slate-50 hover:bg-slate-100 dark:bg-slate-950/40 dark:hover:bg-slate-950/85 border border-slate-200 dark:border-slate-850 rounded-xl transition cursor-pointer flex flex-col gap-0.5"
+                      >
+                        <span className="text-[10px] font-black text-slate-900 dark:text-white uppercase">Térmica 8x4</span>
+                        <span className="text-[8px] text-slate-450 dark:text-slate-500 font-bold">Rolo, 8.0x4.0 cm</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => applyPreset('thermal6x4')}
+                        className="px-3 py-2 text-left bg-slate-50 hover:bg-slate-100 dark:bg-slate-950/40 dark:hover:bg-slate-950/85 border border-slate-200 dark:border-slate-850 rounded-xl transition cursor-pointer flex flex-col gap-0.5"
+                      >
+                        <span className="text-[10px] font-black text-slate-900 dark:text-white uppercase">Térmica 6x4</span>
+                        <span className="text-[8px] text-slate-450 dark:text-slate-500 font-bold">Rolo, 6.0x4.0 cm</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <hr className="border-slate-100 dark:border-slate-850" />
+
+                  {/* Form */}
+                  <div className="space-y-4">
+                    <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400">Definições Físicas</h4>
+                    
+                    {/* Tamanho da Folha */}
+                    <div>
+                      <label className="text-[10px] font-black uppercase tracking-wider text-slate-450 dark:text-slate-500">Tamanho da Folha</label>
+                      <select
+                        value={customTamanhoFolha}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setCustomTamanhoFolha(val);
+                          if (val === 'Térmico/Rolo') {
+                            setCustomColunas(1);
+                            setCustomMargem(0);
+                          } else if (customColunas === 1 && customMargem === 0) {
+                            setCustomColunas(2);
+                            setCustomMargem(0.87);
+                          }
+                        }}
+                        className="w-full mt-1 p-3 bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      >
+                        <option value="A4">A4 (21,0 cm x 29,7 cm)</option>
+                        <option value="Letter">Carta / Letter (21,59 cm x 27,94 cm)</option>
+                        <option value="Térmico/Rolo">Térmico / Rolo Contínuo</option>
+                      </select>
+                    </div>
+
+                    {/* Width & Height */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[10px] font-black uppercase tracking-wider text-slate-450 dark:text-slate-500">Largura (cm)</label>
+                        <input 
+                          type="number"
+                          step="0.01"
+                          min="1"
+                          max="30"
+                          value={customLargura}
+                          onChange={(e) => setCustomLargura(Math.max(1, Number(e.target.value)))}
+                          className="w-full mt-1 p-3 bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black uppercase tracking-wider text-slate-450 dark:text-slate-500">Comprimento / Altura (cm)</label>
+                        <input 
+                          type="number"
+                          step="0.01"
+                          min="1"
+                          max="30"
+                          value={customComprimento}
+                          onChange={(e) => setCustomComprimento(Math.max(1, Number(e.target.value)))}
+                          className="w-full mt-1 p-3 bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Column count & Margins */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[10px] font-black uppercase tracking-wider text-slate-450 dark:text-slate-500">Qtd. de Colunas</label>
+                        <input 
+                          type="number"
+                          min="1"
+                          max="8"
+                          disabled={customTamanhoFolha === 'Térmico/Rolo'}
+                          value={customColunas}
+                          onChange={(e) => setCustomColunas(Math.max(1, Math.min(8, Number(e.target.value))))}
+                          className="w-full mt-1 p-3 bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800 disabled:opacity-50 rounded-xl text-xs font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black uppercase tracking-wider text-slate-450 dark:text-slate-500">Margem da Folha (cm)</label>
+                        <input 
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          max="5"
+                          disabled={customTamanhoFolha === 'Térmico/Rolo'}
+                          value={customMargem}
+                          onChange={(e) => setCustomMargem(Math.max(0, Number(e.target.value)))}
+                          className="w-full mt-1 p-3 bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800 disabled:opacity-50 rounded-xl text-xs font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-2">
+                    <button
+                      onClick={handleSaveCustomLabelConfig}
+                      disabled={isSavingCustomConfig}
+                      className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-bold rounded-2xl text-xs uppercase tracking-widest transition flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-indigo-150 dark:shadow-none"
+                    >
+                      {isSavingCustomConfig ? (
+                        <>
+                          <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                          Salvando...
+                        </>
+                      ) : (
+                        <>
+                          <Check size={14} />
+                          Salvar Configuração na Igreja
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                </div>
+
+                {/* Right panel: dynamic sheet preview */}
+                <div className="lg:col-span-7 bg-slate-50 dark:bg-slate-950/60 p-6 rounded-[2rem] border border-slate-150 dark:border-slate-850 flex flex-col justify-between overflow-hidden">
+                  <div className="space-y-4 flex flex-col h-full">
+                    
+                    {/* Preview header info */}
+                    <div className="flex justify-between items-center pb-2 border-b border-slate-200/50 dark:border-slate-850">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Pré-visualização do Layout</span>
+                      <span className="text-[9px] font-bold text-indigo-500 bg-indigo-500/10 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                        {customTamanhoFolha} • {labelCols} colunas
+                      </span>
+                    </div>
+
+                    {/* Math results info */}
+                    <div className="grid grid-cols-3 gap-4 text-center bg-white dark:bg-slate-900/60 p-3 rounded-2xl border border-slate-150 dark:border-slate-850">
+                      <div>
+                        <span className="text-[8px] font-bold text-slate-400 uppercase block">Etiquetas/Folha</span>
+                        <span className="text-sm font-black text-slate-900 dark:text-white">{totalLabels}</span>
+                      </div>
+                      <div>
+                        <span className="text-[8px] font-bold text-slate-400 uppercase block">Linhas Estimadas</span>
+                        <span className="text-sm font-black text-slate-900 dark:text-white">{labelRows}</span>
+                      </div>
+                      <div>
+                        <span className="text-[8px] font-bold text-slate-400 uppercase block">Área de Corte</span>
+                        <span className="text-xs font-black text-slate-900 dark:text-white font-mono">{customLargura}x{customComprimento} cm</span>
+                      </div>
+                    </div>
+
+                    {/* Interactive Simulated Page */}
+                    <div className="flex-1 flex items-center justify-center p-4 min-h-[220px] overflow-hidden">
+                      {customTamanhoFolha === 'Térmico/Rolo' ? (
+                        /* Continuous roll mockup */
+                        <div className="relative bg-white dark:bg-slate-900 border-2 border-dashed border-slate-350 dark:border-slate-700 shadow-xl rounded-lg p-4 flex flex-col items-center justify-center" style={{ width: '180px', height: '120px' }}>
+                          <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-indigo-500 text-white text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">Bobina</span>
+                          <div className="w-full h-full border border-slate-150 rounded flex flex-col justify-between p-2 relative overflow-hidden bg-slate-50 dark:bg-slate-950/20">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[8px] font-black text-slate-400 uppercase">Kids Checkin</span>
+                              <div className="w-6 h-6 border border-slate-200 flex items-center justify-center text-slate-350"><QrCode size={12} /></div>
+                            </div>
+                            <div className="space-y-1 my-1">
+                              <div className="h-2 bg-slate-200 dark:bg-slate-800 rounded w-4/5"></div>
+                              <div className="h-1 bg-slate-100 dark:bg-slate-850 rounded w-1/2"></div>
+                            </div>
+                            <div className="flex justify-between items-center text-[7px] text-slate-400 border-t border-slate-100 dark:border-slate-800/80 pt-1 font-mono">
+                              <span>Sala: Berçário</span>
+                              <span>12:35</span>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        /* Sheet layout (A4/Letter) simulation scaled dynamically */
+                        (() => {
+                          const containerMaxW = 220;
+                          const containerMaxH = 280;
+                          const aspect = sheetWidth / sheetHeight;
+                          let pageW = containerMaxW;
+                          let pageH = pageW / aspect;
+
+                          if (pageH > containerMaxH) {
+                            pageH = containerMaxH;
+                            pageW = pageH * aspect;
+                          }
+
+                          const scaleFactor = pageW / sheetWidth;
+                          const visualMargin = (customMargem || 0) * scaleFactor;
+                          const cellW = (customLargura || 6.35) * scaleFactor;
+                          const cellH = (customComprimento || 4.66) * scaleFactor;
+
+                          return (
+                            <div 
+                              className="bg-white border border-slate-300 dark:border-slate-800 shadow-xl relative select-none flex-shrink-0"
+                              style={{ 
+                                width: `${pageW}px`, 
+                                height: `${pageH}px`,
+                              }}
+                            >
+                              {/* Printable area with margins */}
+                              <div 
+                                className="absolute bg-slate-50 dark:bg-slate-950/40 border border-indigo-100 dark:border-indigo-950/40 border-dotted overflow-hidden flex flex-wrap content-start"
+                                style={{
+                                  left: `${visualMargin}px`,
+                                  top: `${visualMargin}px`,
+                                  right: `${visualMargin}px`,
+                                  bottom: `${visualMargin}px`,
+                                }}
+                              >
+                                {Array.from({ length: totalLabels }).map((_, i) => (
+                                  <div 
+                                    key={i} 
+                                    className="border border-slate-250 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-[2px] m-[0.5px] overflow-hidden flex flex-col justify-between p-[2px] box-border"
+                                    style={{
+                                      width: `${cellW - 1}px`,
+                                      height: `${cellH - 1}px`,
+                                    }}
+                                  >
+                                    <div className="flex justify-between items-center scale-[0.6] origin-top-left whitespace-nowrap">
+                                      <span className="text-[7px] font-black text-slate-500 uppercase">ID #{i+1}</span>
+                                    </div>
+                                    <div className="w-full scale-[0.5] origin-bottom-left h-[4px] bg-indigo-100 rounded"></div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })()
+                      )}
+                    </div>
+
+                    {/* Bottom warning or info */}
+                    <div className="p-3.5 bg-amber-500/5 border border-amber-500/15 rounded-2xl flex items-start gap-2.5 flex-shrink-0">
+                      <Info size={16} className="text-amber-500 flex-shrink-0 mt-0.5" />
+                      <p className="text-[10px] text-slate-600 dark:text-slate-400 font-medium leading-relaxed">
+                        Selecione as dimensões corretas conforme o manual do seu fabricante de etiquetas adesivas. Os valores em <span className="font-bold text-slate-800 dark:text-slate-200">centímetros</span> determinam o encaixe perfeito e o recorte no navegador.
+                      </p>
+                    </div>
+
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Footer action */}
+              <div className="flex justify-end pt-4 border-t border-slate-100 dark:border-slate-800 flex-shrink-0">
+                <button 
+                  onClick={() => setIsLabelConfigModalOpen(false)}
+                  className="px-6 py-2.5 bg-slate-150 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-800 dark:text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all cursor-pointer"
+                >
+                  Fechar Painel
                 </button>
               </div>
             </div>
