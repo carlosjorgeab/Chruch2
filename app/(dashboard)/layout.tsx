@@ -2,12 +2,13 @@
 import { useState, useEffect } from 'react';
 import { Sidebar } from '@/components/Sidebar';
 import { Topbar } from '@/components/Topbar';
-import { Menu, X } from 'lucide-react';
+import { Menu, X, Bell, AlertTriangle } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter, usePathname } from 'next/navigation';
 import { useIgreja } from '@/context/IgrejaContext';
 import { ShieldAlert } from 'lucide-react';
 import { ConfirmProvider } from '@/context/ConfirmContext';
+import { supabase } from '@/lib/supabase';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false);
@@ -35,6 +36,60 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const timer = setTimeout(() => setMounted(true), 0);
     return () => clearTimeout(timer);
   }, []);
+
+  // Event reminders background worker
+  const [activeReminders, setActiveReminders] = useState<any[]>([]);
+  const [dismissedReminders, setDismissedReminders] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!selectedIgreja?.id) return;
+
+    const checkReminders = async () => {
+      try {
+        const now = new Date();
+        const futureLimit = new Date(now.getTime() + 24 * 60 * 60 * 1000); // Check within 24 hours
+
+        const { data: upcomingEvents, error } = await supabase
+          .from('agendas')
+          .select('*')
+          .eq('id_igreja', selectedIgreja.id)
+          .gte('data_hora', now.toISOString())
+          .lte('data_hora', futureLimit.toISOString())
+          .not('tempo_lembrete', 'is', null);
+
+        if (error) {
+          console.error('Error fetching reminders:', error);
+          return;
+        }
+
+        if (!upcomingEvents) return;
+
+        const alertsToTrigger: any[] = [];
+        upcomingEvents.forEach((event: any) => {
+          if (dismissedReminders.includes(event.id)) return;
+
+          const eventTime = new Date(event.data_hora).getTime();
+          const curTime = now.getTime();
+          const diffMs = eventTime - curTime;
+          const diffMins = Math.floor(diffMs / (60 * 1000));
+
+          // Trigger warning if within the user-defined tempo_lembrete minutes, up to the start time (inclusive)
+          if (diffMins >= 0 && diffMins <= (event.tempo_lembrete || 15)) {
+            alertsToTrigger.push(event);
+          }
+        });
+
+        setActiveReminders(alertsToTrigger);
+      } catch (err) {
+        console.error('Error running reminder worker:', err);
+      }
+    };
+
+    // Check once immediately and then poll every 60 seconds (1 minute)
+    checkReminders();
+    const interval = setInterval(checkReminders, 60000);
+    return () => clearInterval(interval);
+  }, [selectedIgreja?.id, dismissedReminders]);
 
   const toggleSidebarCollapse = () => {
     const newVal = !isSidebarCollapsed;
@@ -403,6 +458,70 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         >
           <Menu size={20} />
         </button>
+      )}
+
+      {/* Floating Active Event Reminders / Alertas Visuais de Agenda */}
+      {activeReminders.length > 0 && (
+        <div className="fixed bottom-6 right-6 z-[100] flex flex-col gap-3 max-w-sm w-full animate-in slide-in-from-bottom duration-300 p-4 sm:p-0">
+          {activeReminders.map((event) => {
+            const eventTime = new Date(event.data_hora);
+            const minutesLeft = Math.max(0, Math.floor((eventTime.getTime() - Date.now()) / 60000));
+
+            return (
+              <div 
+                key={event.id}
+                className="bg-white dark:bg-slate-900 border-2 border-amber-500 rounded-3xl p-4 shadow-2xl relative overflow-hidden flex items-start gap-3.5 animate-pulse"
+                style={{ animationDuration: '3s' }}
+              >
+                <div className="p-2.5 bg-amber-500/10 rounded-2xl text-[#E4A232] shrink-0">
+                  <Bell size={20} className="animate-bounce" />
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <span className="text-[9px] font-black uppercase text-amber-600 dark:text-amber-400 tracking-wider">Lembrete de Compromisso</span>
+                  <h4 className="text-xs font-black text-slate-800 dark:text-white uppercase tracking-tight truncate mt-0.5">
+                    {event.titulo}
+                  </h4>
+                  <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 leading-snug mt-1">
+                    Inicia em <span className="text-amber-550 font-black">{minutesLeft} minutos</span> às {eventTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}.
+                  </p>
+                  
+                  <div className="flex gap-2 mt-3">
+                    <button
+                      onClick={() => {
+                        setDismissedReminders(prev => [...prev, event.id]);
+                        setActiveReminders(prev => prev.filter(r => r.id !== event.id));
+                      }}
+                      className="px-3 py-1.5 bg-amber-500 text-white font-black text-[9px] uppercase tracking-wider rounded-xl hover:bg-amber-600 transition cursor-pointer"
+                    >
+                      Ciente
+                    </button>
+                    <button
+                      onClick={() => {
+                        router.push('/agenda');
+                        setDismissedReminders(prev => [...prev, event.id]);
+                        setActiveReminders(prev => prev.filter(r => r.id !== event.id));
+                      }}
+                      className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-350 font-black text-[9px] uppercase tracking-wider rounded-xl transition cursor-pointer"
+                    >
+                      Ver Agenda
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => {
+                    setDismissedReminders(prev => [...prev, event.id]);
+                    setActiveReminders(prev => prev.filter(r => r.id !== event.id));
+                  }}
+                  className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full text-slate-400 dark:text-slate-500 transition absolute top-3 right-3 cursor-pointer"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            );
+          })}
+        </div>
       )}
     </ConfirmProvider>
   );

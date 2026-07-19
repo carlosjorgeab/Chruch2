@@ -100,6 +100,7 @@ export default function Home() {
   const [currentEventoIndex, setCurrentEventoIndex] = useState(0);
   const [aniversariantes, setAniversariantes] = useState<any[]>([]);
   const [agendas, setAgendas] = useState<any[]>([]);
+  const [eventosChartData, setEventosChartData] = useState<any[]>([]);
   const [lastOpenSala, setLastOpenSala] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -357,8 +358,47 @@ export default function Home() {
           // Na Visão Geral só podem ser visualizadas as Agendas Públicas
           const publicAgendas = agendaData.filter((item: any) => !item.privado);
           setAgendas(publicAgendas);
+
+          // Calculate 6-month comparative data for events
+          const now = new Date();
+          const comparisonResult = [];
+          for (let i = 5; i >= 0; i--) {
+            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            const monthLabel = d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }).toUpperCase();
+            
+            const year = d.getFullYear();
+            const month = d.getMonth();
+
+            const monthAgendas = agendaData.filter((item: any) => {
+              const itemDate = new Date(item.data_hora);
+              return itemDate.getFullYear() === year && itemDate.getMonth() === month;
+            });
+
+            let realizados = 0;
+            let planejados = 0;
+
+            monthAgendas.forEach((item: any) => {
+              const itemDate = new Date(item.data_hora);
+              const isPast = itemDate < now;
+              const statusUpper = String(item.status || '').toUpperCase();
+
+              if (statusUpper === 'REALIZADO' || (statusUpper !== 'CANCELADO' && isPast)) {
+                realizados++;
+              } else if (statusUpper === 'PLANEJADO' || statusUpper === 'CONFIRMADO' || (!isPast && statusUpper !== 'CANCELADO')) {
+                planejados++;
+              }
+            });
+
+            comparisonResult.push({
+              name: monthLabel,
+              Realizados: realizados,
+              Planejados: planejados,
+            });
+          }
+          setEventosChartData(comparisonResult);
         } else {
           setAgendas([]);
+          setEventosChartData([]);
         }
 
         // Fetch eventos
@@ -1755,6 +1795,79 @@ export default function Home() {
         </div>
 
       </div>
+
+      {/* ROW 4: COMPARATIVO DE EVENTOS */}
+      <div className="bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800 mb-8 animate-in fade-in duration-300" id="dashboard-row4-events-comparison">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-100 dark:border-slate-800 pb-5 mb-6" id="panel-events-header">
+          <div>
+            <div className="flex items-center gap-2 text-slate-800 dark:text-white">
+              <Calendar className="text-amber-500 shrink-0" size={16} />
+              <h3 className="text-sm font-black uppercase tracking-wider">Desempenho da Agenda (Últimos 6 Meses)</h3>
+            </div>
+            <p className="text-slate-400 text-[11px] mt-1 font-medium">Comparativo da quantidade de compromissos Realizados vs. Planejados na Igreja</p>
+          </div>
+          
+          <div className="flex items-center gap-4 text-[10px] font-black uppercase tracking-widest text-slate-500">
+            <span className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+              Realizados
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+              Planejados
+            </span>
+          </div>
+        </div>
+
+        <div className="h-72 w-full" id="events-comparison-chart-wrapper">
+          {eventosChartData.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={eventosChartData} margin={{ top: 15, right: 10, left: -25, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" className="dark:stroke-slate-800/60" />
+                <XAxis 
+                  dataKey="name" 
+                  tickLine={false} 
+                  axisLine={false} 
+                  tick={{ fill: '#94A3B8', fontSize: 10, fontWeight: 'bold' }} 
+                />
+                <YAxis 
+                  tickLine={false} 
+                  axisLine={false} 
+                  tick={{ fill: '#94A3B8', fontSize: 10, fontWeight: 'bold' }} 
+                  allowDecimals={false}
+                />
+                <Tooltip 
+                  cursor={{ fill: '#F8FAFC', opacity: 0.15 }}
+                  contentStyle={{ 
+                    backgroundColor: '#1E293B', 
+                    borderRadius: '16px', 
+                    borderColor: '#334155',
+                    padding: '12px 16px',
+                  }}
+                  itemStyle={{ color: '#F1F5F9', fontSize: '11px', fontWeight: 'bold' }}
+                />
+                <Bar 
+                  dataKey="Realizados" 
+                  fill="#10B981" 
+                  radius={[6, 6, 0, 0]} 
+                  maxBarSize={45} 
+                />
+                <Bar 
+                  dataKey="Planejados" 
+                  fill="#F59E0B" 
+                  radius={[6, 6, 0, 0]} 
+                  maxBarSize={45} 
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-full w-full flex items-center justify-center text-slate-400 font-bold uppercase tracking-widest text-xs animate-pulse">
+              Carregando dados comparativos de eventos...
+            </div>
+          )}
+        </div>
+      </div>
+
     </div>
   );
 }

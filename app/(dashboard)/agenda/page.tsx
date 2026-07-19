@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useIgreja } from '@/context/IgrejaContext';
 import { useConfirm } from '@/context/ConfirmContext';
+import { useAuth } from '@/context/AuthContext';
 import { 
   Plus, 
   Edit2, 
@@ -39,11 +40,16 @@ type AgendaItem = {
   id_comunidade?: string | null;
   tempo_lembrete?: number | null;
   created_at?: string;
+  criado_por_nome?: string | null;
+  criado_em?: string | null;
+  atualizado_por_nome?: string | null;
+  atualizado_em?: string | null;
 };
 
 export default function AgendaPage() {
   const { selectedIgreja } = useIgreja();
   const { confirmDelete } = useConfirm();
+  const { user } = useAuth();
   const [items, setItems] = useState<AgendaItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -60,8 +66,65 @@ export default function AgendaPage() {
   const [comunidades, setComunidades] = useState<any[]>([]);
   const [selectedComunidadeId, setSelectedComunidadeId] = useState<string>('');
 
+  // Global default reminder setting
+  const [defaultTempoLembreteGlobal, setDefaultTempoLembreteGlobal] = useState<number>(15);
+  const [savingGlobalLembrete, setSavingGlobalLembrete] = useState(false);
+
+  const fetchGlobalLembrete = async () => {
+    if (!selectedIgreja?.id) return;
+    try {
+      const key = `tempo_lembrete_${selectedIgreja.id}`;
+      const { data, error } = await supabase
+        .from('configuracoes_sistema')
+        .select('valor')
+        .eq('chave', key)
+        .maybeSingle();
+      
+      if (data && data.valor) {
+        setDefaultTempoLembreteGlobal(parseInt(data.valor, 10) || 15);
+      } else {
+        const { data: globalData } = await supabase
+          .from('configuracoes_sistema')
+          .select('valor')
+          .eq('chave', 'tempo_lembrete')
+          .maybeSingle();
+        if (globalData && globalData.valor) {
+          setDefaultTempoLembreteGlobal(parseInt(globalData.valor, 10) || 15);
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching global lembrete:', err);
+    }
+  };
+
+  const saveGlobalLembreteSetting = async (val: number) => {
+    if (!selectedIgreja?.id) return;
+    setSavingGlobalLembrete(true);
+    try {
+      const key = `tempo_lembrete_${selectedIgreja.id}`;
+      const { error } = await supabase
+        .from('configuracoes_sistema')
+        .upsert({
+          chave: key,
+          valor: String(val),
+          descricao: `Tempo padrão de lembrete em minutos antes do início do compromisso para a igreja ${selectedIgreja.nome}`
+        }, { onConflict: 'chave' });
+      if (error) throw error;
+      setDefaultTempoLembreteGlobal(val);
+      localStorage.setItem(key, String(val));
+      if (!editingId) {
+        setTempoLembrete(val);
+      }
+    } catch (err) {
+      console.error('Error saving global lembrete:', err);
+    } finally {
+      setSavingGlobalLembrete(false);
+    }
+  };
+
   // Presence checklist state
   const [showPresenceModal, setShowPresenceModal] = useState(false);
+  const [selectedEventDetails, setSelectedEventDetails] = useState<AgendaItem | null>(null);
   const [currentPresenceMeeting, setCurrentPresenceMeeting] = useState<AgendaItem | null>(null);
   const [presenceList, setPresenceList] = useState<Array<{ id_membro: string, nome: string, presente: boolean }>>([]);
   const [loadingPresence, setLoadingPresence] = useState(false);
@@ -90,6 +153,7 @@ export default function AgendaPage() {
     if (selectedIgreja?.id) {
       fetchAgenda();
       fetchComunidades();
+      fetchGlobalLembrete();
     }
   }, [selectedIgreja]);
 
@@ -276,10 +340,7 @@ export default function AgendaPage() {
       setRecorrencia('Único');
       setSelectedComunidadeId('');
       
-      const localDefault = selectedIgreja?.id 
-        ? localStorage.getItem(`tempo_lembrete_${selectedIgreja.id}`) || localStorage.getItem('tempo_lembrete')
-        : localStorage.getItem('tempo_lembrete');
-      setTempoLembrete(localDefault ? parseInt(localDefault, 10) : 15);
+      setTempoLembrete(defaultTempoLembreteGlobal);
       
       const today = new Date();
       const todayString = today.toISOString().split('T')[0];
@@ -351,7 +412,9 @@ export default function AgendaPage() {
           local: local.trim() || null,
           privado: privado,
           status: status,
-          tempo_lembrete: tempoLembrete
+          tempo_lembrete: tempoLembrete,
+          atualizado_por_nome: user?.nome || user?.email || 'Membro',
+          atualizado_em: new Date().toISOString()
         };
 
         const { error: patchErr } = await supabase
@@ -406,7 +469,9 @@ export default function AgendaPage() {
             local: local.trim() || null,
             privado: privado,
             status: status,
-            tempo_lembrete: tempoLembrete
+            tempo_lembrete: tempoLembrete,
+            criado_por_nome: user?.nome || user?.email || 'Membro',
+            criado_em: new Date().toISOString()
           });
         } else {
           while (currentStartDate <= limitDate) {
@@ -421,7 +486,9 @@ export default function AgendaPage() {
               local: local.trim() || null,
               privado: privado,
               status: status,
-              tempo_lembrete: tempoLembrete
+              tempo_lembrete: tempoLembrete,
+              criado_por_nome: user?.nome || user?.email || 'Membro',
+              criado_em: new Date().toISOString()
             });
 
             if (recorrencia === 'Diário') {
@@ -905,6 +972,27 @@ export default function AgendaPage() {
               />
             </div>
 
+            {/* Global Reminder Configuration */}
+            <div className="flex items-center gap-2 p-1 bg-slate-50 dark:bg-slate-955 rounded-xl border border-slate-200/50 dark:border-slate-800/80 shrink-0 self-start md:self-auto">
+              <span className="text-[10px] font-black uppercase text-slate-450 dark:text-slate-500 tracking-wider pl-2.5 flex items-center gap-1.5">
+                🔔 Lembrete Padrão:
+              </span>
+              <div className="flex items-center gap-1 bg-white dark:bg-slate-900 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-850">
+                <input
+                  type="number"
+                  min="0"
+                  value={defaultTempoLembreteGlobal}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10) || 0;
+                    saveGlobalLembreteSetting(val);
+                  }}
+                  disabled={savingGlobalLembrete}
+                  className="w-11 text-center font-black text-xs bg-transparent text-slate-900 dark:text-white outline-none"
+                />
+                <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider pr-1">min</span>
+              </div>
+            </div>
+
             {/* Layout Toggle (Grid vs Lista) */}
             <div className="flex items-center gap-2 p-1 bg-slate-50 dark:bg-slate-955 rounded-xl border border-slate-200/50 dark:border-slate-800/80 shrink-0 self-start md:self-auto">
               <button
@@ -1031,6 +1119,9 @@ export default function AgendaPage() {
             <AnimatePresence mode="popLayout">
               {filteredItems.map((item, index) => {
                 const styles = getStatusStyle(item.status);
+                const hasReminder = item.tempo_lembrete !== undefined && item.tempo_lembrete !== null;
+                const reminderClass = hasReminder ? 'agenda-event-card' : '';
+
                 return (
                   <motion.div
                     key={item.id}
@@ -1040,8 +1131,8 @@ export default function AgendaPage() {
                     exit={{ opacity: 0, scale: 0.95 }}
                     transition={{ type: "spring", stiffness: 350, damping: 25, delay: index * 0.02 }}
                     className={layoutMode === 'grid' 
-                      ? `bg-white dark:bg-slate-900 border ${styles.border} rounded-3xl p-6 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col justify-between items-start gap-4 h-full relative`
-                      : `bg-white dark:bg-slate-900 border ${styles.border} rounded-2xl p-4 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 relative w-full`
+                      ? `bg-white dark:bg-slate-900 border ${styles.border} rounded-3xl p-6 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col justify-between items-start gap-4 h-full relative ${reminderClass}`
+                      : `bg-white dark:bg-slate-900 border ${styles.border} rounded-2xl p-4 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 relative w-full ${reminderClass}`
                     }
                   >
                     {layoutMode === 'grid' ? (
@@ -1109,6 +1200,13 @@ export default function AgendaPage() {
 
                         {/* Controller actions */}
                         <div className="flex gap-2 w-full pt-4 border-t border-slate-100 dark:border-slate-850/80 mt-auto justify-end items-center">
+                          <button
+                            onClick={() => setSelectedEventDetails(item)}
+                            className="p-2.5 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/20 text-[#E4A232] rounded-xl transition duration-200 hover:scale-[1.04] cursor-pointer"
+                            title="Visualizar Detalhes e Auditoria"
+                          >
+                            <Info size={13} />
+                          </button>
                           <button
                             onClick={() => initForm(item)}
                             className="p-2.5 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-350 rounded-xl transition duration-200 hover:scale-[1.04] cursor-pointer"
@@ -1179,6 +1277,13 @@ export default function AgendaPage() {
 
                           <div className="flex gap-2">
                             <button
+                              onClick={() => setSelectedEventDetails(item)}
+                              className="p-2 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/20 text-[#E4A232] rounded-xl transition duration-200 hover:scale-[1.04] cursor-pointer"
+                              title="Visualizar Detalhes e Auditoria"
+                            >
+                              <Info size={13} />
+                            </button>
+                            <button
                               onClick={() => initForm(item)}
                               className="p-2 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-350 rounded-xl transition duration-200 hover:scale-[1.04] cursor-pointer"
                               title="Modificar Evento"
@@ -1202,9 +1307,120 @@ export default function AgendaPage() {
             </AnimatePresence>
           </motion.div>
         )}
+        {/* Modal de Detalhes e Auditoria do Evento */}
+        {selectedEventDetails && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/55 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200">
+            <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-200 dark:border-slate-850 shadow-2xl p-6 sm:p-8 w-full max-w-md relative animate-in zoom-in-95 duration-250">
+              <button
+                onClick={() => setSelectedEventDetails(null)}
+                className="absolute top-6 right-6 p-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-full text-slate-500 dark:text-slate-400 cursor-pointer transition"
+              >
+                <X size={16} />
+              </button>
 
+              <div className="flex items-center gap-3 border-b border-slate-100 dark:border-slate-800 pb-4 mb-5">
+                <Info className="text-[#E4A232]" size={22} />
+                <h2 className="text-base font-black uppercase tracking-tight text-slate-900 dark:text-white">
+                  Detalhes do Evento
+                </h2>
+              </div>
 
+              <div className="space-y-4">
+                <div>
+                  <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Nome do Compromisso</span>
+                  <p className="text-sm font-extrabold text-slate-800 dark:text-white uppercase tracking-tight leading-tight mt-0.5">
+                    {selectedEventDetails.titulo}
+                  </p>
+                </div>
 
+                <div className="grid grid-cols-2 gap-3 p-3.5 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-100 dark:border-slate-850">
+                  <div>
+                    <span className="text-[8px] font-black uppercase text-slate-400 tracking-wider">📅 Data</span>
+                    <p className="text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase mt-0.5">
+                      {new Date(selectedEventDetails.data_hora).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-[8px] font-black uppercase text-slate-400 tracking-wider">⏰ Horário</span>
+                    <p className="text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase mt-0.5">
+                      {formatEventTimeRange(selectedEventDetails.data_hora, selectedEventDetails.data_hora_fim, selectedEventDetails.dia_inteiro)}
+                    </p>
+                  </div>
+                </div>
+
+                {selectedEventDetails.local && (
+                  <div>
+                    <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider">📍 Local</span>
+                    <p className="text-xs font-bold text-slate-700 dark:text-slate-300 mt-0.5">
+                      {selectedEventDetails.local}
+                    </p>
+                  </div>
+                )}
+
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider rounded-lg border ${
+                    selectedEventDetails.privado 
+                      ? 'bg-slate-100 border-slate-200 text-slate-600 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400' 
+                      : 'bg-green-50 border-green-200 text-green-700 dark:bg-green-950/20 dark:border-green-900/30 dark:text-green-400'
+                  }`}>
+                    {selectedEventDetails.privado ? '🔒 Privado' : '🌍 Público'}
+                  </span>
+                  
+                  {selectedEventDetails.tempo_lembrete !== undefined && selectedEventDetails.tempo_lembrete !== null && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider rounded-lg border bg-amber-500/10 border-amber-500/20 text-[#E4A232]">
+                      🔔 Lembrete: {selectedEventDetails.tempo_lembrete} min
+                    </span>
+                  )}
+                </div>
+
+                {/* Audit Log Panel */}
+                <div className="border-t border-slate-100 dark:border-slate-800 pt-4 mt-2">
+                  <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-400 mb-3 flex items-center gap-1.5">
+                    📝 Histórico de Auditoria
+                  </h4>
+
+                  <div className="space-y-3">
+                    {/* Created log */}
+                    <div className="flex gap-2.5 text-[11px] font-bold text-slate-500 dark:text-slate-400">
+                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 mt-1.5" />
+                      <div>
+                        <span className="font-extrabold text-slate-700 dark:text-slate-300 uppercase text-[9px] block">Criado por</span>
+                        <p className="leading-relaxed">
+                          <span className="text-slate-900 dark:text-white font-black">{selectedEventDetails.criado_por_nome || 'Sistema (Legado)'}</span> em{' '}
+                          <span>{selectedEventDetails.criado_em ? new Date(selectedEventDetails.criado_em).toLocaleString('pt-BR') : new Date(selectedEventDetails.created_at || '').toLocaleString('pt-BR')}</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Updated log (conditional) */}
+                    {selectedEventDetails.atualizado_por_nome && (
+                      <div className="flex gap-2.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 border-t border-dashed border-slate-100 dark:border-slate-800 pt-2.5">
+                        <div className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 mt-1.5" />
+                        <div>
+                          <span className="font-extrabold text-slate-700 dark:text-slate-300 uppercase text-[9px] block">Última modificação</span>
+                          <p className="leading-relaxed">
+                            <span className="text-slate-900 dark:text-white font-black">{selectedEventDetails.atualizado_por_nome}</span> em{' '}
+                            <span>{selectedEventDetails.atualizado_em ? new Date(selectedEventDetails.atualizado_em).toLocaleString('pt-BR') : ''}</span>
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-6 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setSelectedEventDetails(null)}
+                  className="px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-white font-black text-xs uppercase tracking-wide cursor-pointer transition"
+                >
+                  Fechar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -97,6 +97,10 @@ export async function GET(req: NextRequest) {
     ALTER TABLE transacoes ADD COLUMN IF NOT EXISTS juros NUMERIC(15, 2) DEFAULT 0;
     ALTER TABLE transacoes ADD COLUMN IF NOT EXISTS acrescimos NUMERIC(15, 2) DEFAULT 0;
     ALTER TABLE transacoes ADD COLUMN IF NOT EXISTS valor_pago NUMERIC(15, 2) DEFAULT 0;
+    ALTER TABLE transacoes ADD COLUMN IF NOT EXISTS criado_por_nome TEXT;
+    ALTER TABLE transacoes ADD COLUMN IF NOT EXISTS criado_em TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now());
+    ALTER TABLE transacoes ADD COLUMN IF NOT EXISTS atualizado_por_nome TEXT;
+    ALTER TABLE transacoes ADD COLUMN IF NOT EXISTS atualizado_em TIMESTAMP WITH TIME ZONE;
 
     -- 6. Add col to 'usuarios'
     ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS foto_url TEXT;
@@ -156,6 +160,10 @@ export async function GET(req: NextRequest) {
     ALTER TABLE agendas ADD COLUMN IF NOT EXISTS local VARCHAR(255);
     ALTER TABLE agendas ADD COLUMN IF NOT EXISTS privado BOOLEAN DEFAULT false;
     ALTER TABLE agendas ADD COLUMN IF NOT EXISTS tempo_lembrete INTEGER DEFAULT 15;
+    ALTER TABLE agendas ADD COLUMN IF NOT EXISTS criado_por_nome TEXT;
+    ALTER TABLE agendas ADD COLUMN IF NOT EXISTS criado_em TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now());
+    ALTER TABLE agendas ADD COLUMN IF NOT EXISTS atualizado_por_nome TEXT;
+    ALTER TABLE agendas ADD COLUMN IF NOT EXISTS atualizado_em TIMESTAMP WITH TIME ZONE;
     ALTER TABLE agendas DROP COLUMN IF EXISTS id_comunidade CASCADE;
 
     DROP TABLE IF EXISTS chamada_reuniao CASCADE;

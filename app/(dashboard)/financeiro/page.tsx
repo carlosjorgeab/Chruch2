@@ -41,6 +41,10 @@ type Transacao = {
   data_vencimento?: string | null;
   data_pagamento?: string | null;
   arquivos_transacao?: { id: string }[];
+  criado_por_nome?: string | null;
+  criado_em?: string | null;
+  atualizado_por_nome?: string | null;
+  atualizado_em?: string | null;
 };
 
 type Conta = {
@@ -112,6 +116,7 @@ export default function FinanceiroPage() {
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [membros, setMembros] = useState<{ id: string; nome: string }[]>([]);
+  const [selectedTransacaoDetails, setSelectedTransacaoDetails] = useState<Transacao | null>(null);
 
   // Submodules list database states
   const [dbCategorias, setDbCategorias] = useState<Categoria[]>([]);
@@ -1145,12 +1150,18 @@ export default function FinanceiroPage() {
       let savedTransacaoId = currentTransacao.id;
 
       if (currentTransacao.id) {
+        payload.atualizado_por_nome = user?.nome || user?.email || 'Membro';
+        payload.atualizado_em = new Date().toISOString();
+
         const { error: err } = await supabase
           .from('transacoes')
           .update(payload)
           .eq('id', currentTransacao.id);
         if (err) throw err;
       } else {
+        payload.criado_por_nome = user?.nome || user?.email || 'Membro';
+        payload.criado_em = new Date().toISOString();
+
         // Insert and grab ID
         const { data: insertedData, error: err } = await supabase
           .from('transacoes')
@@ -3059,6 +3070,13 @@ export default function FinanceiroPage() {
                                   <span className="inline-block md:hidden text-[9px] text-slate-450 font-black uppercase tracking-wider font-bold">Ações:</span>
                                   <div className="flex gap-1.5">
                                     <button
+                                      onClick={() => setSelectedTransacaoDetails(t)}
+                                      className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-white dark:hover:bg-slate-800 transition rounded-lg cursor-pointer flex items-center gap-1"
+                                      title="Ver Detalhes e Auditoria"
+                                    >
+                                      <FileText size={14} />
+                                    </button>
+                                    <button
                                       onClick={() => handleEdit(t)}
                                       className="p-1.5 text-slate-400 hover:text-amber-650 hover:bg-white dark:hover:bg-slate-800 transition rounded-lg cursor-pointer flex items-center gap-1"
                                       title="Editar Lançamento"
@@ -4490,6 +4508,188 @@ export default function FinanceiroPage() {
                   Sem dados para o período selecionado
                 </div>
               )}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Modal de Detalhes e Auditoria da Transação */}
+      {selectedTransacaoDetails && (() => {
+        const associatedForn = dbFornecedores.find(f => f.id === selectedTransacaoDetails.id_fornecedor);
+        const associatedAccount = dbContas.find(c => c.id === selectedTransacaoDetails.id_conta);
+        const associatedForm = dbFormasPagamento.find(f => f.id === selectedTransacaoDetails.id_forma_pagamento);
+        const associatedCc = dbCentrosCusto.find(cc => cc.id === selectedTransacaoDetails.id_centro_custo);
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/55 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200">
+            <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-200 dark:border-slate-850 shadow-2xl p-6 sm:p-8 w-full max-w-lg relative animate-in zoom-in-95 duration-250">
+              <button
+                onClick={() => setSelectedTransacaoDetails(null)}
+                className="absolute top-6 right-6 p-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-full text-slate-500 dark:text-slate-400 cursor-pointer transition"
+              >
+                <X size={16} />
+              </button>
+
+              <div className="flex items-center gap-3 border-b border-slate-100 dark:border-slate-800 pb-4 mb-5">
+                <FileText className="text-amber-550" size={22} />
+                <h2 className="text-base font-black uppercase tracking-tight text-slate-900 dark:text-white">
+                  Detalhes do Lançamento
+                </h2>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Descrição</span>
+                  <p className="text-sm font-extrabold text-slate-800 dark:text-white uppercase tracking-tight leading-tight mt-0.5">
+                    {selectedTransacaoDetails.descricao}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-3 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-100 dark:border-slate-850">
+                    <span className="text-[8px] font-black uppercase text-slate-400 tracking-wider">🏷️ Categoria</span>
+                    <p className="text-xs font-black text-slate-700 dark:text-slate-300 uppercase mt-0.5">
+                      {selectedTransacaoDetails.categoria}
+                    </p>
+                  </div>
+                  <div className="p-3 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-100 dark:border-slate-850">
+                    <span className="text-[8px] font-black uppercase text-slate-400 tracking-wider">📊 Fluxo</span>
+                    <p className="mt-0.5">
+                      <span className={`inline-flex items-center px-2 py-0.5 text-[9px] font-black uppercase tracking-wider rounded border ${
+                        selectedTransacaoDetails.tipo === 'Entrada' 
+                          ? 'bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-950/20 dark:border-blue-900/30' 
+                          : 'bg-red-50 border-red-200 text-red-700 dark:bg-red-950/20 dark:border-red-900/30'
+                      }`}>
+                        {selectedTransacaoDetails.tipo}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-4 gap-2.5 p-3.5 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-100 dark:border-slate-850">
+                  <div className="col-span-2">
+                    <span className="text-[8px] font-black uppercase text-slate-400 tracking-wider">💵 Valor Principal</span>
+                    <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      R$ {Number(selectedTransacaoDetails.valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-[8px] font-black uppercase text-slate-400 tracking-wider">📈 Juros</span>
+                    <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      R$ {Number(selectedTransacaoDetails.juros || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-[8px] font-black uppercase text-slate-400 tracking-wider">📉 Multa/Acres.</span>
+                    <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      R$ {Number(selectedTransacaoDetails.acrescimos || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                  <div className="col-span-4 border-t border-dashed border-slate-200 dark:border-slate-800 pt-2 mt-1 flex justify-between items-center">
+                    <span className="text-[9px] font-black uppercase text-slate-450 tracking-wider">💰 Total Pago/Recebido</span>
+                    <span className={`text-sm font-black ${selectedTransacaoDetails.tipo === 'Entrada' ? 'text-blue-600' : 'text-red-500'}`}>
+                      R$ {Number(selectedTransacaoDetails.valor_pago || selectedTransacaoDetails.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <span className="text-[8px] font-black uppercase text-slate-400 tracking-wider">📅 Emissão/Data</span>
+                    <p className="text-[10px] font-black text-slate-700 dark:text-slate-300 mt-0.5">
+                      {selectedTransacaoDetails.data ? new Date(selectedTransacaoDetails.data + 'T00:00:00').toLocaleDateString('pt-BR') : '-'}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-[8px] font-black uppercase text-slate-400 tracking-wider">📅 Vencimento</span>
+                    <p className="text-[10px] font-black text-slate-700 dark:text-slate-300 mt-0.5">
+                      {selectedTransacaoDetails.data_vencimento ? new Date(selectedTransacaoDetails.data_vencimento + 'T00:00:00').toLocaleDateString('pt-BR') : '-'}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-[8px] font-black uppercase text-slate-400 tracking-wider">📅 Liquidação</span>
+                    <p className="text-[10px] font-black text-slate-700 dark:text-slate-300 mt-0.5">
+                      {selectedTransacaoDetails.data_pagamento ? (
+                        <span className="text-emerald-600 dark:text-emerald-400 font-bold">{new Date(selectedTransacaoDetails.data_pagamento + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
+                      ) : (
+                        <span className="text-red-500 font-bold uppercase text-[9px] tracking-wider">Pendente</span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <span className="text-[8px] font-black uppercase text-slate-400 tracking-wider block">🏢 Conta Financeira</span>
+                    <span className="font-bold text-slate-700 dark:text-slate-300">
+                      {associatedAccount ? `${associatedAccount.nome} (${associatedAccount.banco || 'Geral'})` : 'Caixa Geral'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[8px] font-black uppercase text-slate-400 tracking-wider block">💳 Forma de Pagamento</span>
+                    <span className="font-bold text-slate-700 dark:text-slate-300">
+                      {associatedForm?.nome || 'Não especificada'}
+                    </span>
+                  </div>
+                  <div className="col-span-2 border-t border-slate-100 dark:border-slate-800 pt-2">
+                    <span className="text-[8px] font-black uppercase text-slate-400 tracking-wider block">🎯 Centro de Custo</span>
+                    <span className="font-bold text-slate-700 dark:text-slate-300">
+                      {associatedCc ? `${associatedCc.nome} (${associatedCc.sigla})` : 'Geral'}
+                    </span>
+                  </div>
+                  <div className="col-span-2">
+                    <span className="text-[8px] font-black uppercase text-slate-400 tracking-wider block">👥 Fornecedor / Contribuinte</span>
+                    <span className="font-bold text-slate-700 dark:text-slate-300">
+                      {associatedForn ? associatedForn.razao_social : (selectedTransacaoDetails.membro_contribuinte || 'Geral / Coletivo')}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Audit Log Panel */}
+                <div className="border-t border-slate-100 dark:border-slate-800 pt-4 mt-2">
+                  <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-400 mb-3 flex items-center gap-1.5">
+                    📝 Histórico de Auditoria
+                  </h4>
+
+                  <div className="space-y-3">
+                    {/* Created log */}
+                    <div className="flex gap-2.5 text-[11px] font-bold text-slate-500 dark:text-slate-400">
+                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 mt-1.5" />
+                      <div>
+                        <span className="font-extrabold text-slate-700 dark:text-slate-300 uppercase text-[9px] block">Criado por</span>
+                        <p className="leading-relaxed">
+                          <span className="text-slate-900 dark:text-white font-black">{selectedTransacaoDetails.criado_por_nome || 'Sistema (Legado)'}</span> em{' '}
+                          <span>{selectedTransacaoDetails.criado_em ? new Date(selectedTransacaoDetails.criado_em).toLocaleString('pt-BR') : 'Data inicial do sistema'}</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Updated log (conditional) */}
+                    {selectedTransacaoDetails.atualizado_por_nome && (
+                      <div className="flex gap-2.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 border-t border-dashed border-slate-100 dark:border-slate-800 pt-2.5">
+                        <div className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 mt-1.5" />
+                        <div>
+                          <span className="font-extrabold text-slate-700 dark:text-slate-300 uppercase text-[9px] block">Última modificação</span>
+                          <p className="leading-relaxed">
+                            <span className="text-slate-900 dark:text-white font-black">{selectedTransacaoDetails.atualizado_por_nome}</span> em{' '}
+                            <span>{selectedTransacaoDetails.atualizado_em ? new Date(selectedTransacaoDetails.atualizado_em).toLocaleString('pt-BR') : ''}</span>
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-6 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setSelectedTransacaoDetails(null)}
+                  className="px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-white font-black text-xs uppercase tracking-wide cursor-pointer transition"
+                >
+                  Fechar
+                </button>
+              </div>
             </div>
           </div>
         );
