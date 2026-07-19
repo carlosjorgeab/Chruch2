@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useIgreja } from '@/context/IgrejaContext';
+import { useAuth } from '@/context/AuthContext';
 import { useConfirm } from '@/context/ConfirmContext';
 import { 
   Plus, 
@@ -106,6 +107,7 @@ type MembroRes = {
 export default function EventosPage() {
   const { selectedIgreja } = useIgreja();
   const { confirmDelete } = useConfirm();
+  const { hasPermission } = useAuth();
 
   // State Management
   const [eventos, setEventos] = useState<Evento[]>([]);
@@ -1062,13 +1064,15 @@ export default function EventosPage() {
             </p>
           </div>
 
-          <button
-            onClick={handleOpenNewEvent}
-            className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-[#E4A232] hover:bg-[#E4A232]/95 text-white text-xs font-black uppercase tracking-wider shadow-lg shadow-amber-500/10 cursor-pointer duration-200 active:scale-95"
-          >
-            <Plus size={16} />
-            Novo Evento
-          </button>
+          {hasPermission('eventos:novo') && (
+            <button
+              onClick={handleOpenNewEvent}
+              className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-[#E4A232] hover:bg-[#E4A232]/95 text-white text-xs font-black uppercase tracking-wider shadow-lg shadow-amber-500/10 cursor-pointer duration-200 active:scale-95"
+            >
+              <Plus size={16} />
+              Novo Evento
+            </button>
+          )}
         </div>
 
         {/* Global Notifications */}
@@ -1359,13 +1363,15 @@ export default function EventosPage() {
                       </button>
                     </div>
 
-                    <button
-                      onClick={() => handleDeleteEvent(evt.id, evt.titulo)}
-                      className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50/50 dark:hover:bg-red-950/20 rounded-xl transition cursor-pointer self-end sm:self-auto"
-                      title="Excluir Evento"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    {hasPermission('eventos:excluir') && (
+                      <button
+                        onClick={() => handleDeleteEvent(evt.id, evt.titulo)}
+                        className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50/50 dark:hover:bg-red-950/20 rounded-xl transition cursor-pointer self-end sm:self-auto"
+                        title="Excluir Evento"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
                   </div>
                 </div>
               );
@@ -1612,8 +1618,8 @@ export default function EventosPage() {
                     </button>
                     <button
                       type="submit"
-                      disabled={isSubmitting}
-                      className="px-6 py-3 rounded-xl bg-[#E4A232] hover:bg-[#E4A232]/90 text-white font-black text-xs uppercase tracking-wider shadow-lg flex items-center gap-1.5 transition cursor-pointer select-none"
+                      disabled={isSubmitting || (currentEvent?.id ? !hasPermission('eventos:editar') : !hasPermission('eventos:novo'))}
+                      className="px-6 py-3 rounded-xl bg-[#E4A232] hover:bg-[#E4A232]/90 disabled:opacity-50 text-white font-black text-xs uppercase tracking-wider shadow-lg flex items-center gap-1.5 transition cursor-pointer select-none"
                     >
                       <Save size={14} />
                       {isSubmitting ? 'Salvando...' : 'Salvar Dados'}

@@ -45,7 +45,7 @@ type UfInfo = {
 
 export default function MembrosPage() {
   const { selectedIgreja } = useIgreja();
-  const { user } = useAuth();
+  const { user, hasPermission } = useAuth();
   const { confirmDelete } = useConfirm();
   const [membros, setMembros] = useState<Membro[]>([]);
   const [ufs, setUfs] = useState<UfInfo[]>([]);
@@ -243,7 +243,7 @@ export default function MembrosPage() {
     setSuccess('');
 
     if (!selectedIgreja) {
-      setError('Selecione uma congregação válida.');
+      setError('Selecione uma igreja válida.');
       return;
     }
 
@@ -476,7 +476,7 @@ export default function MembrosPage() {
       });
 
       // 4. Elegantly style PDF Brand Header Card (all lines in black)
-      const churchName = selectedIgreja?.nome || 'Minha Congregação';
+      const churchName = selectedIgreja?.nome || 'Minha Igreja';
       const docTitle = reportType === 'alphabetical'
         ? 'RELATÓRIO GERAL DE MEMBROS (ORDEM ALFABÉTICA)'
         : `RELATÓRIO DE ANIVERSARIANTES - MÊS ${reportMonth.toString().padStart(2, '0')}`;
@@ -698,7 +698,7 @@ export default function MembrosPage() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
         <div>
           <p className="text-sm font-bold text-amber-600 uppercase tracking-widest mb-1">Membros</p>
-          <h2 className="text-3xl font-black font-headline text-slate-900 dark:text-white uppercase tracking-tight">Congregação</h2>
+          <h2 className="text-3xl font-black font-headline text-slate-900 dark:text-white uppercase tracking-tight">Membros</h2>
           <p className="text-slate-500 text-sm">
             Gestão de membros para {selectedIgreja ? selectedIgreja.nome : 'esta igreja'}
           </p>
@@ -717,14 +717,16 @@ export default function MembrosPage() {
               <FileText size={18} className="text-amber-600" />
               Relatórios
             </button>
-            <button
-              onClick={handleNew}
-              disabled={!selectedIgreja}
-              className="flex items-center gap-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white font-bold py-3 px-6 rounded-xl shadow-md transition active:scale-95 text-sm uppercase tracking-wider cursor-pointer"
-            >
-              <Plus size={18} />
-              Novo Membro
-            </button>
+            {hasPermission('membros:novo') && (
+              <button
+                onClick={handleNew}
+                disabled={!selectedIgreja}
+                className="flex items-center gap-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white font-bold py-3 px-6 rounded-xl shadow-md transition active:scale-95 text-sm uppercase tracking-wider cursor-pointer"
+              >
+                <Plus size={18} />
+                Novo Membro
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -745,7 +747,7 @@ export default function MembrosPage() {
         <form onSubmit={handleSubmit} className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm p-8 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
           <div className="flex justify-between items-center border-b border-slate-150 dark:border-slate-700 pb-4">
             <h3 className="text-xl font-bold text-slate-900 dark:text-white">
-              {currentMembro.id ? 'Editar Cadastro de Membro' : 'Novo Membro da Congregação'}
+              {currentMembro.id ? 'Editar Cadastro de Membro' : 'Novo Membro'}
             </h3>
             <button type="button" onClick={() => setIsEditing(false)} className="text-slate-400 hover:text-slate-600">
               <X size={20} />
@@ -1364,20 +1366,24 @@ export default function MembrosPage() {
                         </td>
                         <td className="px-6 py-4 text-right">
                           <div className="flex justify-end gap-2">
-                            <button
-                              onClick={() => handleEdit(m)}
-                              className="p-2 text-slate-400 hover:text-amber-600 hover:bg-slate-50 dark:hover:bg-slate-900 transition rounded-lg"
-                              title="Editar"
-                            >
-                              <Edit2 size={16} />
-                            </button>
-                            <button
-                              onClick={() => handleDelete(m.id, m.nome)}
-                              className="p-2 text-slate-400 hover:text-red-600 hover:bg-slate-50 dark:hover:bg-slate-900 transition rounded-lg"
-                              title="Excluir"
-                            >
-                              <Trash2 size={16} />
-                            </button>
+                            {hasPermission('membros:editar') && (
+                              <button
+                                onClick={() => handleEdit(m)}
+                                className="p-2 text-slate-400 hover:text-amber-600 hover:bg-slate-50 dark:hover:bg-slate-900 transition rounded-lg"
+                                title="Editar"
+                              >
+                                <Edit2 size={16} />
+                              </button>
+                            )}
+                            {hasPermission('membros:excluir') && (
+                              <button
+                                onClick={() => handleDelete(m.id, m.nome)}
+                                className="p-2 text-slate-400 hover:text-red-600 hover:bg-slate-50 dark:hover:bg-slate-900 transition rounded-lg"
+                                title="Excluir"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>

@@ -332,6 +332,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     router.push('/login');
   };
 
+  const getModuleAndAction = (menu: string): { moduleName: string; action: string } => {
+    if (menu.includes(':')) {
+      const [m, a] = menu.split(':');
+      return { moduleName: m, action: a };
+    }
+
+    let action = 'leitura';
+    let moduleName = '';
+
+    if (menu.startsWith('/membros')) moduleName = 'membros';
+    else if (menu.startsWith('/comunidades')) moduleName = 'comunidades';
+    else if (menu.startsWith('/agenda')) moduleName = 'agenda';
+    else if (menu.startsWith('/eventos')) moduleName = 'eventos';
+    else if (menu.startsWith('/mural')) moduleName = 'mural';
+    else if (menu.startsWith('/licoes')) moduleName = 'licoes';
+    else if (menu.startsWith('/presencas')) moduleName = 'presencas';
+    else if (menu.startsWith('/financeiro')) moduleName = 'financeiro';
+    else if (menu.startsWith('/fornecedores')) moduleName = 'fornecedores';
+    else if (menu.startsWith('/kids')) moduleName = 'kids';
+
+    return { moduleName, action };
+  };
+
   const hasPermission = (menu: string) => {
     const isPublicRoute = pathname?.startsWith('/p/');
     if (isPublicRoute) {
@@ -361,12 +384,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!user.perfil) return false;
     const perms = Array.isArray(user.perfil.permissoes) ? user.perfil.permissoes : [];
     
-    // If checking the base /kids route, allow access if any of the kids sub-permissions are set
-    if (menu === '/kids') {
-      return perms.includes('/kids') || perms.includes('/kids/turmas') || perms.includes('/kids/salas');
-    }
-    
-    return perms.includes(menu);
+    // Check module-specific granular permissions
+    const { moduleName, action } = getModuleAndAction(menu);
+    if (!moduleName) return false;
+
+    // Support legacy plain menu name checks if they exist, alongside new granular string formatting
+    return perms.includes(`${moduleName}:${action}`) || perms.includes(menu);
   };
 
   return (

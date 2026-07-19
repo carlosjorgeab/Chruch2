@@ -346,28 +346,6 @@ export default function Home() {
           setAniversariantes([]);
         }
 
-        // Fetch eventos
-        const { data: eventosData, error: errEventos } = await supabase
-          .from('eventos')
-          .select('*')
-          .eq('id_igreja', id)
-          .eq('status', 'Publicado')
-          .order('data_inicio', { ascending: true });
-
-        if (!errEventos && eventosData) {
-          const now = new Date();
-          const activeEventos = eventosData.filter((item: any) => {
-            const endStr = item.data_fim || item.data_inicio;
-            const end = new Date(endStr.includes('T') ? endStr : endStr + 'T00:00:00');
-            const compareDate = new Date(end);
-            compareDate.setHours(23, 59, 59, 999);
-            return compareDate >= now;
-          });
-          setEventos(activeEventos);
-        } else {
-          setEventos([]);
-        }
-
         // Fetch agendas
         const { data: agendaData, error: errAgenda } = await supabase
           .from('agendas')
@@ -381,6 +359,45 @@ export default function Home() {
           setAgendas(publicAgendas);
         } else {
           setAgendas([]);
+        }
+
+        // Fetch eventos
+        const { data: eventosData, error: errEventos } = await supabase
+          .from('eventos')
+          .select('*')
+          .eq('id_igreja', id)
+          .eq('status', 'Publicado')
+          .order('data_inicio', { ascending: true });
+
+        if (!errEventos && eventosData) {
+          const now = new Date();
+          const activeEventos = eventosData.filter((item: any) => {
+            // Se o evento estiver vinculado a uma agenda, obedece o vencimento da agenda vinculada
+            if (item.id_agenda && agendaData) {
+              const linkedAgenda = agendaData.find((a: any) => a.id === item.id_agenda);
+              if (linkedAgenda) {
+                const agendaDateStr = linkedAgenda.data_hora_fim || linkedAgenda.data_hora;
+                if (agendaDateStr) {
+                  const agendaDate = new Date(agendaDateStr);
+                  agendaDate.setHours(23, 59, 59, 999);
+                  return agendaDate >= now;
+                }
+              }
+            }
+
+            // Fallback para as datas próprias do evento caso não possua agenda vinculada
+            const endStr = item.data_fim || item.data_inicio;
+            if (endStr) {
+              const end = new Date(endStr.includes('T') ? endStr : endStr + 'T00:00:00');
+              const compareDate = new Date(end);
+              compareDate.setHours(23, 59, 59, 999);
+              return compareDate >= now;
+            }
+            return true;
+          });
+          setEventos(activeEventos);
+        } else {
+          setEventos([]);
         }
 
         // Fetch last open kids sala

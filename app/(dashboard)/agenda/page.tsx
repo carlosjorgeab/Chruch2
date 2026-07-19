@@ -37,6 +37,7 @@ type AgendaItem = {
   privado?: boolean;           // Público (false) ou Privado (true)
   status: 'Importante' | 'Normal' | 'Alerta';
   id_comunidade?: string | null;
+  tempo_lembrete?: number | null;
   created_at?: string;
 };
 
@@ -48,12 +49,14 @@ export default function AgendaPage() {
   const [search, setSearch] = useState('');
   const [layoutMode, setLayoutMode] = useState<'grid' | 'lista'>('grid');
   const [statusFilter, setStatusFilter] = useState<'Todos' | 'Normal' | 'Importante' | 'Alerta'>('Todos');
+  const [timeFilter, setTimeFilter] = useState<'futuros' | 'passados' | 'todos'>('futuros');
   
   const [isEditing, setIsEditing] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
   // Form states
   const [titulo, setTitulo] = useState('');
+  const [tempoLembrete, setTempoLembrete] = useState<number>(15);
   const [comunidades, setComunidades] = useState<any[]>([]);
   const [selectedComunidadeId, setSelectedComunidadeId] = useState<string>('');
 
@@ -232,6 +235,7 @@ export default function AgendaPage() {
       setLocal(item.local || '');
       setRecorrencia('Único');
       setSelectedComunidadeId(item.id_comunidade || '');
+      setTempoLembrete(item.tempo_lembrete !== undefined && item.tempo_lembrete !== null ? item.tempo_lembrete : 15);
 
       // Parse Initial Date & Time
       const dtStart = new Date(item.data_hora);
@@ -271,6 +275,11 @@ export default function AgendaPage() {
       setLocal('');
       setRecorrencia('Único');
       setSelectedComunidadeId('');
+      
+      const localDefault = selectedIgreja?.id 
+        ? localStorage.getItem(`tempo_lembrete_${selectedIgreja.id}`) || localStorage.getItem('tempo_lembrete')
+        : localStorage.getItem('tempo_lembrete');
+      setTempoLembrete(localDefault ? parseInt(localDefault, 10) : 15);
       
       const today = new Date();
       const todayString = today.toISOString().split('T')[0];
@@ -341,7 +350,8 @@ export default function AgendaPage() {
           dia_inteiro: diaInteiro,
           local: local.trim() || null,
           privado: privado,
-          status: status
+          status: status,
+          tempo_lembrete: tempoLembrete
         };
 
         const { error: patchErr } = await supabase
@@ -395,7 +405,8 @@ export default function AgendaPage() {
             dia_inteiro: diaInteiro,
             local: local.trim() || null,
             privado: privado,
-            status: status
+            status: status,
+            tempo_lembrete: tempoLembrete
           });
         } else {
           while (currentStartDate <= limitDate) {
@@ -409,7 +420,8 @@ export default function AgendaPage() {
               dia_inteiro: diaInteiro,
               local: local.trim() || null,
               privado: privado,
-              status: status
+              status: status,
+              tempo_lembrete: tempoLembrete
             });
 
             if (recorrencia === 'Diário') {
@@ -487,7 +499,20 @@ export default function AgendaPage() {
   const filteredItems = items.filter(item => {
     const matchesSearch = item.titulo.toLowerCase().includes(search.toLowerCase());
     const matchesStatus = statusFilter === 'Todos' || item.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    
+    // Time filter logic
+    const now = new Date();
+    const eventEndDateStr = item.data_hora_fim || item.data_hora;
+    const eventEndDate = new Date(eventEndDateStr);
+    
+    let matchesTime = true;
+    if (timeFilter === 'futuros') {
+      matchesTime = eventEndDate >= now || eventEndDate.toDateString() === now.toDateString();
+    } else if (timeFilter === 'passados') {
+      matchesTime = eventEndDate < now && eventEndDate.toDateString() !== now.toDateString();
+    }
+    
+    return matchesSearch && matchesStatus && matchesTime;
   });
 
   const getStatusStyle = (st: 'Importante' | 'Normal' | 'Alerta') => {
@@ -799,6 +824,27 @@ export default function AgendaPage() {
                   </p>
                 </div>
 
+                <div>
+                  <label className="block text-[10px] font-black text-slate-450 dark:text-slate-500 uppercase tracking-widest mb-2 ml-1">
+                    🔔 Antecedência do Lembrete (Minutos)
+                  </label>
+                  <div className="flex gap-3 items-center">
+                    <input
+                      type="number"
+                      min="0"
+                      required
+                      value={tempoLembrete}
+                      onChange={(e) => setTempoLembrete(parseInt(e.target.value, 10) || 0)}
+                      className="w-full px-4 py-3 rounded-2xl border-2 border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-955 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-semibold transition text-xs"
+                      placeholder="Ex: 15"
+                    />
+                    <span className="text-xs font-bold text-slate-450 uppercase tracking-wider shrink-0">minutos antes</span>
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-1.5 ml-1">
+                    Define o tempo de antecedência para enviar notificações aos membros cadastrados automaticamente antes do início do compromisso.
+                  </p>
+                </div>
+
                 {!editingId && (
                   <div>
                     <label className="block text-[10px] font-black text-slate-450 dark:text-slate-500 uppercase tracking-widest mb-2 ml-1">
@@ -890,26 +936,72 @@ export default function AgendaPage() {
             </div>
           </div>
 
-          {/* Status Quick Filters */}
-          <div className="flex flex-wrap items-center justify-between gap-4 pt-3 border-t border-slate-100 dark:border-slate-850">
-            <div className="flex flex-wrap gap-2">
-              {(['Todos', 'Normal', 'Importante', 'Alerta'] as const).map((st) => (
-                <button
-                  key={st}
-                  type="button"
-                  onClick={() => setStatusFilter(st)}
-                  className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider border transition-all ${
-                    statusFilter === st
-                      ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 border-transparent shadow-sm'
-                      : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-850'
-                  }`}
-                >
-                  {st === 'Todos' ? '📅 Todos' : st === 'Normal' ? '🔵 Normal' : st === 'Importante' ? '🔴 Importante' : '🟡 Alerta'}
-                </button>
-              ))}
+          {/* Filters Row with Period and Priority */}
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pt-3 border-t border-slate-100 dark:border-slate-850">
+            <div className="flex flex-wrap gap-x-6 gap-y-3 items-center">
+              {/* Time Period Filter */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-[9px] font-black uppercase text-slate-400 dark:text-slate-500 tracking-wider">Período:</span>
+                <div className="flex items-center gap-1 p-0.5 bg-slate-50 dark:bg-slate-955 rounded-lg border border-slate-200/50 dark:border-slate-800/80">
+                  <button
+                    type="button"
+                    onClick={() => setTimeFilter('futuros')}
+                    className={`px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-wider transition-all ${
+                      timeFilter === 'futuros'
+                        ? 'bg-[#E4A232] text-white shadow-sm'
+                        : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    🔮 Futuros
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTimeFilter('passados')}
+                    className={`px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-wider transition-all ${
+                      timeFilter === 'passados'
+                        ? 'bg-[#E4A232] text-white shadow-sm'
+                        : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    ⏳ Passados
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTimeFilter('todos')}
+                    className={`px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-wider transition-all ${
+                      timeFilter === 'todos'
+                        ? 'bg-[#E4A232] text-white shadow-sm'
+                        : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    📅 Todos
+                  </button>
+                </div>
+              </div>
+
+              {/* Status/Priority Filter */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-[9px] font-black uppercase text-slate-400 dark:text-slate-500 tracking-wider">Prioridade:</span>
+                <div className="flex flex-wrap gap-1">
+                  {(['Todos', 'Normal', 'Importante', 'Alerta'] as const).map((st) => (
+                    <button
+                      key={st}
+                      type="button"
+                      onClick={() => setStatusFilter(st)}
+                      className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider border transition-all ${
+                        statusFilter === st
+                          ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 border-transparent shadow-sm'
+                          : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-850'
+                      }`}
+                    >
+                      {st === 'Todos' ? 'Filtro Tudo' : st === 'Normal' ? '🔵 Normal' : st === 'Importante' ? '🔴 Importante' : '🟡 Alerta'}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
 
-            <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+            <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest shrink-0">
               Mostrando <span className="text-slate-700 dark:text-slate-300 font-black">{filteredItems.length}</span> de <span className="text-slate-700 dark:text-slate-300 font-black">{items.length}</span> eventos
             </div>
           </div>
@@ -932,7 +1024,10 @@ export default function AgendaPage() {
             </p>
           </div>
         ) : (
-          <div className={layoutMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" : "flex flex-col gap-4"}>
+          <motion.div 
+            layout 
+            className={layoutMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" : "flex flex-col gap-4"}
+          >
             <AnimatePresence mode="popLayout">
               {filteredItems.map((item, index) => {
                 const styles = getStatusStyle(item.status);
@@ -1000,6 +1095,15 @@ export default function AgendaPage() {
                                 <span className="line-clamp-2 leading-tight">{item.local}</span>
                               </div>
                             )}
+
+                            {/* Render Reminder details */}
+                            {item.tempo_lembrete !== undefined && item.tempo_lembrete !== null && (
+                              <div className="flex items-center gap-2 text-slate-450 dark:text-slate-500 font-bold text-[11px] pt-1 border-t border-dashed border-slate-100 dark:border-slate-800 w-full mt-1">
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/10 text-[#E4A232] font-extrabold uppercase tracking-wide">
+                                  🔔 Lembrete: {item.tempo_lembrete} min
+                                </span>
+                              </div>
+                            )}
                           </div>
                         </div>
 
@@ -1049,6 +1153,11 @@ export default function AgendaPage() {
                                   {item.local}
                                 </span>
                               )}
+                              {item.tempo_lembrete !== undefined && item.tempo_lembrete !== null && (
+                                <span className="flex items-center gap-1 text-[#E4A232] font-black">
+                                  <span>🔔 {item.tempo_lembrete}m antes</span>
+                                </span>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -1091,7 +1200,7 @@ export default function AgendaPage() {
                 );
               })}
             </AnimatePresence>
-          </div>
+          </motion.div>
         )}
 
 

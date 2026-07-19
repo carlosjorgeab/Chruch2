@@ -14,23 +14,24 @@ type Perfil = {
   id_igreja: string | null;
 };
 
-const MENU_OPTIONS = [
-  { id: '/membros', label: 'Gestão de Membros' },
-  { id: '/comunidades', label: 'Gestão de Comunidades' },
-  { id: '/agenda', label: 'Agenda da Igreja' },
-  { id: '/eventos', label: 'Gestão de Eventos' },
-  { id: '/mural', label: 'Mural de Avisos' },
-  { id: '/licoes', label: 'Gestão de Lições' },
-  { id: '/presencas', label: 'Controle de Presenças / Assistências' },
-  { id: '/financeiro', label: 'Gestão Financeira' },
-  { id: '/fornecedores', label: 'Cadastro de Fornecedores' },
-  { id: '/financeiro/contas', label: 'Submódulo Financeiro: Contas' },
-  { id: '/financeiro/categorias', label: 'Submódulo Financeiro: Categorias' },
-  { id: '/financeiro/formas_pagamento', label: 'Submódulo Financeiro: Formas de Pagamento' },
-  { id: '/financeiro/centro_custo', label: 'Submódulo Financeiro: Centro de Custo' },
-  { id: '/kids', label: 'Módulo Kids: Painel Operacional / Check-in' },
-  { id: '/kids/turmas', label: 'Módulo Kids: Turmas' },
-  { id: '/kids/salas', label: 'Módulo Kids: Salas' },
+const MODULES_LIST = [
+  { id: 'membros', label: 'Gestão de Membros' },
+  { id: 'comunidades', label: 'Gestão de Comunidades' },
+  { id: 'agenda', label: 'Agenda da Igreja' },
+  { id: 'eventos', label: 'Gestão de Eventos' },
+  { id: 'mural', label: 'Mural de Avisos' },
+  { id: 'licoes', label: 'Gestão de Lições' },
+  { id: 'presencas', label: 'Controle de Presenças / Assistências' },
+  { id: 'financeiro', label: 'Gestão Financeira' },
+  { id: 'fornecedores', label: 'Cadastro de Fornecedores' },
+  { id: 'kids', label: 'Módulo Kids (Check-in/Turmas/Salas)' },
+];
+
+const ACTIONS = [
+  { id: 'leitura', label: 'Leitura' },
+  { id: 'novo', label: 'Novo' },
+  { id: 'editar', label: 'Editar' },
+  { id: 'excluir', label: 'Excluir' },
 ];
 
 export default function PerfisPage() {
@@ -163,23 +164,40 @@ export default function PerfisPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-3">Permissões de Acesso</label>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                <div className="flex items-center gap-3 p-3 rounded-lg border border-slate-200 bg-slate-50 opacity-70">
-                  <input type="checkbox" checked disabled className="w-4 h-4 text-primary" />
-                  <span className="text-sm font-medium">Visão Geral (Sempre liberado)</span>
-                </div>
-                {MENU_OPTIONS.map(menu => (
-                  <label key={menu.id} className="flex items-center gap-3 p-3 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer transition-colors">
-                    <input 
-                      type="checkbox" 
-                      checked={(currentPerfil.permissoes || []).includes(menu.id)}
-                      onChange={() => togglePermission(menu.id)}
-                      className="w-4 h-4 text-primary rounded focus:ring-primary" 
-                    />
-                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{menu.label}</span>
-                  </label>
-                ))}
+              <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-3">Permissões de Acesso por Módulo</label>
+              <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden bg-white dark:bg-slate-900 shadow-sm">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                      <th className="p-4">Módulo</th>
+                      <th className="p-4 text-center">Leitura</th>
+                      <th className="p-4 text-center">Novo</th>
+                      <th className="p-4 text-center">Editar</th>
+                      <th className="p-4 text-center">Excluir</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {MODULES_LIST.map(mod => (
+                      <tr key={mod.id} className="border-b border-slate-100 dark:border-slate-800 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-800/30">
+                        <td className="p-4 font-bold text-sm text-slate-800 dark:text-slate-200">{mod.label}</td>
+                        {ACTIONS.map(act => {
+                          const permId = `${mod.id}:${act.id}`;
+                          const isChecked = (currentPerfil.permissoes || []).includes(permId);
+                          return (
+                            <td key={act.id} className="p-4 text-center">
+                              <input 
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={() => togglePermission(permId)}
+                                className="w-4 h-4 text-amber-600 border-slate-300 dark:border-slate-600 rounded focus:ring-amber-500 cursor-pointer"
+                              />
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
 
@@ -222,15 +240,23 @@ export default function PerfisPage() {
                     <td className="p-4">
                       <div className="flex flex-wrap gap-1">
                         <span className="px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-xs rounded-md font-medium">Visão Geral</span>
-                        <span className="px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-xs rounded-md font-medium">Visão Mapa</span>
-                        <span className="px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-xs rounded-md font-medium">Adesão Edital</span>
                         {perfil.permissoes.map(p => {
-                          const menu = MENU_OPTIONS.find(m => m.id === p);
-                          return menu ? (
-                            <span key={p} className="px-2 py-1 bg-primary/10 text-primary text-xs rounded-md font-medium">
-                              {menu.label}
+                          if (p.includes(':')) {
+                            const [mod, act] = p.split(':');
+                            const modObj = MODULES_LIST.find(m => m.id === mod);
+                            if (modObj) {
+                              return (
+                                <span key={p} className="px-2 py-1 bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-400 text-xs rounded-md font-bold uppercase">
+                                  {modObj.label} ({act})
+                                </span>
+                              );
+                            }
+                          }
+                          return (
+                            <span key={p} className="px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-xs rounded-md font-medium">
+                              {p}
                             </span>
-                          ) : null;
+                          );
                         })}
                       </div>
                     </td>
