@@ -449,7 +449,7 @@ export default function PublicKidsRegistration() {
                 <div className="space-y-4 pt-4 border-t border-slate-100 dark:border-slate-800/60">
                   <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">2. Dados dos Responsáveis</h3>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 gap-4">
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">
                         Nome do Responsável *

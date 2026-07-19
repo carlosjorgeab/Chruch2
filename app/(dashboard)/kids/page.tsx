@@ -2538,7 +2538,7 @@ export default function KidsModule() {
                         </div>
 
                         {/* Responsible Contact details */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 gap-4">
                           <div className="relative">
                             <label className="text-[10px] font-black uppercase tracking-wider text-slate-450 dark:text-slate-500">Nome do Responsável *</label>
                             {responsavelTipo === 'Membro' ? (

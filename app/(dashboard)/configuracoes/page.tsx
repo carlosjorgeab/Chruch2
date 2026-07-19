@@ -28,6 +28,7 @@ export default function ConfiguracoesPage() {
   const [notifyBirthdays, setNotifyBirthdays] = useState(true);
   const [reminderValue, setReminderValue] = useState('60');
   const [reminderUnit, setReminderUnit] = useState('minutos');
+  const [tempoLembrete, setTempoLembrete] = useState('15');
 
   // SMTP configuration states
   const [smtpHost, setSmtpHost] = useState('');
@@ -160,6 +161,7 @@ export default function ConfiguracoesPage() {
         let sPass = '';
         let sFrom = '';
         let sSSL = 'true';
+        let tLembrete = '15';
         data.forEach((config: any) => {
           if (config.chave === 'session_timeout') setSessionTimeout(config.valor);
           if (config.chave === 'disable_multi_login') setDisableMultiLogin(config.valor === 'true');
@@ -170,6 +172,7 @@ export default function ConfiguracoesPage() {
           if (config.chave === 'notify_birthdays') setNotifyBirthdays(config.valor === 'true');
           if (config.chave === 'event_reminder_value') val = config.valor;
           if (config.chave === 'event_reminder_unit') unit = config.valor;
+          if (config.chave === 'tempo_lembrete') tLembrete = config.valor;
           if (config.chave === 'smtp_host') sHost = config.valor;
           if (config.chave === 'smtp_port') sPort = config.valor;
           if (config.chave === 'smtp_user') sUser = config.valor;
@@ -183,6 +186,7 @@ export default function ConfiguracoesPage() {
           if (selectedIgreja?.id) {
             if (config.chave === `event_reminder_value_${selectedIgreja.id}`) val = config.valor;
             if (config.chave === `event_reminder_unit_${selectedIgreja.id}`) unit = config.valor;
+            if (config.chave === `tempo_lembrete_${selectedIgreja.id}`) tLembrete = config.valor;
             if (config.chave === `smtp_host_${selectedIgreja.id}`) sHost = config.valor;
             if (config.chave === `smtp_port_${selectedIgreja.id}`) sPort = config.valor;
             if (config.chave === `smtp_user_${selectedIgreja.id}`) sUser = config.valor;
@@ -194,6 +198,7 @@ export default function ConfiguracoesPage() {
 
         setReminderValue(val);
         setReminderUnit(unit);
+        setTempoLembrete(tLembrete);
         setSmtpHost(sHost);
         setSmtpPort(sPort);
         setSmtpUser(sUser);
@@ -237,9 +242,11 @@ export default function ConfiguracoesPage() {
       if (selectedIgreja?.id) {
         localStorage.setItem(`event_reminder_value_${selectedIgreja.id}`, String(reminderValue));
         localStorage.setItem(`event_reminder_unit_${selectedIgreja.id}`, reminderUnit);
+        localStorage.setItem(`tempo_lembrete_${selectedIgreja.id}`, String(tempoLembrete));
       }
       localStorage.setItem('event_reminder_value', String(reminderValue));
       localStorage.setItem('event_reminder_unit', reminderUnit);
+      localStorage.setItem('tempo_lembrete', String(tempoLembrete));
 
       // 1. Update system-wide configurations
       const updates = [
@@ -257,6 +264,7 @@ export default function ConfiguracoesPage() {
         updates.push(
           { chave: `event_reminder_value_${selectedIgreja.id}`, valor: String(reminderValue) },
           { chave: `event_reminder_unit_${selectedIgreja.id}`, valor: reminderUnit },
+          { chave: `tempo_lembrete_${selectedIgreja.id}`, valor: String(tempoLembrete) },
           { chave: `smtp_host_${selectedIgreja.id}`, valor: smtpHost },
           { chave: `smtp_port_${selectedIgreja.id}`, valor: smtpPort },
           { chave: `smtp_user_${selectedIgreja.id}`, valor: smtpUser },
@@ -268,6 +276,7 @@ export default function ConfiguracoesPage() {
         updates.push(
           { chave: 'event_reminder_value', valor: String(reminderValue) },
           { chave: 'event_reminder_unit', valor: reminderUnit },
+          { chave: 'tempo_lembrete', valor: String(tempoLembrete) },
           { chave: 'smtp_host', valor: smtpHost },
           { chave: 'smtp_port', valor: smtpPort },
           { chave: 'smtp_user', valor: smtpUser },
@@ -804,9 +813,48 @@ export default function ConfiguracoesPage() {
                         </div>
                       </div>
 
-                      <div className="flex items-center bg-slate-50 dark:bg-slate-950/40 p-4 rounded-2xl border border-dashed border-slate-200 dark:border-slate-850">
+                      <div className="flex items-center bg-slate-50 dark:bg-slate-955/40 p-4 rounded-2xl border border-dashed border-slate-200 dark:border-slate-850">
                         <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
                           💡 <span className="font-bold text-slate-700 dark:text-slate-300">Como funciona:</span> O painel gerará alertas visuais e lembretes para cada evento registrado com exatos <span className="font-bold text-[#E4A232]">{reminderValue} {reminderUnit}</span> de antecedência do seu horário agendado de início.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Tempo de Lembrete - Campo para definir quantos minutos antes de um evento o usuário deve ser notificado */}
+                  <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 p-6 rounded-[2rem] shadow-sm space-y-6">
+                    <div className="flex items-center gap-4 pb-4 border-b border-slate-100 dark:border-slate-800">
+                      <div className="w-10 h-10 bg-amber-500/10 rounded-xl flex items-center justify-center text-[#E4A232]">
+                        <Bell size={20} />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-black uppercase text-slate-900 dark:text-white tracking-widest">Tempo de Lembrete</h4>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">Defina quantos minutos antes de um evento na agenda o usuário deve ser notificado</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+                      <div className="space-y-2">
+                        <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                          Tempo de Lembrete (Minutos)
+                        </label>
+                        <div className="flex gap-3 items-center">
+                          <input
+                            type="number"
+                            min="1"
+                            value={tempoLembrete}
+                            onChange={(e) => setTempoLembrete(e.target.value)}
+                            className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-750 bg-slate-50 dark:bg-slate-955 text-slate-900 dark:text-white font-bold text-sm focus:border-primary focus:bg-white dark:focus:bg-slate-900 transition outline-none"
+                            placeholder="Ex: 15"
+                            disabled={saving}
+                          />
+                          <span className="text-xs font-bold text-slate-450 uppercase tracking-wider shrink-0">minutos antes</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center bg-slate-50 dark:bg-slate-955/45 p-4 rounded-2xl border border-dashed border-slate-200 dark:border-slate-850">
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                          🔔 <span className="font-bold text-slate-700 dark:text-slate-300">Como funciona:</span> O usuário receberá notificações ativas no sistema exatamente <span className="font-bold text-[#E4A232]">{tempoLembrete} minutos</span> antes do início de qualquer evento programado na agenda da igreja.
                         </p>
                       </div>
                     </div>

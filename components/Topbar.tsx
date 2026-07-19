@@ -44,11 +44,12 @@ export function Topbar() {
       try {
         // 1. Fetch system-wide notification configs
         const { data: configData } = await supabase.from('configuracoes_sistema').select('*');
-        const activeConfigs = {
+        const activeConfigs: Record<string, any> = {
           notify_new_members: true,
           notify_lessons: true,
           notify_low_balance: true,
           notify_birthdays: true,
+          tempo_lembrete: 15,
         };
 
         if (configData) {
@@ -57,6 +58,10 @@ export function Topbar() {
             if (c.chave === 'notify_lessons') activeConfigs.notify_lessons = (c.valor === 'true');
             if (c.chave === 'notify_low_balance') activeConfigs.notify_low_balance = (c.valor === 'true');
             if (c.chave === 'notify_birthdays') activeConfigs.notify_birthdays = (c.valor === 'true');
+            if (c.chave === 'tempo_lembrete') activeConfigs.tempo_lembrete = parseInt(c.valor, 10) || 15;
+            if (selectedIgreja?.id && c.chave === `tempo_lembrete_${selectedIgreja.id}`) {
+              activeConfigs.tempo_lembrete = parseInt(c.valor, 10) || 15;
+            }
           });
         }
         setConfigs(activeConfigs);
@@ -243,6 +248,41 @@ export function Topbar() {
             }
           } catch (agendaErr) {
             console.warn('Agenda alerts fetch error:', agendaErr);
+          }
+        }
+
+        // 7. Fetch Upcoming Agendas to trigger Reminders based on custom 'Tempo de Lembrete'
+        if (selectedIgreja?.id) {
+          try {
+            const { data: upcomingEvents, error: errUpcoming } = await supabase
+              .from('agendas')
+              .select('*')
+              .eq('id_igreja', selectedIgreja.id);
+
+            if (!errUpcoming && upcomingEvents) {
+              const now = new Date();
+              const limitMinutes = activeConfigs.tempo_lembrete;
+              
+              upcomingEvents.forEach((a: any) => {
+                const eventDate = new Date(a.data_hora);
+                const diffMs = eventDate.getTime() - now.getTime();
+                const diffMinutes = Math.floor(diffMs / (1000 * 60));
+                
+                // If the event starts in the future and is within the limitMinutes threshold
+                // (e.g. starts in 0 to limitMinutes from now)
+                if (diffMinutes >= 0 && diffMinutes <= limitMinutes) {
+                  list.push({
+                    id: `agenda-lembrete-${a.id}`,
+                    title: 'Lembrete de Evento',
+                    message: `O evento "${a.titulo}" começará em ${diffMinutes} minutos (${eventDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}).`,
+                    time: `${diffMinutes} min`,
+                    type: 'agenda_reminder',
+                  });
+                }
+              });
+            }
+          } catch (upcomingErr) {
+            console.warn('Upcoming agenda events fetch error:', upcomingErr);
           }
         }
 

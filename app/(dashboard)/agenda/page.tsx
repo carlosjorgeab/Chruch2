@@ -20,7 +20,9 @@ import {
   MapPin,
   Lock,
   Globe,
-  ClipboardCheck
+  ClipboardCheck,
+  LayoutGrid,
+  List
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -44,6 +46,8 @@ export default function AgendaPage() {
   const [items, setItems] = useState<AgendaItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [layoutMode, setLayoutMode] = useState<'grid' | 'lista'>('grid');
+  const [statusFilter, setStatusFilter] = useState<'Todos' | 'Normal' | 'Importante' | 'Alerta'>('Todos');
   
   const [isEditing, setIsEditing] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -480,9 +484,11 @@ export default function AgendaPage() {
     });
   };
 
-  const filteredItems = items.filter(item => 
-    item.titulo.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredItems = items.filter(item => {
+    const matchesSearch = item.titulo.toLowerCase().includes(search.toLowerCase());
+    const matchesStatus = statusFilter === 'Todos' || item.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
 
   const getStatusStyle = (st: 'Importante' | 'Normal' | 'Alerta') => {
     switch(st) {
@@ -838,20 +844,74 @@ export default function AgendaPage() {
           </div>
         )}
 
-        {/* Search bar and metadata indicators */}
-        <div className="bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-200/60 dark:border-slate-800/85 p-5 shadow-sm flex flex-col sm:flex-row justify-between items-center gap-4">
-          <div className="relative w-full sm:max-w-md">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" size={16} />
-            <input
-              type="text"
-              placeholder="Pesquisar evento pelo nome..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-11 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-955 text-slate-900 dark:text-white placeholder-slate-400 focus:border-amber-500 outline-none text-xs font-semibold"
-            />
+        {/* Filter & Search Bar */}
+        <div className="bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-200/60 dark:border-slate-800/85 p-6 shadow-sm space-y-4">
+          <div className="flex flex-col md:flex-row gap-4 justify-between items-stretch md:items-center">
+            {/* Search Input */}
+            <div className="relative flex-1">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" size={16} />
+              <input
+                type="text"
+                placeholder="Pesquisar evento pelo nome..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full pl-11 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-955 text-slate-900 dark:text-white placeholder-slate-400 focus:border-amber-500 outline-none text-xs font-semibold"
+              />
+            </div>
+
+            {/* Layout Toggle (Grid vs Lista) */}
+            <div className="flex items-center gap-2 p-1 bg-slate-50 dark:bg-slate-955 rounded-xl border border-slate-200/50 dark:border-slate-800/80 shrink-0 self-start md:self-auto">
+              <button
+                type="button"
+                onClick={() => setLayoutMode('grid')}
+                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition ${
+                  layoutMode === 'grid'
+                    ? 'bg-[#E4A232] text-white shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
+                }`}
+                title="Visualização em Grid"
+              >
+                <LayoutGrid size={14} />
+                Grid
+              </button>
+              <button
+                type="button"
+                onClick={() => setLayoutMode('lista')}
+                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition ${
+                  layoutMode === 'lista'
+                    ? 'bg-[#E4A232] text-white shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
+                }`}
+                title="Visualização em Lista"
+              >
+                <List size={14} />
+                Lista
+              </button>
+            </div>
           </div>
-          <div className="flex items-center gap-4 text-xs font-bold text-slate-400 dark:text-slate-500">
-            <p>Total: <span className="text-slate-700 dark:text-slate-300 font-black">{filteredItems.length}</span> eventos</p>
+
+          {/* Status Quick Filters */}
+          <div className="flex flex-wrap items-center justify-between gap-4 pt-3 border-t border-slate-100 dark:border-slate-850">
+            <div className="flex flex-wrap gap-2">
+              {(['Todos', 'Normal', 'Importante', 'Alerta'] as const).map((st) => (
+                <button
+                  key={st}
+                  type="button"
+                  onClick={() => setStatusFilter(st)}
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider border transition-all ${
+                    statusFilter === st
+                      ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 border-transparent shadow-sm'
+                      : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-850'
+                  }`}
+                >
+                  {st === 'Todos' ? '📅 Todos' : st === 'Normal' ? '🔵 Normal' : st === 'Importante' ? '🔴 Importante' : '🟡 Alerta'}
+                </button>
+              ))}
+            </div>
+
+            <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+              Mostrando <span className="text-slate-700 dark:text-slate-300 font-black">{filteredItems.length}</span> de <span className="text-slate-700 dark:text-slate-300 font-black">{items.length}</span> eventos
+            </div>
           </div>
         </div>
 
@@ -872,92 +932,161 @@ export default function AgendaPage() {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className={layoutMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" : "flex flex-col gap-4"}>
             <AnimatePresence mode="popLayout">
               {filteredItems.map((item, index) => {
                 const styles = getStatusStyle(item.status);
                 return (
                   <motion.div
                     key={item.id}
+                    layout
                     initial={{ opacity: 0, y: 12 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95 }}
-                    transition={{ duration: 0.2, delay: index * 0.04 }}
-                    className={`bg-white dark:bg-slate-900 border ${styles.border} rounded-3xl p-6 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col justify-between items-start gap-4 h-full relative`}
+                    transition={{ type: "spring", stiffness: 350, damping: 25, delay: index * 0.02 }}
+                    className={layoutMode === 'grid' 
+                      ? `bg-white dark:bg-slate-900 border ${styles.border} rounded-3xl p-6 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col justify-between items-start gap-4 h-full relative`
+                      : `bg-white dark:bg-slate-900 border ${styles.border} rounded-2xl p-4 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 relative w-full`
+                    }
                   >
-                    {/* Event Status Warning indicators */}
-                    {item.status === 'Alerta' && (
-                      <div className="absolute top-6 right-6">
-                        <span className="flex h-3.5 w-3.5 relative">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-amber-500"></span>
-                        </span>
-                      </div>
-                    )}
-
-                    <div className="space-y-4 w-full">
-                      {/* Priority Tag line & Visibility indicator */}
-                      <div className="flex flex-wrap gap-2 items-center">
-                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 text-[9px] font-black uppercase tracking-wider rounded-lg border ${styles.wrapper}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${styles.dot}`} />
-                          {item.status}
-                        </span>
-                        <span className={`inline-flex items-center gap-1 px-2 py-1 text-[9px] font-black uppercase tracking-wider rounded-lg border ${
-                          item.privado 
-                            ? 'bg-slate-100 border-slate-200 text-slate-600 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400' 
-                            : 'bg-green-50 border-green-200 text-green-700 dark:bg-green-950/20 dark:border-green-900/30 dark:text-green-400'
-                        }`}>
-                          {item.privado ? <Lock size={9} /> : <Globe size={9} />}
-                          {item.privado ? 'Privado' : 'Público'}
-                        </span>
-
-                      </div>
-
-                      {/* Event Title */}
-                      <h3 className="text-sm font-black uppercase tracking-tight text-slate-850 dark:text-white leading-snug line-clamp-2">
-                        {item.titulo}
-                      </h3>
-
-                      {/* Date and Time block */}
-                      <div className="space-y-2 border-t border-slate-100 dark:border-slate-850 pt-4 w-full">
-                        <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 font-bold text-xs">
-                          <Calendar size={14} className="text-[#E4A232] shrink-0" />
-                          <span className="line-clamp-1">{formatEventDateRange(item.data_hora, item.data_hora_fim, item.dia_inteiro)}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 font-bold text-xs">
-                          <Clock size={14} className="text-[#E4A232] shrink-0" />
-                          <span>{formatEventTimeRange(item.data_hora, item.data_hora_fim, item.dia_inteiro)}</span>
-                        </div>
-                        
-                        {/* Render Local details */}
-                        {item.local && (
-                          <div className="flex items-start gap-2 text-slate-500 dark:text-slate-400 font-bold text-xs pt-1">
-                            <MapPin size={14} className="text-amber-550 shrink-0 mt-0.5" />
-                            <span className="line-clamp-2 leading-tight">{item.local}</span>
+                    {layoutMode === 'grid' ? (
+                      <>
+                        {item.status === 'Alerta' && (
+                          <div className="absolute top-6 right-6">
+                            <span className="flex h-3.5 w-3.5 relative">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-amber-500"></span>
+                            </span>
                           </div>
                         )}
-                      </div>
-                    </div>
 
-                    {/* Controller actions */}
-                    <div className="flex gap-2 w-full pt-4 border-t border-slate-100 dark:border-slate-850/80 mt-auto justify-end items-center">
+                        <div className="space-y-4 w-full">
+                          {/* Priority Tag line & Visibility indicator */}
+                          <div className="flex flex-wrap gap-2 items-center">
+                            <span className={`inline-flex items-center gap-1.5 px-3 py-1 text-[9px] font-black uppercase tracking-wider rounded-lg border ${styles.wrapper}`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${styles.dot}`} />
+                              {item.status}
+                            </span>
+                            <span className={`inline-flex items-center gap-1 px-2 py-1 text-[9px] font-black uppercase tracking-wider rounded-lg border ${
+                              item.privado 
+                                ? 'bg-slate-100 border-slate-200 text-slate-600 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400' 
+                                : 'bg-green-50 border-green-200 text-green-700 dark:bg-green-950/20 dark:border-green-900/30 dark:text-green-400'
+                            }`}>
+                              <Lock size={9} />
+                              {item.privado ? 'Privado' : 'Público'}
+                            </span>
+                          </div>
 
-                      <button
-                        onClick={() => initForm(item)}
-                        className="p-2.5 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-350 rounded-xl transition duration-200 hover:scale-[1.04] cursor-pointer"
-                        title="Modificar Evento"
-                      >
-                        <Edit2 size={13} />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(item.id, item.titulo)}
-                        className="p-2.5 bg-red-50 hover:bg-red-100 dark:bg-red-950/20 text-red-600 dark:text-red-400 rounded-xl transition duration-200 hover:scale-[1.04] cursor-pointer"
-                        title="Excluir Evento"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
+                          {/* Event Title */}
+                          <h3 className="text-sm font-black uppercase tracking-tight text-slate-850 dark:text-white leading-snug line-clamp-2">
+                            {item.titulo}
+                          </h3>
 
+                          {/* Date and Time block */}
+                          <div className="space-y-2 border-t border-slate-100 dark:border-slate-850 pt-4 w-full">
+                            <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 font-bold text-xs">
+                              <Calendar size={14} className="text-[#E4A232] shrink-0" />
+                              <span className="line-clamp-1">{formatEventDateRange(item.data_hora, item.data_hora_fim, item.dia_inteiro)}</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 font-bold text-xs">
+                              <Clock size={14} className="text-[#E4A232] shrink-0" />
+                              <span>{formatEventTimeRange(item.data_hora, item.data_hora_fim, item.dia_inteiro)}</span>
+                            </div>
+                            
+                            {/* Render Local details */}
+                            {item.local && (
+                              <div className="flex items-start gap-2 text-slate-500 dark:text-slate-400 font-bold text-xs pt-1">
+                                <MapPin size={14} className="text-amber-550 shrink-0 mt-0.5" />
+                                <span className="line-clamp-2 leading-tight">{item.local}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Controller actions */}
+                        <div className="flex gap-2 w-full pt-4 border-t border-slate-100 dark:border-slate-850/80 mt-auto justify-end items-center">
+                          <button
+                            onClick={() => initForm(item)}
+                            className="p-2.5 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-350 rounded-xl transition duration-200 hover:scale-[1.04] cursor-pointer"
+                            title="Modificar Evento"
+                          >
+                            <Edit2 size={13} />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(item.id, item.titulo)}
+                            className="p-2.5 bg-red-50 hover:bg-red-100 dark:bg-red-950/20 text-red-600 dark:text-red-400 rounded-xl transition duration-200 hover:scale-[1.04] cursor-pointer"
+                            title="Excluir Evento"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex items-start gap-4 flex-1 w-full sm:w-auto">
+                          {/* Left status vertical strip or bar */}
+                          <div className={`w-1.5 h-12 rounded-full ${styles.dot} self-stretch shrink-0`} />
+                          
+                          <div className="space-y-1 flex-1">
+                            {/* Event Title */}
+                            <h3 className="text-sm font-black uppercase tracking-tight text-slate-850 dark:text-white leading-snug">
+                              {item.titulo}
+                            </h3>
+                            
+                            {/* Quick dates & times */}
+                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] font-bold text-slate-400 dark:text-slate-500">
+                              <span className="flex items-center gap-1">
+                                <Calendar size={12} className="text-[#E4A232]" />
+                                {formatEventDateRange(item.data_hora, item.data_hora_fim, item.dia_inteiro)}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <Clock size={12} className="text-[#E4A232]" />
+                                {formatEventTimeRange(item.data_hora, item.data_hora_fim, item.dia_inteiro)}
+                              </span>
+                              {item.local && (
+                                <span className="flex items-center gap-1">
+                                  <MapPin size={12} className="text-amber-550" />
+                                  {item.local}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Status badges & actions */}
+                        <div className="flex flex-wrap sm:flex-nowrap items-center gap-3 w-full sm:w-auto shrink-0 border-t sm:border-t-0 pt-3 sm:pt-0 border-slate-100 dark:border-slate-850 justify-between sm:justify-end">
+                          <div className="flex gap-2">
+                            <span className={`inline-flex items-center gap-1 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider rounded-lg border ${styles.wrapper}`}>
+                              {item.status}
+                            </span>
+                            <span className={`inline-flex items-center gap-1 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider rounded-lg border ${
+                              item.privado 
+                                ? 'bg-slate-100 border-slate-200 text-slate-600 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400' 
+                                : 'bg-green-50 border-green-200 text-green-700 dark:bg-green-950/20 dark:border-green-900/30 dark:text-green-400'
+                            }`}>
+                              {item.privado ? 'Privado' : 'Público'}
+                            </span>
+                          </div>
+
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => initForm(item)}
+                              className="p-2 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-350 rounded-xl transition duration-200 hover:scale-[1.04] cursor-pointer"
+                              title="Modificar Evento"
+                            >
+                              <Edit2 size={13} />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(item.id, item.titulo)}
+                              className="p-2 bg-red-50 hover:bg-red-100 dark:bg-red-950/20 text-red-600 dark:text-red-400 rounded-xl transition duration-200 hover:scale-[1.04] cursor-pointer"
+                              title="Excluir Evento"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </motion.div>
                 );
               })}

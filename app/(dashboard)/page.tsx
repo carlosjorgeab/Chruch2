@@ -100,6 +100,7 @@ export default function Home() {
   const [currentEventoIndex, setCurrentEventoIndex] = useState(0);
   const [aniversariantes, setAniversariantes] = useState<any[]>([]);
   const [agendas, setAgendas] = useState<any[]>([]);
+  const [lastOpenSala, setLastOpenSala] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Agenda selectors and view preferences
@@ -119,6 +120,14 @@ export default function Home() {
   const isDirectVideo = (url: string | null | undefined) => {
     if (!url) return false;
     return !!url.match(/\.(mp4|webm|ogg)$/i);
+  };
+
+  const getKidsCheckinQrCodeUrl = () => {
+    if (!lastOpenSala || !selectedIgreja) return '';
+    // Check if window is defined to safely access window.location.origin
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const registerUrl = `${origin}/p/${selectedIgreja.slug}/kids/cadastro?sala=${lastOpenSala.id}`;
+    return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(registerUrl)}&color=0f172a&bgcolor=ffffff`;
   };
 
   const getActiveAvisos = () => {
@@ -348,7 +357,8 @@ export default function Home() {
         if (!errEventos && eventosData) {
           const now = new Date();
           const activeEventos = eventosData.filter((item: any) => {
-            const end = item.data_fim ? new Date(item.data_fim) : new Date(item.data_inicio);
+            const endStr = item.data_fim || item.data_inicio;
+            const end = new Date(endStr.includes('T') ? endStr : endStr + 'T00:00:00');
             const compareDate = new Date(end);
             compareDate.setHours(23, 59, 59, 999);
             return compareDate >= now;
@@ -371,6 +381,31 @@ export default function Home() {
           setAgendas(publicAgendas);
         } else {
           setAgendas([]);
+        }
+
+        // Fetch last open kids sala
+        const { data: kidsTurmas, error: errTurmas } = await supabase
+          .from('kids_turmas')
+          .select('id')
+          .eq('id_igreja', id);
+
+        if (!errTurmas && kidsTurmas && kidsTurmas.length > 0) {
+          const turmaIds = kidsTurmas.map((t: any) => t.id);
+          const { data: openSalas, error: errSalas } = await supabase
+            .from('kids_salas')
+            .select('*')
+            .in('id_turma', turmaIds)
+            .eq('status', 'Aberto')
+            .order('created_at', { ascending: false })
+            .limit(1);
+
+          if (!errSalas && openSalas && openSalas.length > 0) {
+            setLastOpenSala(openSalas[0]);
+          } else {
+            setLastOpenSala(null);
+          }
+        } else {
+          setLastOpenSala(null);
         }
       } catch (err) {
         console.error('Error compiling dashboard:', err);
@@ -517,6 +552,26 @@ export default function Home() {
       })
     : agendas;
 
+  const showMural = loading || activeAvisos.length > 0;
+  const showEventos = loading || eventos.length > 0;
+  const showAgendas = loading || displayAgendas.length > 0;
+  const showAniversariantes = loading || aniversariantes.length > 0;
+
+  const visiblePanels: string[] = [];
+  if (showMural) visiblePanels.push('mural');
+  if (showEventos) visiblePanels.push('eventos');
+  if (showAgendas) visiblePanels.push('agendas');
+  if (showAniversariantes) visiblePanels.push('aniversariantes');
+
+  const getPanelSpanClass = (panelId: string) => {
+    const index = visiblePanels.indexOf(panelId);
+    if (index === -1) return 'hidden';
+    const total = visiblePanels.length;
+    if (total === 1) return 'lg:col-span-2';
+    if (total === 3 && index === 2) return 'lg:col-span-2';
+    return '';
+  };
+
   return (
     <div className="p-8 space-y-8 max-w-7xl mx-auto" id="dashboard-container">
       {/* HEADER SECTION */}
@@ -606,24 +661,47 @@ export default function Home() {
           className="bg-gradient-to-br from-amber-500 to-amber-600 p-6 rounded-3xl shadow-md text-white flex items-center gap-5 hover:scale-102 hover:shadow-lg transition-all duration-250 group cursor-pointer"
           id="stat-card-qr-checkin"
         >
-          <div className="w-14 h-14 rounded-2xl bg-white/10 flex items-center justify-center text-white transition-colors group-hover:bg-white/20">
-            <QrCode size={26} className="animate-pulse" />
-          </div>
-          <div className="space-y-0.5">
-            <p className="text-[10px] sm:text-xs font-black text-amber-100 uppercase tracking-wider">Módulo Kids</p>
-            <p className="text-base sm:text-lg font-black mt-0.5 leading-none">Gerar QR Check-in</p>
-            <p className="text-[9px] text-amber-50/80 font-medium tracking-wide">Acessar salas e turmas</p>
-          </div>
+          {lastOpenSala ? (
+            <>
+              <div className="w-16 h-16 rounded-2xl bg-white p-1 flex items-center justify-center border border-amber-400/25 shrink-0 overflow-hidden shadow-inner">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img 
+                  src={getKidsCheckinQrCodeUrl()} 
+                  alt="QR Code Checkin" 
+                  className="w-full h-full object-contain" 
+                  referrerPolicy="no-referrer"
+                />
+              </div>
+              <div className="space-y-0.5 min-w-0">
+                <p className="text-[10px] sm:text-xs font-black text-amber-100 uppercase tracking-wider">Módulo Kids</p>
+                <p className="text-base sm:text-lg font-black mt-0.5 leading-tight truncate" title={`Sala: ${lastOpenSala.nome}`}>
+                  {lastOpenSala.nome}
+                </p>
+                <p className="text-[9px] text-amber-50/80 font-medium tracking-wide">Check-in QR da última sala aberta</p>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="w-14 h-14 rounded-2xl bg-white/10 flex items-center justify-center text-white transition-colors group-hover:bg-white/20">
+                <QrCode size={26} className="animate-pulse" />
+              </div>
+              <div className="space-y-0.5">
+                <p className="text-[10px] sm:text-xs font-black text-amber-100 uppercase tracking-wider">Módulo Kids</p>
+                <p className="text-base sm:text-lg font-black mt-0.5 leading-none">Gerar QR Check-in</p>
+                <p className="text-[9px] text-amber-50/80 font-medium tracking-wide">Acessar salas e turmas</p>
+              </div>
+            </>
+          )}
         </Link>
       </div>
 
-      {/* ROW 1: MURAL DE AVISOS & EVENTOS */}
-      {(activeAvisos.length > 0 || eventos.length > 0) && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8" id="dashboard-row1-grid">
+      {/* PANELS SECTION: MURAL, EVENTOS, AGENDAS & ANIVERSARIANTES */}
+      {visiblePanels.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8" id="dashboard-panels-grid">
           {/* MURAL DE AVISOS MULTIMÍDIA */}
-          {activeAvisos.length > 0 && (
+          {showMural && (
             <div 
-              className={`bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col ${eventos.length === 0 ? 'lg:col-span-2' : ''}`} 
+              className={`bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col ${getPanelSpanClass('mural')}`} 
               id="dashboard-mural-avisos"
             >
               <div className="p-6 sm:p-8 space-y-6 flex-1 flex flex-col justify-between">
@@ -888,9 +966,9 @@ export default function Home() {
           )}
 
           {/* PAINEL DE EVENTOS */}
-          {eventos.length > 0 && (
+          {showEventos && (
             <div 
-              className={`bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col ${activeAvisos.length === 0 ? 'lg:col-span-2' : ''}`} 
+              className={`bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col ${getPanelSpanClass('eventos')}`} 
               id="dashboard-eventos"
             >
               <div className="p-6 sm:p-8 space-y-6 flex-1 flex flex-col justify-between">
@@ -997,14 +1075,10 @@ export default function Home() {
               </div>
             </div>
           )}
-        </div>
-      )}
 
-      {/* ROW 2: AGENDAS & ANIVERSARIANTES */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8" id="dashboard-row2-grid">
-
-        {/* PAINEL DE AGENDAS CADASTRADAS */}
-        <div className={`bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col ${aniversariantes.length === 0 ? 'lg:col-span-2' : ''}`} id="dashboard-agendas">
+          {/* PAINEL DE AGENDAS CADASTRADAS */}
+          {showAgendas && (
+            <div className={`bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col ${getPanelSpanClass('agendas')}`} id="dashboard-agendas">
           <div className="p-6 sm:p-8 space-y-6 flex-1 flex flex-col justify-between">
             <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-5">
               <div>
@@ -1328,11 +1402,11 @@ export default function Home() {
               </div>
             )}
           </div>
-        </div>
+        </div>)}
 
         {/* PAINEL DE MEMBROS ANIVERSARIANTES */}
-        {aniversariantes.length > 0 && (
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col" id="dashboard-aniversariantes">
+        {showAniversariantes && (
+          <div className={`bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col ${getPanelSpanClass('aniversariantes')}`} id="dashboard-aniversariantes">
             <div className="p-6 sm:p-8 space-y-6 flex-1 flex flex-col justify-between">
               <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-5">
                 <div>
@@ -1410,7 +1484,8 @@ export default function Home() {
             </div>
           </div>
         )}
-      </div>
+        </div>
+      )}
 
       {/* ROW 3: GRÁFICOS FINANCEIROS */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8" id="dashboard-row3-grid">
