@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useIgreja } from '@/context/IgrejaContext';
 import { useConfirm } from '@/context/ConfirmContext';
+import { useAuth } from '@/context/AuthContext';
 import { 
   Plus, 
   Edit2, 
@@ -25,7 +26,8 @@ import {
   ExternalLink,
   ChevronLeft,
   ChevronRight,
-  GripVertical
+  GripVertical,
+  AlertCircle
 } from 'lucide-react';
 import { motion } from 'motion/react';
 
@@ -48,6 +50,13 @@ type MuralAviso = {
 export default function MuralPage() {
   const { selectedIgreja } = useIgreja();
   const { confirmDelete } = useConfirm();
+  const { hasPermission } = useAuth();
+
+  const canRead = hasPermission('mural:leitura');
+  const canCreate = hasPermission('mural:novo');
+  const canEdit = hasPermission('mural:editar');
+  const canDelete = hasPermission('mural:excluir');
+
   const [murais, setMurais] = useState<MuralAviso[]>([]);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
@@ -263,6 +272,10 @@ export default function MuralPage() {
   };
 
   const handleEdit = (mural: MuralAviso) => {
+    if (!canEdit) {
+      setError('Você não possui permissão para editar avisos.');
+      return;
+    }
     setSelectedFile(null);
     setCurrentMural({
       ...mural,
@@ -276,6 +289,10 @@ export default function MuralPage() {
   };
 
   const handleNew = () => {
+    if (!canCreate) {
+      setError('Você não possui permissão para cadastrar avisos.');
+      return;
+    }
     if (!selectedIgreja) {
       setError('Selecione uma igreja.');
       return;
@@ -306,6 +323,10 @@ export default function MuralPage() {
   };
 
   const handleDelete = (id: string, titulo: string) => {
+    if (!canDelete) {
+      setError('Você não possui permissão para excluir avisos.');
+      return;
+    }
     confirmDelete({
       message: `Deseja realmente excluir o aviso "${titulo}" do mural? Esta ação não poderá ser desfeita.`,
       onConfirm: async () => {
@@ -401,6 +422,16 @@ export default function MuralPage() {
     e.preventDefault();
     setError('');
     setSuccess('');
+
+    if (!currentMural.id && !canCreate) {
+      setError('Você não possui permissão para cadastrar novos avisos.');
+      return;
+    }
+    if (currentMural.id && !canEdit) {
+      setError('Você não possui permissão para editar este aviso.');
+      return;
+    }
+
     setIsSaving(true);
 
     if (!selectedIgreja) {
@@ -489,6 +520,22 @@ export default function MuralPage() {
     (m.arquivo_nome && m.arquivo_nome.toLowerCase().includes(search.toLowerCase()))
   );
 
+  if (!canRead) {
+    return (
+      <div className="p-8 flex flex-col items-center justify-center min-h-[450px]" id="mural-no-access">
+        <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800 text-center max-w-md w-full space-y-4">
+          <div className="w-16 h-16 bg-red-100 dark:bg-red-950/40 text-red-600 dark:text-red-400 rounded-2xl flex items-center justify-center mx-auto">
+            <Megaphone size={32} />
+          </div>
+          <h2 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">Acesso Restrito</h2>
+          <p className="text-slate-500 dark:text-slate-400 text-xs leading-relaxed">
+            Seu perfil de usuário não possui permissão de leitura para o módulo de <strong>Mural de Avisos</strong>. Entre em contato com o administrador do sistema se precisar de acesso.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-8 space-y-8 max-w-6xl mx-auto">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
@@ -499,7 +546,7 @@ export default function MuralPage() {
             Gerencie avisos, vídeos e campanhas exibidas no topo da Visão Geral da congregação {selectedIgreja?.nome || ''}
           </p>
         </div>
-        {!isEditing && (
+        {!isEditing && canCreate && (
           <button
             onClick={handleNew}
             disabled={!selectedIgreja}

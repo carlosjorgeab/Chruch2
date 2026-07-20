@@ -5,7 +5,8 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { useIgreja } from '@/context/IgrejaContext';
 import { useConfirm } from '@/context/ConfirmContext';
-import { Plus, Edit2, Trash2, Save, X, Search, Users, Calendar, MapPin, RefreshCw, ClipboardCheck, Globe, Lock, Printer } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
+import { Plus, Edit2, Trash2, Save, X, Search, Users, Calendar, MapPin, RefreshCw, ClipboardCheck, Globe, Lock, Printer, AlertCircle } from 'lucide-react';
 import { motion } from 'motion/react';
 import { jsPDF } from 'jspdf';
 
@@ -42,11 +43,17 @@ type AssociatedMember = {
 export default function ComunidadesPage() {
   const { selectedIgreja } = useIgreja();
   const { confirmDelete } = useConfirm();
+  const { hasPermission } = useAuth();
   const [comunidades, setComunidades] = useState<Comunidade[]>([]);
   const [membros, setMembros] = useState<Membro[]>([]);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [search, setSearch] = useState('');
+
+  const canRead = hasPermission('comunidades:leitura');
+  const canCreate = hasPermission('comunidades:novo');
+  const canEdit = hasPermission('comunidades:editar');
+  const canDelete = hasPermission('comunidades:excluir');
   
   const [associatedMembers, setAssociatedMembers] = useState<AssociatedMember[]>([]);
   const [selectedAddMember, setSelectedAddMember] = useState<string>('');
@@ -616,6 +623,10 @@ export default function ComunidadesPage() {
   }
 
   const handleEdit = (comunidade: Comunidade) => {
+    if (!canEdit) {
+      setError('Você não possui permissão para editar comunidades.');
+      return;
+    }
     setCurrentComunidade(comunidade);
     setIsEditing(true);
     setError('');
@@ -629,6 +640,10 @@ export default function ComunidadesPage() {
   };
 
   const handleNew = () => {
+    if (!canCreate) {
+      setError('Você não possui permissão para cadastrar comunidades.');
+      return;
+    }
     if (!selectedIgreja) {
       setError('Selecione uma igreja.');
       return;
@@ -655,6 +670,10 @@ export default function ComunidadesPage() {
   };
 
   const handleDelete = (id: string, nome: string) => {
+    if (!canDelete) {
+      setError('Você não possui permissão para excluir comunidades.');
+      return;
+    }
     confirmDelete({
       message: `Deseja realmente excluir a comunidade/célula "${nome}"? Esta ação não poderá ser desfeita.`,
       onConfirm: async () => {
@@ -674,6 +693,15 @@ export default function ComunidadesPage() {
     e.preventDefault();
     setError('');
     setSuccess('');
+
+    if (!currentComunidade.id && !canCreate) {
+      setError('Você não possui permissão para cadastrar novas comunidades.');
+      return;
+    }
+    if (currentComunidade.id && !canEdit) {
+      setError('Você não possui permissão para editar comunidades.');
+      return;
+    }
 
     if (!selectedIgreja) {
       setError('Selecione uma congregação.');
@@ -726,6 +754,22 @@ export default function ComunidadesPage() {
     (c.lider && c.lider.nome.toLowerCase().includes(search.toLowerCase()))
   );
 
+  if (!canRead) {
+    return (
+      <div className="p-8 flex flex-col items-center justify-center min-h-[450px]" id="comunidades-no-access">
+        <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800 text-center max-w-md w-full space-y-4">
+          <div className="w-16 h-16 bg-red-100 dark:bg-red-950/40 text-red-600 dark:text-red-400 rounded-2xl flex items-center justify-center mx-auto">
+            <AlertCircle size={32} />
+          </div>
+          <h2 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">Acesso Restrito</h2>
+          <p className="text-slate-500 dark:text-slate-400 text-xs leading-relaxed">
+            Seu perfil de usuário não possui permissão de leitura para o módulo de <strong>Gestão de Comunidades</strong>. Entre em contato com o administrador do sistema se precisar de acesso.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-8 space-y-8 max-w-6xl mx-auto">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
@@ -736,7 +780,7 @@ export default function ComunidadesPage() {
             Grupos de crescimento e comunhão da congregação {selectedIgreja?.nome || ''}
           </p>
         </div>
-        {!isEditing && (
+        {!isEditing && canCreate && (
           <button
             onClick={handleNew}
             disabled={!selectedIgreja}

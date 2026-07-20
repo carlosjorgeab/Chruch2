@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useIgreja } from '@/context/IgrejaContext';
 import { useConfirm } from '@/context/ConfirmContext';
-import { Plus, Edit2, Trash2, Save, X, Search, BookOpen, Calendar, HelpCircle, RefreshCw } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
+import { Plus, Edit2, Trash2, Save, X, Search, BookOpen, Calendar, HelpCircle, RefreshCw, AlertCircle } from 'lucide-react';
 
 type DecodedLicao = {
   id: string;
@@ -27,6 +28,13 @@ type Membro = {
 export default function LicoesPage() {
   const { selectedIgreja } = useIgreja();
   const { confirmDelete } = useConfirm();
+  const { hasPermission } = useAuth();
+
+  const canRead = hasPermission('licoes:leitura');
+  const canCreate = hasPermission('licoes:novo');
+  const canEdit = hasPermission('licoes:editar');
+  const canDelete = hasPermission('licoes:excluir');
+
   const [lecoes, setLecoes] = useState<DecodedLicao[]>([]);
   const [membros, setMembros] = useState<Membro[]>([]);
   const [loading, setLoading] = useState(true);
@@ -100,6 +108,10 @@ export default function LicoesPage() {
   }
 
   const handleEdit = (licao: DecodedLicao) => {
+    if (!canEdit) {
+      setError('Você não possui permissão para editar lições.');
+      return;
+    }
     setCurrentLicao({
       ...licao,
       data: licao.data || '',
@@ -110,6 +122,10 @@ export default function LicoesPage() {
   };
 
   const handleNew = () => {
+    if (!canCreate) {
+      setError('Você não possui permissão para cadastrar lições.');
+      return;
+    }
     if (!selectedIgreja) {
       setError('Selecione uma igreja.');
       return;
@@ -131,6 +147,10 @@ export default function LicoesPage() {
   };
 
   const handleDelete = (id: string, titulo: string) => {
+    if (!canDelete) {
+      setError('Você não possui permissão para excluir lições.');
+      return;
+    }
     confirmDelete({
       message: `Deseja realmente excluir a lição "${titulo}"? Esta ação não poderá ser desfeita.`,
       onConfirm: async () => {
@@ -150,6 +170,15 @@ export default function LicoesPage() {
     e.preventDefault();
     setError('');
     setSuccess('');
+
+    if (!currentLicao.id && !canCreate) {
+      setError('Você não possui permissão para cadastrar novas lições.');
+      return;
+    }
+    if (currentLicao.id && !canEdit) {
+      setError('Você não possui permissão para editar esta lição.');
+      return;
+    }
 
     if (!selectedIgreja) {
       setError('Selecione uma congregação válida.');
@@ -201,6 +230,22 @@ export default function LicoesPage() {
     return matchesSearch && l.status === statusFilter;
   });
 
+  if (!canRead) {
+    return (
+      <div className="p-8 flex flex-col items-center justify-center min-h-[450px]" id="licoes-no-access">
+        <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800 text-center max-w-md w-full space-y-4">
+          <div className="w-16 h-16 bg-red-100 dark:bg-red-950/40 text-red-600 dark:text-red-400 rounded-2xl flex items-center justify-center mx-auto">
+            <BookOpen size={32} />
+          </div>
+          <h2 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">Acesso Restrito</h2>
+          <p className="text-slate-500 dark:text-slate-400 text-xs leading-relaxed">
+            Seu perfil de usuário não possui permissão de leitura para o módulo de <strong>Lições & Estudos</strong>. Entre em contato com o administrador do sistema se precisar de acesso.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-8 space-y-8 max-w-6xl mx-auto">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
@@ -211,7 +256,7 @@ export default function LicoesPage() {
             Programação de estudos bíblicos e lições bíbicas da congregação {selectedIgreja?.nome || ''}
           </p>
         </div>
-        {!isEditing && (
+        {!isEditing && canCreate && (
           <button
             onClick={handleNew}
             disabled={!selectedIgreja}

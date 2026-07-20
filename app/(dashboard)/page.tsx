@@ -104,6 +104,10 @@ export default function Home() {
   const [lastOpenSala, setLastOpenSala] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Eventos View Mode and Date states
+  const [eventosViewMode, setEventosViewMode] = useState<'cards' | 'calendario'>('cards');
+  const [currentEventosDate, setCurrentEventosDate] = useState(() => new Date());
+
   // Agenda selectors and view preferences
   const [viewType, setViewType] = useState<'dia' | 'semana' | 'mes'>('dia');
   const [currentDate, setCurrentDate] = useState(() => new Date());
@@ -406,7 +410,7 @@ export default function Home() {
           .from('eventos')
           .select('*')
           .eq('id_igreja', id)
-          .eq('status', 'Publicado')
+          .neq('status', 'Cancelado')
           .order('data_inicio', { ascending: true });
 
         if (!errEventos && eventosData) {
@@ -1029,7 +1033,7 @@ export default function Home() {
               id="dashboard-eventos"
             >
               <div className="p-6 sm:p-8 space-y-6 flex-1 flex flex-col justify-between">
-                <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-5">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-100 dark:border-slate-800 pb-5 gap-4">
                   <div>
                     <div className="flex items-center gap-2 text-slate-800 dark:text-white">
                       <Calendar className="text-amber-500 shrink-0" size={18} />
@@ -1037,98 +1041,225 @@ export default function Home() {
                     </div>
                     <p className="text-slate-500 text-[11px] mt-1 font-medium">Não perca nossas programações especiais e inscrições</p>
                   </div>
+                  <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-955 p-1 rounded-xl border border-slate-150 dark:border-slate-850 self-end sm:self-auto">
+                    <button
+                      type="button"
+                      onClick={() => setEventosViewMode('cards')}
+                      className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition cursor-pointer ${
+                        eventosViewMode === 'cards'
+                          ? 'bg-amber-500 text-white shadow-sm'
+                          : 'text-slate-500 dark:text-slate-400 hover:bg-slate-150 dark:hover:bg-slate-850'
+                      }`}
+                    >
+                      Cards
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEventosViewMode('calendario')}
+                      className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition cursor-pointer ${
+                        eventosViewMode === 'calendario'
+                          ? 'bg-amber-500 text-white shadow-sm'
+                          : 'text-slate-500 dark:text-slate-400 hover:bg-slate-150 dark:hover:bg-slate-850'
+                      }`}
+                    >
+                      Calendário
+                    </button>
+                  </div>
                 </div>
 
-                {(() => {
-                  const item = eventos[currentEventoIndex] ?? eventos[0];
-                  if (!item) return null;
-
-                  const startEventDate = new Date(item.data_inicio);
-                  const endEventDate = item.data_fim ? new Date(item.data_fim) : null;
-                  
-                  let dateStr = startEventDate.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
-                  if (endEventDate && startEventDate.toDateString() !== endEventDate.toDateString()) {
-                    dateStr += ` até ${endEventDate.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}`;
-                  }
-                  
-                  let timeStr = startEventDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-                  if (endEventDate) {
-                    timeStr += ` às ${endEventDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}h`;
-                  }
-
-                  return (
-                    <div className="flex flex-col gap-4 flex-1 justify-between mt-4">
-                      {item.url_imagem && (
-                        <div className="w-full relative h-[180px] md:h-[220px] rounded-2xl overflow-hidden bg-slate-50 dark:bg-slate-955/50 border border-slate-150 dark:border-slate-850 shadow-inner flex flex-col justify-center items-center">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={item.url_imagem}
-                            alt={item.titulo}
-                            className="w-full h-full object-contain"
-                            referrerPolicy="no-referrer"
-                          />
-                        </div>
-                      )}
-                      
-                      <div className="space-y-2">
-                        <h4 className="text-sm font-black font-headline text-slate-905 dark:text-white uppercase tracking-tight leading-normal line-clamp-2">
-                          {item.titulo}
-                        </h4>
-                        {item.descricao && (
-                          <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-3 leading-relaxed">
-                            {item.descricao}
-                          </p>
-                        )}
-                      </div>
-
-                      <div className="space-y-1.5 pt-3 border-t border-slate-100 dark:border-slate-850">
-                        <div className="text-[10px] text-slate-500 dark:text-slate-400 font-bold flex items-center gap-1.5">
-                          📅 {dateStr} às {timeStr}
-                        </div>
-                        {item.local && (
-                          <div className="text-[10px] text-slate-500 dark:text-slate-400 font-bold flex items-center gap-1.5">
-                            📍 {item.local}
-                          </div>
-                        )}
-                        <div className="text-[10px] text-slate-500 dark:text-slate-400 font-bold flex items-center gap-1.5">
-                          🎟️ Valor: {Number(item.valor_inscricao) > 0 ? `R$ ${parseFloat(item.valor_inscricao).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'Gratuito'}
-                        </div>
-                      </div>
-
-                      {eventos.length > 1 && (
-                        <div className="flex items-center justify-end gap-2 mt-1">
-                          <div className="flex items-center gap-1 bg-slate-50 dark:bg-slate-955 border border-slate-150 dark:border-slate-850 p-1 rounded-lg">
-                            <button 
-                              type="button"
-                              onClick={() => {
-                                const nextIndex = currentEventoIndex === 0 ? eventos.length - 1 : currentEventoIndex - 1;
-                                setCurrentEventoIndex(nextIndex);
-                              }}
-                              className="p-1 px-2 rounded-md hover:bg-slate-150 dark:hover:bg-slate-850 text-slate-650 dark:text-slate-400 transition cursor-pointer"
-                              title="Evento Anterior"
-                            >
-                              <ChevronLeft size={14} />
-                            </button>
-                            <span className="text-[10px] font-bold text-slate-400 px-1 select-none">
-                              {currentEventoIndex + 1} / {eventos.length}
-                            </span>
-                            <button 
-                              type="button"
-                              onClick={() => {
-                                const nextIndex = currentEventoIndex === eventos.length - 1 ? 0 : currentEventoIndex + 1;
-                                setCurrentEventoIndex(nextIndex);
-                              }}
-                              className="p-1 px-2 rounded-md hover:bg-slate-150 dark:hover:bg-slate-850 text-slate-650 dark:text-slate-400 transition cursor-pointer"
-                              title="Próximo Evento"
-                            >
-                              <ChevronRight size={14} />
-                            </button>
-                          </div>
-                        </div>
-                      )}
+                {eventosViewMode === 'calendario' && (
+                  <div className="flex items-center justify-between gap-2 mt-2 pb-2 border-b border-slate-50 dark:border-slate-850 animate-in fade-in duration-200">
+                    <span className="text-xs font-black uppercase tracking-widest text-slate-800 dark:text-slate-300">
+                      {currentEventosDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newDate = new Date(currentEventosDate);
+                          newDate.setMonth(newDate.getMonth() - 1);
+                          setCurrentEventosDate(newDate);
+                        }}
+                        className="p-1 px-2 bg-slate-50 dark:bg-slate-955 hover:bg-slate-150 dark:hover:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-650 dark:text-slate-300 font-extrabold text-[10px] transition cursor-pointer"
+                      >
+                        ◀
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCurrentEventosDate(new Date())}
+                        className="p-1 px-2.5 bg-amber-100 dark:bg-amber-955/40 text-amber-600 dark:text-amber-400 border border-amber-200/50 dark:border-amber-900/30 rounded-lg font-black text-[9px] uppercase tracking-wider hover:opacity-95 transition cursor-pointer"
+                      >
+                        Hoje
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newDate = new Date(currentEventosDate);
+                          newDate.setMonth(newDate.getMonth() + 1);
+                          setCurrentEventosDate(newDate);
+                        }}
+                        className="p-1 px-2 bg-slate-50 dark:bg-slate-955 hover:bg-slate-150 dark:hover:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-650 dark:text-slate-300 font-extrabold text-[10px] transition cursor-pointer"
+                      >
+                        ▶
+                      </button>
                     </div>
-                  );
-                })()}
+                  </div>
+                )}
+
+                {eventosViewMode === 'calendario' ? (
+                  <div className="space-y-3 flex-1 flex flex-col justify-between animate-in fade-in duration-300">
+                    {/* Calendar columns headers */}
+                    <div className="grid grid-cols-7 gap-1 text-center font-black text-[9px] uppercase tracking-wider text-slate-400 pb-1">
+                      <div>Dom</div>
+                      <div>Seg</div>
+                      <div>Ter</div>
+                      <div>Qua</div>
+                      <div>Qui</div>
+                      <div>Sex</div>
+                      <div>Sáb</div>
+                    </div>
+
+                    {/* Calendar Grid cells */}
+                    <div className="grid grid-cols-7 gap-1 bg-slate-100/50 dark:bg-slate-955 p-1 rounded-2xl border border-slate-200/50 dark:border-slate-850">
+                      {getMonthDaysGrid(currentEventosDate).map((day) => {
+                        const isCurrentMonth = day.getMonth() === currentEventosDate.getMonth();
+                        const isToday = day.toDateString() === new Date().toDateString();
+                        const dayEvents = eventos.filter((item) => {
+                          const eventDay = new Date(item.data_inicio);
+                          return eventDay.toDateString() === day.toDateString();
+                        });
+
+                        return (
+                          <div
+                            key={day.toISOString()}
+                            className={`min-h-[55px] md:min-h-[70px] p-1 rounded-xl flex flex-col justify-between transition ${
+                              isToday
+                                ? 'bg-amber-500/10 border border-amber-500/40'
+                                : isCurrentMonth 
+                                  ? 'bg-white dark:bg-slate-900 border border-slate-150/40 dark:border-slate-800/50' 
+                                  : 'bg-slate-50/50 dark:bg-slate-900/20 opacity-40'
+                            }`}
+                          >
+                            <div className="flex justify-between items-center mb-0.5">
+                              <span className={`text-[8px] font-black px-1 rounded ${
+                                isToday 
+                                  ? 'bg-[#E4A232] text-white' 
+                                  : isCurrentMonth 
+                                    ? 'text-slate-800 dark:text-white' 
+                                    : 'text-slate-400'
+                              }`}>
+                                {day.getDate()}
+                              </span>
+                            </div>
+
+                            <div className="space-y-0.5 overflow-y-auto max-h-[35px] scrollbar-none w-full">
+                              {dayEvents.map((item) => (
+                                <div
+                                  key={item.id}
+                                  className="p-0.5 px-1 bg-amber-500/10 border border-amber-500/20 text-[7px] md:text-[8px] font-black text-amber-700 dark:text-amber-400 rounded truncate uppercase select-none leading-none w-full"
+                                  title={`${item.titulo}${item.local ? ` em ${item.local}` : ''}`}
+                                >
+                                  {item.titulo}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  (() => {
+                    const item = eventos[currentEventoIndex] ?? eventos[0];
+                    if (!item) return <div className="text-slate-400 text-xs py-10 text-center font-bold">Nenhum evento especial encontrado</div>;
+
+                    const startEventDate = new Date(item.data_inicio);
+                    const endEventDate = item.data_fim ? new Date(item.data_fim) : null;
+                    
+                    let dateStr = startEventDate.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+                    if (endEventDate && startEventDate.toDateString() !== endEventDate.toDateString()) {
+                      dateStr += ` até ${endEventDate.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}`;
+                    }
+                    
+                    let timeStr = startEventDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                    if (endEventDate) {
+                      timeStr += ` às ${endEventDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}h`;
+                    }
+
+                    return (
+                      <div className="flex flex-col gap-4 flex-1 justify-between mt-4 animate-in fade-in duration-300">
+                        {item.url_imagem && (
+                          <div className="w-full relative h-[180px] md:h-[220px] rounded-2xl overflow-hidden bg-slate-50 dark:bg-slate-955/50 border border-slate-150 dark:border-slate-850 shadow-inner flex flex-col justify-center items-center">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={item.url_imagem}
+                              alt={item.titulo}
+                              className="w-full h-full object-contain"
+                              referrerPolicy="no-referrer"
+                            />
+                          </div>
+                        )}
+                        
+                        <div className="space-y-2">
+                          <h4 className="text-sm font-black font-headline text-slate-905 dark:text-white uppercase tracking-tight leading-normal line-clamp-2">
+                            {item.titulo}
+                          </h4>
+                          {item.descricao && (
+                            <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-3 leading-relaxed">
+                              {item.descricao}
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="space-y-1.5 pt-3 border-t border-slate-100 dark:border-slate-850">
+                          <div className="text-[10px] text-slate-500 dark:text-slate-400 font-bold flex items-center gap-1.5">
+                            📅 {dateStr} às {timeStr}
+                          </div>
+                          {item.local && (
+                            <div className="text-[10px] text-slate-500 dark:text-slate-400 font-bold flex items-center gap-1.5">
+                              📍 {item.local}
+                            </div>
+                          )}
+                          <div className="text-[10px] text-slate-500 dark:text-slate-400 font-bold flex items-center gap-1.5">
+                            🎟️ Valor: {Number(item.valor_inscricao) > 0 ? `R$ ${parseFloat(item.valor_inscricao).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'Gratuito'}
+                          </div>
+                        </div>
+
+                        {eventos.length > 1 && (
+                          <div className="flex items-center justify-end gap-2 mt-1">
+                            <div className="flex items-center gap-1 bg-slate-50 dark:bg-slate-955 border border-slate-150 dark:border-slate-850 p-1 rounded-lg">
+                              <button 
+                                type="button"
+                                onClick={() => {
+                                  const nextIndex = currentEventoIndex === 0 ? eventos.length - 1 : currentEventoIndex - 1;
+                                  setCurrentEventoIndex(nextIndex);
+                                }}
+                                className="p-1 px-2 rounded-md hover:bg-slate-150 dark:hover:bg-slate-850 text-slate-650 dark:text-slate-400 transition cursor-pointer"
+                                title="Evento Anterior"
+                              >
+                                <ChevronLeft size={14} />
+                              </button>
+                              <span className="text-[10px] font-bold text-slate-400 px-1 select-none">
+                                {currentEventoIndex + 1} / {eventos.length}
+                              </span>
+                              <button 
+                                type="button"
+                                onClick={() => {
+                                  const nextIndex = currentEventoIndex === eventos.length - 1 ? 0 : currentEventoIndex + 1;
+                                  setCurrentEventoIndex(nextIndex);
+                                }}
+                                className="p-1 px-2 rounded-md hover:bg-slate-150 dark:hover:bg-slate-850 text-slate-650 dark:text-slate-400 transition cursor-pointer"
+                                title="Próximo Evento"
+                              >
+                                <ChevronRight size={14} />
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()
+                )}
               </div>
             </div>
           )}

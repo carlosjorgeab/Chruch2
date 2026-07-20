@@ -72,11 +72,16 @@ export default function KidsModule() {
   const { user, hasPermission } = useAuth();
 
   // Core authorization checks
+  const canRead = hasPermission('kids:leitura');
+  const canCreate = hasPermission('kids:novo');
+  const canEdit = hasPermission('kids:editar');
+  const canDelete = hasPermission('kids:excluir');
+
   const isMasterOrAdmin = user?.id_master || user?.is_admin;
   const userPerms = user?.perfil?.permissoes || [];
-  const canAccessPainel = isMasterOrAdmin || userPerms.includes('/kids');
-  const canAccessTurmas = isMasterOrAdmin || userPerms.includes('/kids/turmas');
-  const canAccessSalas = isMasterOrAdmin || userPerms.includes('/kids/salas');
+  const canAccessPainel = canRead && (isMasterOrAdmin || userPerms.includes('/kids') || userPerms.includes('kids:leitura'));
+  const canAccessTurmas = canRead && (isMasterOrAdmin || userPerms.includes('/kids/turmas') || userPerms.includes('kids:leitura'));
+  const canAccessSalas = canRead && (isMasterOrAdmin || userPerms.includes('/kids/salas') || userPerms.includes('kids:leitura'));
 
   // Active Tab: 'painel' | 'turmas' | 'salas'
   const [activeTab, setActiveTab] = useState<'painel' | 'turmas' | 'salas'>('painel');
@@ -1042,6 +1047,15 @@ export default function KidsModule() {
 
   const handleSaveTurma = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (editingTurma && !canEdit) {
+      showNotification('Você não possui permissão para editar turmas.', 'error');
+      return;
+    }
+    if (!editingTurma && !canCreate) {
+      showNotification('Você não possui permissão para cadastrar novas turmas.', 'error');
+      return;
+    }
+
     if (!turmaNome.trim()) {
       showNotification('Por favor, informe o nome da turma.', 'error');
       return;
@@ -1093,6 +1107,10 @@ export default function KidsModule() {
   };
 
   const handleDeleteTurma = async (turmaId: string) => {
+    if (!canDelete) {
+      showNotification('Você não possui permissão para excluir turmas.', 'error');
+      return;
+    }
     if (!confirm('Deseja realmente excluir esta turma? Todas as salas vinculadas a ela serão afetadas.')) return;
     try {
       // Explicitly delete from database
@@ -1225,6 +1243,15 @@ export default function KidsModule() {
 
   const handleSaveSala = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (editingSala && !canEdit) {
+      showNotification('Você não possui permissão para editar salas.', 'error');
+      return;
+    }
+    if (!editingSala && !canCreate) {
+      showNotification('Você não possui permissão para cadastrar novas salas.', 'error');
+      return;
+    }
+
     if (!salaNome.trim()) {
       showNotification('Informe o nome da sala.', 'error');
       return;
@@ -1277,6 +1304,10 @@ export default function KidsModule() {
   };
 
   const handleDeleteSala = async (salaId: string) => {
+    if (!canDelete) {
+      showNotification('Você não possui permissão para excluir salas.', 'error');
+      return;
+    }
     if (!confirm('Deseja realmente excluir esta sala?')) return;
     try {
       const { error: dError } = await supabase

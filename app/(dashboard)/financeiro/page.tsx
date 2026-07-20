@@ -82,6 +82,11 @@ export default function FinanceiroPage() {
   const { user, hasPermission } = useAuth();
   const { selectedIgreja } = useIgreja();
   const { confirmDelete } = useConfirm();
+
+  const canRead = hasPermission('financeiro:leitura') || hasPermission('/financeiro');
+  const canCreate = hasPermission('financeiro:novo');
+  const canEdit = hasPermission('financeiro:editar');
+  const canDelete = hasPermission('financeiro:excluir');
   const [activeTab, setActiveTab] = useState<'lancamentos' | 'contas' | 'categorias' | 'formas_pagamento' | 'centro_custo' | 'fluxo_caixa' | 'relatorios' | 'estatisticas_financeiras'>('lancamentos');
   
   // States specifically for the "Estatísticas Financeiras" Submodule
@@ -976,6 +981,10 @@ export default function FinanceiroPage() {
   };
 
   const handleDelete = (id: string) => {
+    if (!canDelete) {
+      setError('Você não possui permissão para excluir lançamentos financeiros.');
+      return;
+    }
     confirmDelete({
       message: 'Deseja realmente remover este lançamento financeiro? Esta ação é irreversível.',
       onConfirm: async () => {
@@ -996,6 +1005,10 @@ export default function FinanceiroPage() {
   };
 
   const handleEdit = async (transacao: Transacao) => {
+    if (!canEdit) {
+      setError('Você não possui permissão para editar lançamentos financeiros.');
+      return;
+    }
     setCurrentTransacao({
       ...transacao,
       data: transacao.data || '',
@@ -1060,6 +1073,10 @@ export default function FinanceiroPage() {
   };
 
   const handleNew = () => {
+    if (!canCreate) {
+      setError('Você não possui permissão para cadastrar novos lançamentos financeiros.');
+      return;
+    }
     const todayStr = new Date().toISOString().split('T')[0];
     
     // Choose initial category from DB if available, fallback otherwise
@@ -1094,6 +1111,15 @@ export default function FinanceiroPage() {
     e.preventDefault();
     setError('');
     setSuccess('');
+
+    if (!currentTransacao.id && !canCreate) {
+      setError('Você não possui permissão para cadastrar novos lançamentos.');
+      return;
+    }
+    if (currentTransacao.id && !canEdit) {
+      setError('Você não possui permissão para editar lançamentos existentes.');
+      return;
+    }
 
     if (!selectedIgreja) {
       setError('Selecione uma congregação.');
@@ -1721,16 +1747,16 @@ export default function FinanceiroPage() {
     .reverse()
     .slice(-10); // Get latest 10 active days for the flux
 
-  if (!user?.id_master && !user?.is_admin && !hasPermission('/financeiro')) {
+  if (!user?.id_master && !user?.is_admin && !canRead) {
     return (
-      <div className="p-8 max-w-4xl mx-auto text-center py-20">
+      <div className="p-8 max-w-4xl mx-auto text-center py-20" id="financeiro-no-access">
         <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded-3xl p-12 shadow-sm space-y-4 max-w-xl mx-auto">
           <div className="p-4 bg-red-100 dark:bg-red-900/40 rounded-full w-16 h-16 flex items-center justify-center mx-auto text-red-650">
             <AlertCircle size={32} />
           </div>
-          <h3 className="text-xl font-bold text-slate-850 dark:text-white">Acesso Negado</h3>
+          <h3 className="text-xl font-bold text-slate-850 dark:text-white">Acesso Restrito</h3>
           <p className="text-sm text-slate-550 dark:text-slate-400 leading-relaxed">
-            Você não possui permissão para acessar a Gestão Financeira. Entre em contato com o administrador do sistema.
+            Seu perfil de usuário não possui permissão de leitura para acessar a <strong>Gestão Financeira</strong>. Entre em contato com o administrador do sistema se precisar de acesso.
           </p>
         </div>
       </div>

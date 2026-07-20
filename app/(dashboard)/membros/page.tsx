@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { useIgreja } from '@/context/IgrejaContext';
 import { useAuth } from '@/context/AuthContext';
 import { useConfirm } from '@/context/ConfirmContext';
-import { Plus, Edit2, Trash2, Save, X, Search, Check, RefreshCw, UserCheck, FileText, Calendar, Printer, Upload } from 'lucide-react';
+import { Plus, Edit2, Trash2, Save, X, Search, Check, RefreshCw, UserCheck, FileText, Calendar, Printer, Upload, AlertCircle } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { formatCPF, formatTelefone, formatCEP, validateCPF } from '@/lib/masks';
@@ -692,6 +692,24 @@ export default function MembrosPage() {
 
     return matchesSearch && matchesStatus && matchesSexo && matchesEstadoCivil && matchesMesNascimento;
   });
+
+  const canRead = hasPermission('membros:leitura');
+
+  if (!canRead) {
+    return (
+      <div className="p-8 flex flex-col items-center justify-center min-h-[450px]" id="membros-no-access">
+        <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800 text-center max-w-md w-full space-y-4">
+          <div className="w-16 h-16 bg-red-100 dark:bg-red-950/40 text-red-600 dark:text-red-400 rounded-2xl flex items-center justify-center mx-auto">
+            <AlertCircle size={32} />
+          </div>
+          <h2 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">Acesso Restrito</h2>
+          <p className="text-slate-500 dark:text-slate-400 text-xs leading-relaxed">
+            Seu perfil de usuário não possui permissão de leitura para o módulo de <strong>Gestão de Membros</strong>. Entre em contato com o administrador do sistema se precisar de acesso.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-8 space-y-8 max-w-6xl mx-auto">

@@ -49,7 +49,13 @@ type AgendaItem = {
 export default function AgendaPage() {
   const { selectedIgreja } = useIgreja();
   const { confirmDelete } = useConfirm();
-  const { user } = useAuth();
+  const { user, hasPermission } = useAuth();
+
+  const canRead = hasPermission('agenda:leitura');
+  const canCreate = hasPermission('agenda:novo');
+  const canEdit = hasPermission('agenda:editar');
+  const canDelete = hasPermission('agenda:excluir');
+
   const [items, setItems] = useState<AgendaItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -290,6 +296,15 @@ export default function AgendaPage() {
     setError('');
     setSuccess('');
     
+    if (item && !canEdit) {
+      setError('Você não possui permissão para editar eventos.');
+      return;
+    }
+    if (!item && !canCreate) {
+      setError('Você não possui permissão para cadastrar novos eventos.');
+      return;
+    }
+    
     if (item) {
       setEditingId(item.id);
       setTitulo(item.titulo);
@@ -356,6 +371,15 @@ export default function AgendaPage() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!editingId && !canCreate) {
+      setError('Você não possui permissão para cadastrar novos eventos.');
+      return;
+    }
+    if (editingId && !canEdit) {
+      setError('Você não possui permissão para editar este evento.');
+      return;
+    }
+
     if (!selectedIgreja?.id) {
       setError('Selecione uma igreja ativa.');
       return;
@@ -542,6 +566,10 @@ export default function AgendaPage() {
   };
 
   const handleDelete = async (id: string, name: string) => {
+    if (!canDelete) {
+      setError('Você não possui permissão para excluir eventos.');
+      return;
+    }
     confirmDelete({
       title: 'Excluir Evento da Agenda',
       message: `Tem certeza que deseja excluir o evento "${name}" permanentemente?`,
@@ -636,6 +664,22 @@ export default function AgendaPage() {
     return `${startStr} Horas`;
   };
 
+  if (!canRead) {
+    return (
+      <div className="p-8 flex flex-col items-center justify-center min-h-[450px]" id="agenda-no-access">
+        <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800 text-center max-w-md w-full space-y-4">
+          <div className="w-16 h-16 bg-red-100 dark:bg-red-950/40 text-red-600 dark:text-red-400 rounded-2xl flex items-center justify-center mx-auto">
+            <AlertTriangle size={32} />
+          </div>
+          <h2 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">Acesso Restrito</h2>
+          <p className="text-slate-500 dark:text-slate-400 text-xs leading-relaxed">
+            Seu perfil de usuário não possui permissão de leitura para a <strong>Agenda da Igreja</strong>. Entre em contato com o administrador do sistema se precisar de acesso.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen pt-20 pb-16 px-4 sm:px-6 lg:px-8 transition-colors duration-300 font-['Inter']">
       <div className="max-w-6xl mx-auto space-y-8">
@@ -667,13 +711,15 @@ export default function AgendaPage() {
               <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
               Atualizar
             </button>
-            <button
-              onClick={() => initForm()}
-              className="px-5 py-3 bg-[#E4A232] hover:bg-[#E4A232]/90 text-white rounded-xl font-black text-xs tracking-wider uppercase shadow-xl shadow-amber-500/20 active:scale-95 duration-200 transition flex items-center gap-2 cursor-pointer"
-            >
-              <Plus size={16} />
-              Novo Evento
-            </button>
+            {canCreate && (
+              <button
+                onClick={() => initForm()}
+                className="px-5 py-3 bg-[#E4A232] hover:bg-[#E4A232]/90 text-white rounded-xl font-black text-xs tracking-wider uppercase shadow-xl shadow-amber-500/20 active:scale-95 duration-200 transition flex items-center gap-2 cursor-pointer"
+              >
+                <Plus size={16} />
+                Novo Evento
+              </button>
+            )}
           </div>
         </div>
 

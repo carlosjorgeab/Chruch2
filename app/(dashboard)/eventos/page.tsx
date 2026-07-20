@@ -687,6 +687,16 @@ export default function EventosPage() {
 
       if (currentEvent.id) {
         // Edit Mode
+        let wasCancelled = false;
+        if (payload.status === 'Cancelado') {
+          const { data: oldEvt } = await supabase
+            .from('eventos')
+            .select('status')
+            .eq('id', currentEvent.id)
+            .maybeSingle();
+          wasCancelled = oldEvt?.status === 'Cancelado';
+        }
+
         const { data, error: err } = await supabase
           .from('eventos')
           .update(payload)
@@ -707,6 +717,29 @@ export default function EventosPage() {
           `)
           .single();
         if (err) throw err;
+
+        if (payload.status === 'Cancelado' && !wasCancelled) {
+          fetch('/api/eventos/cancelado-email', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              id_evento: currentEvent?.id,
+              id_igreja: selectedIgreja?.id,
+              titulo_evento: payload.titulo,
+              data_inicio: currentEvent?.agenda?.data_hora || '',
+              descricao: currentEvent?.sub_titulo || 'O evento foi cancelado pela coordenação.'
+            })
+          }).then(res => res.json())
+            .then(resData => {
+              console.log('Cancellation emails trigger success:', resData);
+            })
+            .catch(resErr => {
+              console.error('Cancellation emails trigger error:', resErr);
+            });
+        }
+
         setSuccess('Evento atualizado com sucesso!');
         
         const mapped = {
@@ -1045,6 +1078,24 @@ export default function EventosPage() {
       (evt.sub_titulo && evt.sub_titulo.toLowerCase().includes(rawMatch))
     );
   });
+
+  const canRead = hasPermission('eventos:leitura');
+
+  if (!canRead) {
+    return (
+      <div className="p-8 flex flex-col items-center justify-center min-h-[450px]" id="eventos-no-access">
+        <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800 text-center max-w-md w-full space-y-4">
+          <div className="w-16 h-16 bg-red-100 dark:bg-red-950/40 text-red-600 dark:text-red-400 rounded-2xl flex items-center justify-center mx-auto">
+            <Ticket size={32} />
+          </div>
+          <h2 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">Acesso Restrito</h2>
+          <p className="text-slate-500 dark:text-slate-400 text-xs leading-relaxed">
+            Seu perfil de usuário não possui permissão de leitura para o módulo de <strong>Gestão de Eventos</strong>. Entre em contato com o administrador do sistema se precisar de acesso.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen font-['Inter'] transition-colors p-4 sm:p-8">

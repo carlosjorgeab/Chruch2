@@ -35,6 +35,10 @@ export default function FornecedoresPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
+  const canCreate = hasPermission('fornecedores:novo');
+  const canEdit = hasPermission('fornecedores:editar');
+  const canDelete = hasPermission('fornecedores:excluir');
+
   async function fetchData() {
     if (!selectedIgreja) {
       setFornecedores([]);
@@ -67,6 +71,15 @@ export default function FornecedoresPage() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!currentFornecedor.id && !canCreate) {
+      setError('Você não possui permissão para cadastrar novos fornecedores.');
+      return;
+    }
+    if (currentFornecedor.id && !canEdit) {
+      setError('Você não possui permissão para editar fornecedores.');
+      return;
+    }
+
     if (!currentFornecedor.razao_social) {
       setError('A Razão Social é obrigatória.');
       return;
@@ -125,6 +138,11 @@ export default function FornecedoresPage() {
   };
 
   const handleDelete = (id: string, name: string) => {
+    if (!canDelete) {
+      setError('Você não possui permissão para excluir fornecedores.');
+      return;
+    }
+
     confirmDelete({
       message: `Tem certeza que deseja excluir o fornecedor "${name}"? Esta ação não poderá ser desfeita.`,
       onConfirm: async () => {
@@ -200,7 +218,7 @@ export default function FornecedoresPage() {
           </h1>
           <p className="text-slate-500 dark:text-slate-400 mt-1">Gerencie prestadores de serviços, credores e fornecedores</p>
         </div>
-        {!isEditing && (
+        {!isEditing && canCreate && (
           <button 
             onClick={() => { 
               setCurrentFornecedor({ razao_social: '', cpf_cnpj: '', endereco: '', telefone: '', email: '' }); 
@@ -353,18 +371,22 @@ export default function FornecedoresPage() {
                         </td>
                         <td className="p-4 text-right">
                           <div className="flex justify-end gap-2">
-                            <button 
-                              onClick={() => { setCurrentFornecedor(f); setIsEditing(true); setError(''); setSuccess(''); }}
-                              className="p-2 text-slate-400 hover:text-amber-500 transition-colors rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"
-                            >
-                              <Edit2 size={18} />
-                            </button>
-                            <button 
-                              onClick={() => handleDelete(f.id, f.razao_social)}
-                              className="p-2 text-slate-400 hover:text-red-500 transition-colors rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"
-                            >
-                              <Trash2 size={18} />
-                            </button>
+                            {canEdit && (
+                              <button 
+                                onClick={() => { setCurrentFornecedor(f); setIsEditing(true); setError(''); setSuccess(''); }}
+                                className="p-2 text-slate-400 hover:text-amber-500 transition-colors rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"
+                              >
+                                <Edit2 size={18} />
+                              </button>
+                            )}
+                            {canDelete && (
+                              <button 
+                                onClick={() => handleDelete(f.id, f.razao_social)}
+                                className="p-2 text-slate-400 hover:text-red-500 transition-colors rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"
+                              >
+                                <Trash2 size={18} />
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>

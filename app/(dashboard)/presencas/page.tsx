@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useIgreja } from '@/context/IgrejaContext';
+import { useAuth } from '@/context/AuthContext';
 import { ClipboardCheck, Save, RefreshCw, AlertCircle, CheckCircle, HelpCircle } from 'lucide-react';
 
 type Licao = {
@@ -24,6 +25,7 @@ type PresencaRecord = {
 
 export default function PresencasPage() {
   const { selectedIgreja } = useIgreja();
+  const { hasPermission } = useAuth();
   const [lecoes, setLecoes] = useState<Licao[]>([]);
   const [membros, setMembros] = useState<Membro[]>([]);
   const [selectedLicaoId, setSelectedLicaoId] = useState('');
@@ -34,6 +36,9 @@ export default function PresencasPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+
+  const canRead = hasPermission('presencas:leitura');
+  const canWrite = hasPermission('presencas:editar') || hasPermission('presencas:novo');
 
   useEffect(() => {
     if (selectedIgreja) {
@@ -129,6 +134,7 @@ export default function PresencasPage() {
   }
 
   const handleTogglePresenca = (membroId: string) => {
+    if (!canWrite) return;
     setPresencas(prev => ({
       ...prev,
       [membroId]: prev[membroId] === 'Presente' ? 'Falta' : 'Presente'
@@ -136,6 +142,7 @@ export default function PresencasPage() {
   };
 
   const handleAllPresent = () => {
+    if (!canWrite) return;
     const updated: Record<string, 'Presente' | 'Falta'> = {};
     membros.forEach(m => {
       updated[m.id] = 'Presente';
@@ -144,6 +151,7 @@ export default function PresencasPage() {
   };
 
   const handleClearAll = () => {
+    if (!canWrite) return;
     const updated: Record<string, 'Presente' | 'Falta'> = {};
     membros.forEach(m => {
       updated[m.id] = 'Falta';
@@ -152,6 +160,10 @@ export default function PresencasPage() {
   };
 
   const handleSave = async () => {
+    if (!canWrite) {
+      setError('Você não possui permissão para salvar presenças.');
+      return;
+    }
     if (!selectedLicaoId || !selectedIgreja) return;
     try {
       setSaving(true);
@@ -191,6 +203,22 @@ export default function PresencasPage() {
       setSaving(false);
     }
   };
+
+  if (!canRead) {
+    return (
+      <div className="p-8 flex flex-col items-center justify-center min-h-[450px]" id="presencas-no-access">
+        <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800 text-center max-w-md w-full space-y-4">
+          <div className="w-16 h-16 bg-red-100 dark:bg-red-950/40 text-red-600 dark:text-red-400 rounded-2xl flex items-center justify-center mx-auto">
+            <AlertCircle size={32} />
+          </div>
+          <h2 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">Acesso Restrito</h2>
+          <p className="text-slate-500 dark:text-slate-400 text-xs leading-relaxed">
+            Seu perfil de usuário não possui permissão de leitura para o módulo de <strong>Controle de Presenças</strong>. Entre em contato com o administrador do sistema se precisar de acesso.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-8 space-y-8 max-w-5xl mx-auto">
@@ -248,15 +276,15 @@ export default function PresencasPage() {
             <div className="pt-4 border-t border-slate-100 dark:border-slate-850 space-y-3">
               <button
                 onClick={handleAllPresent}
-                disabled={loadingPresencas || saving}
-                className="w-full text-xs font-black uppercase tracking-wider py-2.5 bg-slate-50 hover:bg-slate-100 dark:bg-slate-950 dark:hover:bg-slate-850 text-slate-650 dark:text-slate-300 rounded-xl transition-all"
+                disabled={loadingPresencas || saving || !canWrite}
+                className="w-full text-xs font-black uppercase tracking-wider py-2.5 bg-slate-50 hover:bg-slate-100 dark:bg-slate-950 dark:hover:bg-slate-850 text-slate-650 dark:text-slate-300 rounded-xl transition-all disabled:opacity-55"
               >
                 Marcar Todos Importantes / Presentes
               </button>
               <button
                 onClick={handleClearAll}
-                disabled={loadingPresencas || saving}
-                className="w-full text-xs font-black uppercase tracking-wider py-2.5 bg-slate-50 hover:bg-slate-100 dark:bg-slate-950 dark:hover:bg-slate-850 text-slate-650 dark:text-slate-300 rounded-xl transition-all"
+                disabled={loadingPresencas || saving || !canWrite}
+                className="w-full text-xs font-black uppercase tracking-wider py-2.5 bg-slate-50 hover:bg-slate-100 dark:bg-slate-950 dark:hover:bg-slate-850 text-slate-650 dark:text-slate-300 rounded-xl transition-all disabled:opacity-55"
               >
                 Limpar Presenças / Faltas
               </button>
@@ -264,7 +292,7 @@ export default function PresencasPage() {
 
             <button
               onClick={handleSave}
-              disabled={loadingPresencas || saving || membros.length === 0}
+              disabled={loadingPresencas || saving || membros.length === 0 || !canWrite}
               className="w-full flex items-center justify-center gap-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 py-3.5 hover:opacity-90 active:scale-98 disabled:opacity-50 font-black rounded-xl uppercase text-xs tracking-widest transition-all"
             >
               {saving ? (
@@ -303,10 +331,10 @@ export default function PresencasPage() {
                   return (
                     <div
                       key={m.id}
-                      onClick={() => !saving && handleTogglePresenca(m.id)}
+                      onClick={() => !saving && canWrite && handleTogglePresenca(m.id)}
                       className={`flex justify-between items-center p-5 cursor-pointer hover:bg-slate-50/40 dark:hover:bg-slate-950/10 transition-colors ${
                         isPresent ? 'bg-amber-50/10 dark:bg-amber-950/5' : ''
-                      }`}
+                      } ${!canWrite ? 'cursor-not-allowed opacity-80' : ''}`}
                     >
                       <div>
                         <div className="font-bold text-slate-900 dark:text-white flex items-center gap-2 select-none text-sm uppercase">
