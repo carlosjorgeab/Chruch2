@@ -315,6 +315,19 @@ export async function GET(req: NextRequest) {
     ALTER TABLE membros ADD COLUMN IF NOT EXISTS categoria VARCHAR(100);
     ALTER TABLE perfis ADD COLUMN IF NOT EXISTS id_igreja UUID REFERENCES igrejas(id) ON DELETE CASCADE;
 
+    -- Extra customizations for Membros and Financeiro
+    ALTER TABLE transacoes ADD COLUMN IF NOT EXISTS observacoes TEXT;
+
+    ALTER TABLE membros ADD COLUMN IF NOT EXISTS criado_por_nome TEXT;
+    ALTER TABLE membros ADD COLUMN IF NOT EXISTS criado_em TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now());
+    ALTER TABLE membros ADD COLUMN IF NOT EXISTS atualizado_por_nome TEXT;
+    ALTER TABLE membros ADD COLUMN IF NOT EXISTS atualizado_em TIMESTAMP WITH TIME ZONE;
+    ALTER TABLE membros ADD COLUMN IF NOT EXISTS data_batismo DATE;
+    ALTER TABLE membros ADD COLUMN IF NOT EXISTS data_conversao DATE;
+    ALTER TABLE membros ADD COLUMN IF NOT EXISTS id_conjuge UUID REFERENCES membros(id) ON DELETE SET NULL;
+    ALTER TABLE membros ADD COLUMN IF NOT EXISTS id_grupo UUID REFERENCES comunidades(id) ON DELETE SET NULL;
+    ALTER TABLE membros ADD COLUMN IF NOT EXISTS id_comunidade UUID REFERENCES comunidades(id) ON DELETE SET NULL;
+
     -- 10. Kids Module - Turmas
     CREATE TABLE IF NOT EXISTS kids_turmas (
       id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

@@ -763,7 +763,7 @@ export default function ComunidadesPage() {
           </div>
           <h2 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">Acesso Restrito</h2>
           <p className="text-slate-500 dark:text-slate-400 text-xs leading-relaxed">
-            Seu perfil de usuário não possui permissão de leitura para o módulo de <strong>Gestão de Comunidades</strong>. Entre em contato com o administrador do sistema se precisar de acesso.
+            Seu perfil de usuário não possui permissão de leitura para o módulo de <strong>Gestão de Grupos</strong>. Entre em contato com o administrador do sistema se precisar de acesso.
           </p>
         </div>
       </div>
@@ -775,7 +775,7 @@ export default function ComunidadesPage() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
         <div>
           <p className="text-sm font-bold text-amber-600 uppercase tracking-widest mb-1">Células e Pequenos Grupos</p>
-          <h2 className="text-3xl font-black font-headline text-slate-900 dark:text-white uppercase tracking-tight">Comunidades</h2>
+          <h2 className="text-3xl font-black font-headline text-slate-900 dark:text-white uppercase tracking-tight">Grupos</h2>
           <p className="text-slate-500 text-sm">
             Grupos de crescimento e comunhão da congregação {selectedIgreja?.nome || ''}
           </p>
@@ -787,7 +787,7 @@ export default function ComunidadesPage() {
             className="flex items-center gap-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white font-bold py-3 px-6 rounded-xl shadow-md transition active:scale-95 text-sm uppercase tracking-wider"
           >
             <Plus size={18} />
-            Nova Comunidade
+            Novo Grupo
           </button>
         )}
       </div>
@@ -809,7 +809,7 @@ export default function ComunidadesPage() {
           <form onSubmit={handleSubmit} className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm p-8 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
             <div className="flex justify-between items-center border-b border-slate-150 dark:border-slate-700 pb-4">
               <h3 className="text-xl font-bold text-slate-900 dark:text-white">
-                {currentComunidade.id ? 'Editar Comunidade' : 'Criar Nova Comunidade / Célula'}
+                {currentComunidade.id ? 'Editar Grupo' : 'Criar Novo Grupo / Célula'}
               </h3>
               <button type="button" onClick={() => setIsEditing(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
                 <X size={20} />
@@ -819,7 +819,7 @@ export default function ComunidadesPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
-                  Nome da Comunidade *
+                  Nome do Grupo *
                 </label>
                 <input
                   type="text"
@@ -827,14 +827,14 @@ export default function ComunidadesPage() {
                   value={currentComunidade.nome || ''}
                   onChange={(e) => setCurrentComunidade({ ...currentComunidade, nome: e.target.value })}
                   className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-bold text-sm"
-                  placeholder="Ex. Comunidade Restauração"
+                  placeholder="Ex. Grupo Restauração"
                 />
               </div>
 
               {/* c) Inserir Categorias no Combo com dados específicos */}
               <div>
                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
-                  Categoria da Comunidade
+                  Categoria do Grupo
                 </label>
                 <select
                   value={currentComunidade.categoria || 'Adultos'}
@@ -848,6 +848,8 @@ export default function ComunidadesPage() {
                   <option value="Jovens">✨ Jovens</option>
                   <option value="Adolescentes">🎒 Adolescentes</option>
                   <option value="Crianças">🧸 Crianças</option>
+                  <option value="Homens">🙋‍♂️ Homens</option>
+                  <option value="Mulheres">🙋‍♀️ Mulheres</option>
                 </select>
               </div>
 
@@ -855,7 +857,7 @@ export default function ComunidadesPage() {
               <div className="md:col-span-2">
                 <fieldset className="p-4 border-2 border-slate-100 dark:border-slate-800 rounded-2xl space-y-4">
                   <legend className="px-2 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
-                    Liderança da Comunidade (Selecione do cadastro de membros)
+                    Liderança do Grupo (Selecione do cadastro de membros)
                   </legend>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
@@ -980,13 +982,13 @@ export default function ComunidadesPage() {
                       <div className="text-center space-y-2 w-full">
                         <img
                           src={currentComunidade.imagem_base64}
-                          alt="Prévia capa comunidade"
+                          alt="Prévia capa grupo"
                           className="w-full h-24 object-cover rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm mx-auto"
                         />
                         <div className="flex gap-4 justify-center items-center">
                           <a
                             href={currentComunidade.imagem_base64}
-                            download={currentComunidade.imagem_nome || 'capa_comunidade.png'}
+                            download={currentComunidade.imagem_nome || 'capa_grupo.png'}
                             className="text-[10px] text-amber-600 hover:underline font-bold flex items-center gap-1 cursor-pointer"
                           >
                             ⬇️ Baixar Imagem
@@ -1001,13 +1003,13 @@ export default function ComunidadesPage() {
                         </div>
                       </div>
                     ) : (
-                      <p className="text-xs text-slate-450 italic">Nenhuma capa de imagem carregada para a comunidade</p>
+                      <p className="text-xs text-slate-450 italic">Nenhuma capa de imagem carregada para o grupo</p>
                     )}
                   </div>
                 </div>
               </div>
 
-              {/* d) Criar uma Listagem de Membros para a Comunidade (Tabela com adição/remoção em tempo real) */}
+              {/* d) Criar uma Listagem de Membros para o Grupo (Tabela com adição/remoção em tempo real) */}
               {currentComunidade.id ? (
                 <div className="md:col-span-2 border-t border-slate-100 dark:border-slate-700 pt-6">
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
@@ -1045,14 +1047,14 @@ export default function ComunidadesPage() {
                   </div>
 
                   {associatedMembers.length === 0 ? (
-                    <div className="border border-dashed border-slate-200 dark:border-slate-800 rounded-xl p-6 text-center text-xs text-slate-450 italic bg-slate-50 dark:bg-slate-950/20">
-                      Nenhum membro vinculado a esta comunidade ainda. Use a caixa de seleção para adicionar novos participantes.
+                    <div className="border border-dashed border-slate-200 dark:border-slate-800 rounded-xl p-6 text-center text-xs text-slate-450 italic bg-slate-50 dark:bg-slate-955/20">
+                      Nenhum membro vinculado a este grupo ainda. Use a caixa de seleção para adicionar novos participantes.
                     </div>
                   ) : (
                     <div className="overflow-x-auto border border-slate-150 dark:border-slate-850 rounded-2xl">
                       <table className="w-full text-left border-collapse">
                         <thead>
-                          <tr className="bg-slate-50 dark:bg-slate-950/40 text-[10px] text-slate-450 font-black uppercase tracking-wider border-b border-slate-150 dark:border-slate-800/80">
+                          <tr className="bg-slate-50 dark:bg-slate-955/40 text-[10px] text-slate-450 font-black uppercase tracking-wider border-b border-slate-150 dark:border-slate-800/80">
                             <th className="p-3 pl-4">Membro Cadastrado</th>
                             <th className="p-3 text-right pr-4">Ação</th>
                           </tr>
@@ -1079,8 +1081,8 @@ export default function ComunidadesPage() {
                 </div>
               ) : (
                 <div className="md:col-span-2 border-t border-slate-100 dark:border-slate-700 pt-6">
-                  <div className="p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-2xl text-xs text-amber-800 dark:text-amber-400 font-bold flex items-center gap-2">
-                    <span>⚠️ Após Salvar o cadastro inicial desta comunidade, a listagem/tabela para vincular membros e participantes será ativada aqui automaticamente.</span>
+                  <div className="p-4 bg-amber-50 dark:bg-amber-955/20 border border-amber-200 dark:border-amber-900 rounded-2xl text-xs text-amber-800 dark:text-amber-400 font-bold flex items-center gap-2">
+                    <span>⚠️ Após Salvar o cadastro inicial deste grupo, a listagem/tabela para vincular membros e participantes será ativada aqui automaticamente.</span>
                   </div>
                 </div>
               )}
@@ -1099,7 +1101,7 @@ export default function ComunidadesPage() {
                 className="flex items-center gap-2 bg-[#E4A232] hover:bg-[#E4A232]/90 text-white px-8 py-3 rounded-xl font-bold transition-all shadow-md uppercase text-xs tracking-widest cursor-pointer"
               >
                 <Save size={16} />
-                Salvar Comunidade
+                Salvar Grupo
               </button>
             </div>
           </form>
@@ -1110,7 +1112,7 @@ export default function ComunidadesPage() {
             <Search className="absolute left-3.5 top-3.5 text-slate-400" size={18} />
             <input
               type="text"
-              placeholder="Buscar comunidade, descrição ou líder..."
+              placeholder="Buscar grupo, descrição ou líder..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white outline-none focus:border-amber-500 transition-all text-xs font-semibold"
@@ -1120,11 +1122,11 @@ export default function ComunidadesPage() {
           {loading ? (
             <div className="bg-white dark:bg-slate-850 rounded-3xl border border-slate-200 p-12 text-center text-slate-450 font-bold uppercase tracking-widest text-xs flex items-center justify-center gap-2">
               <RefreshCw size={16} className="animate-spin" />
-              Carregando comunidades...
+              Carregando grupos...
             </div>
           ) : filteredComunidades.length === 0 ? (
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm p-12 text-center text-slate-500 font-medium">
-              Nenhuma comunidade cadastrada na congregação.
+              Nenhum grupo cadastrado na congregação.
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -1264,11 +1266,11 @@ export default function ComunidadesPage() {
                 </h3>
 
                 <p className="text-xs text-slate-600 dark:text-slate-300 font-semibold leading-relaxed">
-                  Para máxima integração, o agendamento desta reunião celular criará automaticamente o evento na Agenda da igreja e gerará a lista de chamada para o grupo celular correspondente.
+                  Para máxima integração, o agendamento desta reunião criará automaticamente o evento na Agenda da igreja e gerará a lista de chamada para o grupo correspondente.
                 </p>
 
                 <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-normal font-medium">
-                  Use o botão abaixo para abrir o painel de criação de agendas integrado a esta comunidade celular.
+                  Use o botão abaixo para abrir o painel de criação de agendas integrado a este grupo.
                 </p>
 
                 <button
@@ -1288,8 +1290,8 @@ export default function ComunidadesPage() {
                 </h3>
 
                 {meetingsComunidade.length === 0 ? (
-                  <div className="border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl p-12 text-center text-xs text-slate-450 italic bg-slate-50 dark:bg-slate-950/10">
-                    Nenhuma reunião agendada para esta comunidade celular ainda.
+                  <div className="border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl p-12 text-center text-xs text-slate-450 italic bg-slate-50 dark:bg-slate-955/10">
+                    Nenhuma reunião agendada para este grupo ainda.
                   </div>
                 ) : (
                   <div className="space-y-3.5 max-h-[50vh] overflow-y-auto pr-1">

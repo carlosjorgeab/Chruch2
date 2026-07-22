@@ -45,6 +45,7 @@ type Transacao = {
   criado_em?: string | null;
   atualizado_por_nome?: string | null;
   atualizado_em?: string | null;
+  observacoes?: string | null;
 };
 
 type Conta = {
@@ -152,7 +153,8 @@ export default function FinanceiroPage() {
     id_fornecedor: '',
     id_centro_custo: '',
     data_vencimento: '',
-    data_pagamento: ''
+    data_pagamento: '',
+    observacoes: ''
   });
 
   // Attachments state
@@ -474,7 +476,7 @@ export default function FinanceiroPage() {
           
           const associatedForn = dbFornecedores.find(f => f.id === t.id_fornecedor);
           const fornecedorName = associatedForn ? associatedForn.razao_social : '-';
-          const val = t.valor || 0;
+          const val = t.valor_pago || t.valor || 0;
           totalSum += val;
 
           return [
@@ -503,7 +505,7 @@ export default function FinanceiroPage() {
           const descAndDoc = `${t.descricao} (Doc: ${docDateStr})`;
           
           const clientName = t.membro_contribuinte || 'Coletivo / Caixa';
-          const val = t.valor || 0;
+          const val = t.valor_pago || t.valor || 0;
           totalSum += val;
 
           return [
@@ -536,7 +538,7 @@ export default function FinanceiroPage() {
           
           const associatedForn = dbFornecedores.find(f => f.id === t.id_fornecedor);
           const contactName = associatedForn ? associatedForn.razao_social : (t.membro_contribuinte || 'Coletivo / Caixa');
-          const val = t.valor || 0;
+          const val = t.valor_pago || t.valor || 0;
           if (t.tipo === 'Entrada') {
             totalEntradas += val;
           } else {
@@ -599,7 +601,7 @@ export default function FinanceiroPage() {
           const contaName = c ? c.nome : 'Sem Conta';
 
           const ccContaLabel = `${ccSigla} | ${contaName}`;
-          const val = t.valor || 0;
+          const val = t.valor_pago || t.valor || 0;
           const change = t.tipo === 'Entrada' ? val : -val;
           runningBalance += change;
 
@@ -1018,7 +1020,8 @@ export default function FinanceiroPage() {
       id_fornecedor: transacao.id_fornecedor || '',
       id_centro_custo: transacao.id_centro_custo || '',
       data_vencimento: transacao.data_vencimento || '',
-      data_pagamento: transacao.data_pagamento || ''
+      data_pagamento: transacao.data_pagamento || '',
+      observacoes: transacao.observacoes || ''
     });
 
     // Load attachments from database for this transaction to allow editing
@@ -1061,7 +1064,8 @@ export default function FinanceiroPage() {
       id_fornecedor: transacao.id_fornecedor || '',
       id_centro_custo: transacao.id_centro_custo || '',
       data_vencimento: transacao.data_vencimento || '',
-      data_pagamento: transacao.data_pagamento || ''
+      data_pagamento: transacao.data_pagamento || '',
+      observacoes: transacao.observacoes || ''
     });
 
     // Do not copy the files from the original record in the clone operation
@@ -1099,7 +1103,8 @@ export default function FinanceiroPage() {
       id_fornecedor: '',
       id_centro_custo: '',
       data_vencimento: '',
-      data_pagamento: ''
+      data_pagamento: '',
+      observacoes: ''
     });
     setAnexos([]);
     setIsEditing(true);
@@ -1170,6 +1175,7 @@ export default function FinanceiroPage() {
       id_centro_custo: currentTransacao.id_centro_custo || null,
       data_vencimento: currentTransacao.data_vencimento || null,
       data_pagamento: currentTransacao.data_pagamento || null,
+      observacoes: currentTransacao.observacoes || null,
     };
 
     try {
@@ -1621,11 +1627,11 @@ export default function FinanceiroPage() {
   // Balances calculation
   const totalEntradas = transacoes
     .filter((t) => t.tipo === 'Entrada')
-    .reduce((sum, t) => sum + t.valor, 0);
+    .reduce((sum, t) => sum + (t.valor_pago || t.valor || 0), 0);
 
   const totalSaidas = transacoes
     .filter((t) => t.tipo === 'Saída')
-    .reduce((sum, t) => sum + t.valor, 0);
+    .reduce((sum, t) => sum + (t.valor_pago || t.valor || 0), 0);
 
   const saldoTotal = totalEntradas - totalSaidas;
 
@@ -1636,7 +1642,7 @@ export default function FinanceiroPage() {
     if (!dataMap[d]) {
       dataMap[d] = { Entrada: 0, Saída: 0 };
     }
-    dataMap[d][t.tipo] += t.valor;
+    dataMap[d][t.tipo] += (t.valor_pago || t.valor || 0);
   });
 
   const chartData = Object.entries(dataMap)
@@ -1721,11 +1727,11 @@ export default function FinanceiroPage() {
   const fluxoList = getFilteredFluxoTransactions();
   const fluxoTotalEntradas = fluxoList
     .filter((t) => t.tipo === 'Entrada')
-    .reduce((sum, t) => sum + t.valor, 0);
+    .reduce((sum, t) => sum + (t.valor_pago || t.valor || 0), 0);
 
   const fluxoTotalSaidas = fluxoList
     .filter((t) => t.tipo === 'Saída')
-    .reduce((sum, t) => sum + t.valor, 0);
+    .reduce((sum, t) => sum + (t.valor_pago || t.valor || 0), 0);
 
   const fluxoSaldoTotal = fluxoTotalEntradas - fluxoTotalSaidas;
 
@@ -1736,7 +1742,7 @@ export default function FinanceiroPage() {
     if (!fluxoDataMap[d]) {
       fluxoDataMap[d] = { Entrada: 0, Saída: 0 };
     }
-    fluxoDataMap[d][t.tipo] += t.valor;
+    fluxoDataMap[d][t.tipo] += (t.valor_pago || t.valor || 0);
   });
 
   const fluxoChartData = Object.entries(fluxoDataMap)
@@ -1789,7 +1795,7 @@ export default function FinanceiroPage() {
   let debitTotal = 0;
 
   filteredTransactions.forEach((t) => {
-    const valor = Number(t.valor || 0);
+    const valor = Number(t.valor_pago || t.valor || 0);
     if (t.tipo === 'Entrada') {
       creditTotal += valor;
       if (t.data_pagamento) {
@@ -2014,7 +2020,7 @@ export default function FinanceiroPage() {
 
                 <div className="md:col-span-2">
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
-                    Descrição ou Observações *
+                    Descrição *
                   </label>
                   <input
                     type="text"
@@ -2023,6 +2029,18 @@ export default function FinanceiroPage() {
                     onChange={(e) => setCurrentTransacao({ ...currentTransacao, descricao: e.target.value })}
                     className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-semibold shadow-inner"
                     placeholder="Ex. Pagamento fatura de serviços, compra insumos"
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
+                    Observações
+                  </label>
+                  <textarea
+                    value={currentTransacao.observacoes || ''}
+                    onChange={(e) => setCurrentTransacao({ ...currentTransacao, observacoes: e.target.value })}
+                    className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-semibold shadow-inner h-20 resize-none"
+                    placeholder="Escreva observações adicionais aqui..."
                   />
                 </div>
 
@@ -3065,7 +3083,7 @@ export default function FinanceiroPage() {
                                   <span className={`font-black text-sm whitespace-nowrap ${
                                     t.tipo === 'Entrada' ? 'text-blue-600 dark:text-blue-450' : 'text-red-500'
                                   }`}>
-                                    {t.tipo === 'Entrada' ? '+' : '-'} R$ {t.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                    {t.tipo === 'Entrada' ? '+' : '-'} R$ {(t.valor_pago || t.valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                   </span>
                                 </div>
                               </td>
@@ -4264,10 +4282,11 @@ export default function FinanceiroPage() {
               });
 
               const printSum = prevList.reduce((acc, current) => {
+                const currentVal = current.valor_pago || current.valor || 0;
                 if (selectedReportType === 'fluxo_caixa' || selectedReportType === 'consolidado') {
-                  return acc + (current.tipo === 'Entrada' ? current.valor : -current.valor);
+                  return acc + (current.tipo === 'Entrada' ? currentVal : -currentVal);
                 }
-                return acc + current.valor;
+                return acc + currentVal;
               }, 0);
 
               if (prevList.length === 0) {
@@ -4313,7 +4332,8 @@ export default function FinanceiroPage() {
                           const contaName = cObj ? cObj.nome : 'Sem Conta';
                           const ccContaLabel = `${ccSigla} | ${contaName}`;
 
-                          const change = t.tipo === 'Entrada' ? t.valor : -t.valor;
+                          const currentVal = t.valor_pago || t.valor || 0;
+                          const change = t.tipo === 'Entrada' ? currentVal : -currentVal;
                           previewRunningBalance += change;
 
                           return (
@@ -4357,7 +4377,7 @@ export default function FinanceiroPage() {
                               <td className={`p-4 text-right font-mono font-bold text-sm ${
                                 t.tipo === 'Entrada' ? 'text-green-600 dark:text-green-400' : 'text-red-500'
                               }`}>
-                                {t.tipo === 'Entrada' ? '+' : '-'} R$ {t.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                {t.tipo === 'Entrada' ? '+' : '-'} R$ {currentVal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                               </td>
                             </tr>
                           );
@@ -4669,6 +4689,14 @@ export default function FinanceiroPage() {
                       {associatedForn ? associatedForn.razao_social : (selectedTransacaoDetails.membro_contribuinte || 'Geral / Coletivo')}
                     </span>
                   </div>
+                  {selectedTransacaoDetails.observacoes && (
+                    <div className="col-span-2 border-t border-slate-100 dark:border-slate-800 pt-2">
+                      <span className="text-[8px] font-black uppercase text-slate-400 tracking-wider block">📝 Observações</span>
+                      <p className="font-bold text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
+                        {selectedTransacaoDetails.observacoes}
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Audit Log Panel */}

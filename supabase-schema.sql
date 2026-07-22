@@ -86,6 +86,15 @@ CREATE TABLE IF NOT EXISTS membros (
   pais VARCHAR(100) DEFAULT 'Brasil',
   recepcao VARCHAR(50) DEFAULT 'Batismo',
   categoria VARCHAR(100),
+  criado_por_nome TEXT,
+  criado_em TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
+  atualizado_por_nome TEXT,
+  atualizado_em TIMESTAMP WITH TIME ZONE,
+  data_batismo DATE,
+  data_conversao DATE,
+  id_conjuge UUID REFERENCES membros(id) ON DELETE SET NULL,
+  id_grupo UUID, -- Referenced to comunidades(id)
+  id_comunidade UUID, -- Referenced to comunidades(id)
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -99,8 +108,17 @@ CREATE TABLE IF NOT EXISTS comunidades (
   horario VARCHAR(20),
   local TEXT,
   id_lider UUID REFERENCES membros(id),
+  id_segundo_lider UUID REFERENCES membros(id) ON DELETE SET NULL,
+  id_terceiro_lider UUID REFERENCES membros(id) ON DELETE SET NULL,
+  imagem_base64 TEXT,
+  imagem_nome VARCHAR(255),
+  categoria VARCHAR(100),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+
+-- Add foreign key constraints that require both tables to exist
+ALTER TABLE membros ADD CONSTRAINT fk_membros_id_grupo FOREIGN KEY (id_grupo) REFERENCES comunidades(id) ON DELETE SET NULL;
+ALTER TABLE membros ADD CONSTRAINT fk_membros_id_comunidade FOREIGN KEY (id_comunidade) REFERENCES comunidades(id) ON DELETE SET NULL;
 
 -- Tabela de Mural de Avisos
 CREATE TABLE IF NOT EXISTS mural_avisos (

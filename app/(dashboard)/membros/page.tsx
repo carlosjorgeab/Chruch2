@@ -35,6 +35,15 @@ type Membro = {
   pais: string | null;
   recepcao: string | null;
   categoria: string | null;
+  data_batismo: string | null;
+  data_conversao: string | null;
+  id_conjuge: string | null;
+  id_grupo: string | null;
+  id_comunidade: string | null;
+  criado_por_nome: string | null;
+  criado_em: string | null;
+  atualizado_por_nome: string | null;
+  atualizado_em: string | null;
 };
 
 type UfInfo = {
@@ -43,12 +52,37 @@ type UfInfo = {
   sigla: string;
 };
 
+type GrupoInfo = {
+  id: string;
+  nome: string;
+};
+
+const calculateAge = (birthdate: string | null | undefined): string => {
+  if (!birthdate) return '-';
+  try {
+    const birth = new Date(birthdate + 'T00:00:00');
+    if (isNaN(birth.getTime())) return '-';
+    const today = new Date();
+    let age = today.getFullYear() - birth.getFullYear();
+    const m = today.getMonth() - birth.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+      age--;
+    }
+    return age >= 0 ? `${age} anos` : '-';
+  } catch (e) {
+    return '-';
+  }
+};
+
 export default function MembrosPage() {
   const { selectedIgreja } = useIgreja();
   const { user, hasPermission } = useAuth();
   const { confirmDelete } = useConfirm();
   const [membros, setMembros] = useState<Membro[]>([]);
   const [ufs, setUfs] = useState<UfInfo[]>([]);
+  const [grupos, setGrupos] = useState<GrupoInfo[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState<number>(25);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [search, setSearch] = useState('');
@@ -79,6 +113,11 @@ export default function MembrosPage() {
     pais: 'Brasil',
     recepcao: 'Batismo',
     categoria: 'Adulto',
+    data_batismo: '',
+    data_conversao: '',
+    id_conjuge: '',
+    id_grupo: '',
+    id_comunidade: '',
   });
 
   const [error, setError] = useState('');
@@ -149,11 +188,29 @@ export default function MembrosPage() {
     fetchUfs();
   }, []);
 
+  async function fetchGrupos() {
+    if (!selectedIgreja) return;
+    try {
+      const { data, error } = await supabase
+        .from('comunidades')
+        .select('id, nome')
+        .eq('id_igreja', selectedIgreja.id)
+        .order('nome', { ascending: true });
+      if (!error && data) {
+        setGrupos(data);
+      }
+    } catch (e) {
+      console.error('Error loading groups:', e);
+    }
+  }
+
   useEffect(() => {
     if (selectedIgreja) {
       fetchMembros();
+      fetchGrupos();
     } else {
       setMembros([]);
+      setGrupos([]);
       setLoading(false);
     }
   }, [selectedIgreja]);
@@ -215,6 +272,11 @@ export default function MembrosPage() {
       pais: 'Brasil',
       recepcao: 'Batismo',
       categoria: 'Adulto',
+      data_batismo: '',
+      data_conversao: '',
+      id_conjuge: '',
+      id_grupo: '',
+      id_comunidade: '',
     });
     setIsEditing(true);
     setError('');
@@ -259,7 +321,7 @@ export default function MembrosPage() {
       }
     }
 
-    const payload = {
+    const payload: any = {
       id_igreja: selectedIgreja.id,
       nome: currentMembro.nome,
       email: currentMembro.email || null,
@@ -282,10 +344,17 @@ export default function MembrosPage() {
       pais: currentMembro.pais || null,
       recepcao: currentMembro.recepcao || null,
       categoria: currentMembro.categoria || 'Adulto',
+      data_batismo: currentMembro.data_batismo || null,
+      data_conversao: currentMembro.data_conversao || null,
+      id_conjuge: currentMembro.id_conjuge || null,
+      id_grupo: currentMembro.id_grupo || null,
+      id_comunidade: currentMembro.id_grupo || null,
     };
 
     try {
       if (currentMembro.id) {
+        payload.atualizado_por_nome = user?.nome || user?.email || 'Membro';
+        payload.atualizado_em = new Date().toISOString();
         const { error: err } = await supabase
           .from('membros')
           .update(payload)
@@ -293,6 +362,7 @@ export default function MembrosPage() {
         if (err) throw err;
         setSuccess('Membro atualizado com sucesso!');
       } else {
+        payload.criado_por_nome = user?.nome || user?.email || 'Membro';
         const { error: err } = await supabase.from('membros').insert(payload);
         if (err) throw err;
         setSuccess('Membro cadastrado com sucesso!');
@@ -693,6 +763,13 @@ export default function MembrosPage() {
     return matchesSearch && matchesStatus && matchesSexo && matchesEstadoCivil && matchesMesNascimento;
   });
 
+  const totalItems = filteredMembros.length;
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
+  const clampedCurrentPage = Math.min(Math.max(1, currentPage), Math.max(1, totalPages));
+  const startIndex = (clampedCurrentPage - 1) * itemsPerPage;
+  const endIndex = Math.min(startIndex + itemsPerPage, totalItems);
+  const paginatedMembros = filteredMembros.slice(startIndex, endIndex);
+
   const canRead = hasPermission('membros:leitura');
 
   if (!canRead) {
@@ -834,6 +911,7 @@ export default function MembrosPage() {
                 <option value="Viúvo(a)">Viúvo(a)</option>
                 <option value="Separado(a)">Separado(a)</option>
                 <option value="União Estável">União Estável</option>
+                <option value="Outro">Outro</option>
               </select>
             </div>
 
@@ -867,6 +945,18 @@ export default function MembrosPage() {
                 value={currentMembro.data_nascimento || ''}
                 onChange={(e) => setCurrentMembro({ ...currentMembro, data_nascimento: e.target.value })}
                 className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-semibold"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
+                Idade (Cálculo Automático)
+              </label>
+              <input
+                type="text"
+                disabled
+                value={calculateAge(currentMembro.data_nascimento)}
+                className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 text-slate-500 dark:text-slate-400 font-bold outline-none cursor-not-allowed"
               />
             </div>
 
@@ -975,7 +1065,7 @@ export default function MembrosPage() {
 
             <div>
               <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
-                Categoria *
+                Faixa Etária *
               </label>
               <select
                 value={currentMembro.categoria || 'Adulto'}
@@ -987,6 +1077,44 @@ export default function MembrosPage() {
                 <option value="Jovens">Jovens</option>
                 <option value="Adolescentes">Adolescentes</option>
                 <option value="Crianças">Crianças</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
+                Cônjuge
+              </label>
+              <select
+                value={currentMembro.id_conjuge || ''}
+                onChange={(e) => setCurrentMembro({ ...currentMembro, id_conjuge: e.target.value || null })}
+                className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-bold"
+              >
+                <option value="">Sem Cônjuge / Não informado</option>
+                {membros
+                  .filter((m) => m.id !== currentMembro.id)
+                  .map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.nome}
+                    </option>
+                  ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
+                Grupo / Comunidade
+              </label>
+              <select
+                value={currentMembro.id_grupo || ''}
+                onChange={(e) => setCurrentMembro({ ...currentMembro, id_grupo: e.target.value || null })}
+                className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-bold"
+              >
+                <option value="">Nenhum Grupo</option>
+                {grupos.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.nome}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -1152,6 +1280,30 @@ export default function MembrosPage() {
               </select>
             </div>
 
+            <div>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
+                Data de Batismo (Opcional)
+              </label>
+              <input
+                type="date"
+                value={currentMembro.data_batismo || ''}
+                onChange={(e) => setCurrentMembro({ ...currentMembro, data_batismo: e.target.value })}
+                className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-semibold"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
+                Data de Conversão (Opcional)
+              </label>
+              <input
+                type="date"
+                value={currentMembro.data_conversao || ''}
+                onChange={(e) => setCurrentMembro({ ...currentMembro, data_conversao: e.target.value })}
+                className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-semibold"
+              />
+            </div>
+
             {/* Quadro Recepção com as 3 opções da igreja */}
             <div className="p-4 border-2 border-slate-100 dark:border-slate-700 rounded-2xl bg-slate-50/50 dark:bg-slate-900/30 space-y-3">
               <label className="block text-[10px] font-black text-[#E4A232] uppercase tracking-widest ml-1 font-bold">
@@ -1177,6 +1329,43 @@ export default function MembrosPage() {
                 ))}
               </div>
             </div>
+
+            {/* Audit Log for members */}
+            {currentMembro.id && (
+              <div className="md:col-span-2 border-t border-slate-100 dark:border-slate-700/80 pt-6 mt-4 space-y-4">
+                <h4 className="text-xs font-black uppercase tracking-widest text-[#E4A232]">📝 Histórico de Auditoria</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 dark:bg-slate-900/40 p-5 rounded-2xl border border-slate-100 dark:border-slate-800">
+                  {/* Created log */}
+                  <div className="flex gap-2.5 text-[11px] font-bold text-slate-500 dark:text-slate-400">
+                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 mt-1.5" />
+                    <div>
+                      <span className="font-extrabold text-slate-700 dark:text-slate-300 uppercase text-[9px] block">Criado por</span>
+                      <p className="leading-relaxed">
+                        <span className="text-slate-900 dark:text-white font-black">{currentMembro.criado_por_nome || 'Sistema (Legado)'}</span> em{' '}
+                        <span>{currentMembro.criado_em ? new Date(currentMembro.criado_em).toLocaleString('pt-BR') : 'Data inicial do sistema'}</span>
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Updated log */}
+                  <div className="flex gap-2.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 font-bold">
+                    <div className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 mt-1.5" />
+                    <div>
+                      <span className="font-extrabold text-slate-700 dark:text-slate-300 uppercase text-[9px] block">Última atualização por</span>
+                      <p className="leading-relaxed">
+                        <span className="text-slate-900 dark:text-white font-black">{currentMembro.atualizado_por_nome || 'Nenhuma atualização'}</span>
+                        {currentMembro.atualizado_em && (
+                          <>
+                            {' '}em{' '}
+                            <span>{new Date(currentMembro.atualizado_em).toLocaleString('pt-BR')}</span>
+                          </>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="flex justify-end gap-3 pt-6 border-t border-slate-100 dark:border-slate-700">
@@ -1318,13 +1507,13 @@ export default function MembrosPage() {
                       <th className="px-6 py-4">Membro</th>
                       <th className="px-6 py-4">Contato</th>
                       <th className="px-6 py-4">Cargo / Função</th>
-                      <th className="px-6 py-4">Categoria</th>
+                      <th className="px-6 py-4">Faixa Etária</th>
                       <th className="px-6 py-4">Quadro de Recepção</th>
                       <th className="px-6 py-4 text-right">Ações</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-700 font-medium text-slate-700 dark:text-slate-300">
-                    {filteredMembros.map((m) => (
+                    {paginatedMembros.map((m) => (
                       <tr key={m.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/20 transition-all">
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
@@ -1351,7 +1540,7 @@ export default function MembrosPage() {
                               </div>
                               {m.data_nascimento && (
                                 <div className="text-xs text-slate-400 font-normal">
-                                  Nasc: {new Date(m.data_nascimento + 'T00:00:00').toLocaleDateString('pt-BR')}
+                                  Nasc: {new Date(m.data_nascimento + 'T00:00:00').toLocaleDateString('pt-BR')} ( {calculateAge(m.data_nascimento)} )
                                 </div>
                               )}
                             </div>
@@ -1408,6 +1597,67 @@ export default function MembrosPage() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            )}
+
+            {/* Pagination Controls */}
+            {filteredMembros.length > 0 && (
+              <div className="flex flex-col sm:flex-row justify-between items-center gap-4 bg-slate-50 dark:bg-slate-900/40 p-4 border-t border-slate-100 dark:border-slate-800 rounded-b-3xl">
+                <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 font-bold">
+                  <span>Registros por página:</span>
+                  <select
+                    value={itemsPerPage}
+                    onChange={(e) => {
+                      setItemsPerPage(Number(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                    className="bg-white dark:bg-slate-800 border border-slate-250 dark:border-slate-700 rounded px-2.5 py-1 outline-none text-slate-900 dark:text-white font-bold cursor-pointer"
+                  >
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                  <span className="ml-4">
+                    Mostrando {totalItems === 0 ? 0 : startIndex + 1}-{endIndex} de {totalItems} membros
+                  </span>
+                </div>
+
+                {totalPages > 1 && (
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      disabled={clampedCurrentPage === 1}
+                      className="px-3 py-1.5 rounded-lg border border-slate-250 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-755 text-xs font-bold text-slate-700 dark:text-slate-200 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                    >
+                      Anterior
+                    </button>
+                    
+                    {Array.from({ length: totalPages }).map((_, index) => {
+                      const page = index + 1;
+                      return (
+                        <button
+                          key={page}
+                          onClick={() => setCurrentPage(page)}
+                          className={`w-8 h-8 rounded-lg text-xs font-bold transition ${
+                            clampedCurrentPage === page
+                              ? 'bg-amber-600 text-white'
+                              : 'border border-slate-250 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-755 text-slate-700 dark:text-slate-200'
+                          }`}
+                        >
+                          {page}
+                        </button>
+                      );
+                    })}
+
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                      disabled={clampedCurrentPage === totalPages}
+                      className="px-3 py-1.5 rounded-lg border border-slate-250 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-755 text-xs font-bold text-slate-700 dark:text-slate-200 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                    >
+                      Próximo
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>

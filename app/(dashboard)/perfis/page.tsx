@@ -16,15 +16,24 @@ type Perfil = {
 
 const MODULES_LIST = [
   { id: 'membros', label: 'Gestão de Membros' },
-  { id: 'comunidades', label: 'Gestão de Comunidades' },
+  { id: 'comunidades', label: 'Gestão de Grupos' },
   { id: 'agenda', label: 'Agenda da Igreja' },
   { id: 'eventos', label: 'Gestão de Eventos' },
   { id: 'mural', label: 'Mural de Avisos' },
   { id: 'licoes', label: 'Gestão de Lições' },
   { id: 'presencas', label: 'Controle de Presenças / Assistências' },
-  { id: 'financeiro', label: 'Gestão Financeira' },
+  { id: 'financeiro', label: 'Gestão Financeira (Lançamentos)' },
+  { id: 'financeiro_fluxo_caixa', label: 'Gestão Financeira: Fluxo de Caixa' },
+  { id: 'financeiro_contas', label: 'Gestão Financeira: Contas Bancárias' },
+  { id: 'financeiro_categorias', label: 'Gestão Financeira: Categorias' },
+  { id: 'financeiro_formas_pagamento', label: 'Gestão Financeira: Formas de Pagamento' },
+  { id: 'financeiro_centro_custo', label: 'Gestão Financeira: Centros de Custo' },
+  { id: 'financeiro_relatorios', label: 'Gestão Financeira: Relatórios' },
+  { id: 'financeiro_estatisticas', label: 'Gestão Financeira: Estatísticas' },
   { id: 'fornecedores', label: 'Cadastro de Fornecedores' },
-  { id: 'kids', label: 'Módulo Kids (Check-in/Turmas/Salas)' },
+  { id: 'kids', label: 'Módulo Kids: Painel / Dashboard' },
+  { id: 'kids_turmas', label: 'Módulo Kids: Turmas' },
+  { id: 'kids_salas', label: 'Módulo Kids: Salas' },
 ];
 
 const ACTIONS = [

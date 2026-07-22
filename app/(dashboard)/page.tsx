@@ -665,13 +665,13 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Panel 2: Comunidades / Grupos */}
+        {/* Panel 2: Grupos */}
         <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800 flex items-center gap-5 hover:scale-102 transition-all duration-250 group cursor-default" id="stat-card-comunidades">
           <div className="w-14 h-14 rounded-2xl bg-transparent flex items-center justify-center text-green-600 dark:text-green-400 transition-colors">
             <UsersRound size={26} />
           </div>
           <div className="space-y-0.5">
-            <p className="text-[10px] sm:text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider">Células / Comunidades</p>
+            <p className="text-[10px] sm:text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider">Células / Grupos</p>
             {loading ? (
               <div className="h-7 w-12 bg-slate-100 dark:bg-slate-800 animate-pulse rounded-lg mt-1" />
             ) : (

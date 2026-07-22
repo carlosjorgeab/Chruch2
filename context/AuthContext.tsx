@@ -342,14 +342,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let moduleName = '';
 
     if (menu.startsWith('/membros')) moduleName = 'membros';
-    else if (menu.startsWith('/comunidades')) moduleName = 'comunidades';
+    else if (menu.startsWith('/comunidades') || menu.startsWith('/grupos')) moduleName = 'comunidades';
     else if (menu.startsWith('/agenda')) moduleName = 'agenda';
     else if (menu.startsWith('/eventos')) moduleName = 'eventos';
     else if (menu.startsWith('/mural')) moduleName = 'mural';
     else if (menu.startsWith('/licoes')) moduleName = 'licoes';
     else if (menu.startsWith('/presencas')) moduleName = 'presencas';
+    else if (menu.startsWith('/financeiro/fluxo_caixa')) moduleName = 'financeiro_fluxo_caixa';
+    else if (menu.startsWith('/financeiro/contas')) moduleName = 'financeiro_contas';
+    else if (menu.startsWith('/financeiro/categorias')) moduleName = 'financeiro_categorias';
+    else if (menu.startsWith('/financeiro/formas_pagamento')) moduleName = 'financeiro_formas_pagamento';
+    else if (menu.startsWith('/financeiro/centro_custo')) moduleName = 'financeiro_centro_custo';
+    else if (menu.startsWith('/financeiro/relatorios')) moduleName = 'financeiro_relatorios';
+    else if (menu.startsWith('/financeiro/estatisticas_financeiras') || menu.startsWith('/financeiro/estatisticas')) moduleName = 'financeiro_estatisticas';
     else if (menu.startsWith('/financeiro')) moduleName = 'financeiro';
     else if (menu.startsWith('/fornecedores')) moduleName = 'fornecedores';
+    else if (menu.startsWith('/kids/turmas')) moduleName = 'kids_turmas';
+    else if (menu.startsWith('/kids/salas')) moduleName = 'kids_salas';
     else if (menu.startsWith('/kids')) moduleName = 'kids';
 
     return { moduleName, action };
