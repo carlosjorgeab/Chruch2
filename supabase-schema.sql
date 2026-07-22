@@ -184,6 +184,17 @@ CREATE TABLE IF NOT EXISTS transacoes (
   valor_pago NUMERIC(15, 2) DEFAULT 0,
   data DATE NOT NULL,
   membro_contribuinte VARCHAR(255),
+  id_forma_pagamento UUID, -- Referenced to forma_pagamento(id)
+  id_conta UUID, -- Referenced to contas(id)
+  id_fornecedor UUID, -- Referenced to fornecedor(id)
+  id_centro_custo UUID, -- Referenced to centro_custos(id)
+  data_vencimento DATE,
+  data_pagamento DATE,
+  observacoes TEXT,
+  criado_por_nome TEXT,
+  criado_em TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
+  atualizado_por_nome TEXT,
+  atualizado_em TIMESTAMP WITH TIME ZONE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 

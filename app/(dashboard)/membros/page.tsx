@@ -5,10 +5,11 @@ import { supabase } from '@/lib/supabase';
 import { useIgreja } from '@/context/IgrejaContext';
 import { useAuth } from '@/context/AuthContext';
 import { useConfirm } from '@/context/ConfirmContext';
-import { Plus, Edit2, Trash2, Save, X, Search, Check, RefreshCw, UserCheck, FileText, Calendar, Printer, Upload, AlertCircle } from 'lucide-react';
+import { Plus, Edit2, Trash2, Save, X, Search, Check, RefreshCw, UserCheck, FileText, Calendar, Printer, Upload, AlertCircle, FileSpreadsheet, Download } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { formatCPF, formatTelefone, formatCEP, validateCPF } from '@/lib/masks';
+import * as XLSX from 'xlsx';
 
 type Membro = {
   id: string;
@@ -90,6 +91,11 @@ export default function MembrosPage() {
   const [sexoFilter, setSexoFilter] = useState<string>('todos');
   const [estadoCivilFilter, setEstadoCivilFilter] = useState<string>('todos');
   const [mesNascimentoFilter, setMesNascimentoFilter] = useState<string>('todos');
+
+  // Excel Import/Export States
+  const [importPreview, setImportPreview] = useState<any[]>([]);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
 
   const [currentMembro, setCurrentMembro] = useState<Partial<Membro>>({
     nome: '',
@@ -715,6 +721,481 @@ export default function MembrosPage() {
     }
   };
 
+  const formatNascimentoParaExcel = (dateStr: string) => {
+    if (!dateStr) return '';
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+      return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+    return dateStr;
+  };
+
+  const parseDateToDBString = (val: any): string | null => {
+    if (!val) return null;
+    if (typeof val === 'number') {
+      try {
+        const date = new Date((val - 25569) * 86400 * 1000);
+        if (!isNaN(date.getTime())) {
+          return date.toISOString().split('T')[0];
+        }
+      } catch (e) {
+        console.warn('Error parsing excel serial date:', val);
+      }
+    }
+
+    const str = String(val).trim();
+    const parts = str.split('/');
+    if (parts.length === 3) {
+      const day = parts[0].padStart(2, '0');
+      const month = parts[1].padStart(2, '0');
+      const year = parts[2];
+      if (year.length === 4) {
+        return `${year}-${month}-${day}`;
+      }
+    }
+
+    try {
+      const d = new Date(str);
+      if (!isNaN(d.getTime())) {
+        return d.toISOString().split('T')[0];
+      }
+    } catch (e) {}
+
+    return null;
+  };
+
+  const exportToExcel = () => {
+    try {
+      const exportData = filteredMembros.map((m) => {
+        const grupoName = grupos.find(g => g.id === m.id_grupo)?.nome || grupos.find(g => g.id === m.id_comunidade)?.nome || '';
+        const spouseName = membros.find(member => member.id === m.id_conjuge)?.nome || '';
+        const ufSigla = ufs.find(u => u.id === m.id_uf)?.sigla || m.estado || '';
+
+        return {
+          'Nome': m.nome,
+          'E-mail': m.email || '',
+          'Telefone': m.telefone || '',
+          'Data de Nascimento': m.data_nascimento ? formatNascimentoParaExcel(m.data_nascimento) : '',
+          'Idade': calculateAge(m.data_nascimento),
+          'Status': m.status,
+          'Batizado em Águas?': m.batizado_aguas ? 'Sim' : 'Não',
+          'Batizado no Espírito Santo?': m.batizado_espirito ? 'Sim' : 'Não',
+          'Cargo / Função': m.cargo || '',
+          'CPF': m.cpf || '',
+          'Sexo': m.sexo || '',
+          'Estado Civil': m.estado_civil || '',
+          'Escolaridade': m.escolaridade || '',
+          'Endereço': m.endereco || '',
+          'Bairro': m.bairro || '',
+          'Cidade': m.cidade || '',
+          'Estado (UF)': ufSigla,
+          'CEP': m.cep || '',
+          'País': m.pais || 'Brasil',
+          'Quadro de Recepção': m.recepcao || '',
+          'Faixa Etária': m.categoria || '',
+          'Data de Batismo': m.data_batismo ? formatNascimentoParaExcel(m.data_batismo) : '',
+          'Data de Conversão': m.data_conversao ? formatNascimentoParaExcel(m.data_conversao) : '',
+          'Cônjuge': spouseName,
+          'Grupo / Comunidade': grupoName,
+        };
+      });
+
+      const worksheet = XLSX.utils.json_to_sheet(exportData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Membros');
+
+      const max_width = exportData.reduce((w, r) => {
+        Object.keys(r).forEach((key, colIndex) => {
+          const value = r[key as keyof typeof r] || '';
+          const len = value.toString().length;
+          w[colIndex] = Math.max(w[colIndex] || 10, len, key.length);
+        });
+        return w;
+      }, [] as number[]);
+      worksheet['!cols'] = max_width.map(w => ({ wch: w + 3 }));
+
+      XLSX.writeFile(workbook, `membros_export_${new Date().toISOString().substring(0,10)}.xlsx`);
+      setSuccess('Membros exportados para Excel com sucesso!');
+    } catch (err: any) {
+      console.error('Error exporting to Excel:', err);
+      setError('Erro ao exportar membros para Excel: ' + (err.message || err));
+    }
+  };
+
+  const downloadTemplate = () => {
+    try {
+      const templateData = [
+        {
+          'Nome': 'José da Silva',
+          'E-mail': 'jose.silva@email.com',
+          'Telefone': '(11) 99999-9999',
+          'Data de Nascimento': '15/08/1985',
+          'Status': 'Ativo',
+          'Batizado em Águas?': 'Sim',
+          'Batizado no Espírito Santo?': 'Sim',
+          'Cargo / Função': 'Membro',
+          'CPF': '123.456.789-00',
+          'Sexo': 'Masculino',
+          'Estado Civil': 'Casado(a)',
+          'Escolaridade': 'Ensino Médio Completo',
+          'Endereço': 'Rua das Flores, 123',
+          'Bairro': 'Centro',
+          'Cidade': 'São Paulo',
+          'Estado (UF)': 'SP',
+          'CEP': '01001-000',
+          'País': 'Brasil',
+          'Quadro de Recepção': 'Batismo',
+          'Faixa Etária': 'Adulto',
+          'Data de Batismo': '10/10/2010',
+          'Data de Conversão': '05/05/2009',
+          'Cônjuge': 'Maria da Silva',
+          'Grupo / Comunidade': grupos[0]?.nome || 'Grupo de Oração',
+        },
+        {
+          'Nome': 'Maria da Silva',
+          'E-mail': 'maria.silva@email.com',
+          'Telefone': '(11) 98888-8888',
+          'Data de Nascimento': '22/10/1988',
+          'Status': 'Ativo',
+          'Batizado em Águas?': 'Sim',
+          'Batizado no Espírito Santo?': 'Não',
+          'Cargo / Função': 'Membro',
+          'CPF': '987.654.321-11',
+          'Sexo': 'Feminino',
+          'Estado Civil': 'Casado(a)',
+          'Escolaridade': 'Ensino Superior Completo',
+          'Endereço': 'Rua das Flores, 123',
+          'Bairro': 'Centro',
+          'Cidade': 'São Paulo',
+          'Estado (UF)': 'SP',
+          'CEP': '01001-000',
+          'País': 'Brasil',
+          'Quadro de Recepção': 'Transferência',
+          'Faixa Etária': 'Adulto',
+          'Data de Batismo': '12/12/2012',
+          'Data de Conversão': '11/11/2011',
+          'Cônjuge': 'José da Silva',
+          'Grupo / Comunidade': grupos[0]?.nome || 'Grupo de Oração',
+        }
+      ];
+
+      const worksheet = XLSX.utils.json_to_sheet(templateData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Modelo Membros');
+
+      const max_width = templateData.reduce((w, r) => {
+        Object.keys(r).forEach((key, colIndex) => {
+          const value = r[key as keyof typeof r] || '';
+          const len = value.toString().length;
+          w[colIndex] = Math.max(w[colIndex] || 10, len, key.length);
+        });
+        return w;
+      }, [] as number[]);
+      worksheet['!cols'] = max_width.map(w => ({ wch: w + 3 }));
+
+      XLSX.writeFile(workbook, 'modelo_importacao_membros.xlsx');
+      setSuccess('Modelo de importação Excel baixado com sucesso!');
+    } catch (err: any) {
+      console.error('Error downloading template:', err);
+      setError('Erro ao baixar modelo de importação: ' + (err.message || err));
+    }
+  };
+
+  const handleExcelImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    parseExcelFile(file);
+    e.target.value = ''; // Reset input to allow re-uploading the same file
+  };
+
+  const parseExcelFile = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const data = event.target?.result;
+        if (!data) return;
+        
+        const workbook = XLSX.read(data, { type: 'binary' });
+        const sheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json<any>(sheet);
+        
+        if (rows.length === 0) {
+          throw new Error('O arquivo de planilha está vazio ou não possui linhas válidas.');
+        }
+
+        const firstRow = rows[0];
+        const hasNome = Object.keys(firstRow).some(key => key.toLowerCase() === 'nome');
+        if (!hasNome) {
+          throw new Error('Formato de arquivo inválido. Certifique-se de que a coluna "Nome" existe e use o modelo padrão.');
+        }
+
+        setImportPreview(rows);
+        setIsImportModalOpen(true);
+        setError('');
+      } catch (err: any) {
+        console.error('Error parsing Excel file:', err);
+        setError('Erro ao processar arquivo Excel: ' + (err.message || err));
+      }
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  const processExcelImport = async () => {
+    if (!selectedIgreja || importPreview.length === 0) return;
+    setIsImporting(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      const membersToInsert: any[] = [];
+      
+      for (const row of importPreview) {
+        const nomeKey = Object.keys(row).find(k => k.toLowerCase() === 'nome');
+        const nome = nomeKey ? String(row[nomeKey]).trim() : '';
+        if (!nome) continue;
+
+        const emailKey = Object.keys(row).find(k => k.toLowerCase() === 'e-mail' || k.toLowerCase() === 'email');
+        const email = emailKey ? String(row[emailKey]).trim() : null;
+
+        const telefoneKey = Object.keys(row).find(k => k.toLowerCase() === 'telefone');
+        const telefone = telefoneKey ? String(row[telefoneKey]).trim() : null;
+
+        const nascimentoKey = Object.keys(row).find(k => k.toLowerCase() === 'data de nascimento' || k.toLowerCase() === 'datanascimento');
+        let data_nascimento: string | null = null;
+        if (nascimentoKey && row[nascimentoKey]) {
+          data_nascimento = parseDateToDBString(row[nascimentoKey]);
+        }
+
+        const statusKey = Object.keys(row).find(k => k.toLowerCase() === 'status');
+        let status: 'Ativo' | 'Inativo' | 'Visitante' = 'Ativo';
+        if (statusKey && row[statusKey]) {
+          const val = String(row[statusKey]).trim().toLowerCase();
+          if (val.includes('inativo')) status = 'Inativo';
+          else if (val.includes('visitante')) status = 'Visitante';
+        }
+
+        const batizadoAguasKey = Object.keys(row).find(k => k.toLowerCase().includes('águas') || k.toLowerCase().includes('aguas'));
+        let batizado_aguas = false;
+        if (batizadoAguasKey && row[batizadoAguasKey]) {
+          const val = String(row[batizadoAguasKey]).trim().toLowerCase();
+          if (val === 'sim' || val === 'yes' || val === 'true' || val === '1' || val === 's') {
+            batizado_aguas = true;
+          }
+        }
+
+        const batizadoEspiritoKey = Object.keys(row).find(k => k.toLowerCase().includes('espírito') || k.toLowerCase().includes('espirito'));
+        let batizado_espirito = false;
+        if (batizadoEspiritoKey && row[batizadoEspiritoKey]) {
+          const val = String(row[batizadoEspiritoKey]).trim().toLowerCase();
+          if (val === 'sim' || val === 'yes' || val === 'true' || val === '1' || val === 's') {
+            batizado_espirito = true;
+          }
+        }
+
+        const cargoKey = Object.keys(row).find(k => k.toLowerCase().includes('cargo') || k.toLowerCase().includes('função') || k.toLowerCase().includes('funcao'));
+        const cargo = cargoKey ? String(row[cargoKey]).trim() : null;
+
+        const cpfKey = Object.keys(row).find(k => k.toLowerCase() === 'cpf');
+        const cpf = cpfKey ? String(row[cpfKey]).trim() : null;
+
+        const sexoKey = Object.keys(row).find(k => k.toLowerCase() === 'sexo');
+        let sexo = null;
+        if (sexoKey && row[sexoKey]) {
+          const val = String(row[sexoKey]).trim().toLowerCase();
+          if (val.startsWith('m')) sexo = 'Masculino';
+          else if (val.startsWith('f')) sexo = 'Feminino';
+        }
+
+        const estadoCivilKey = Object.keys(row).find(k => k.toLowerCase() === 'estado civil' || k.toLowerCase() === 'estadocivil');
+        let estado_civil = 'Solteiro(a)';
+        if (estadoCivilKey && row[estadoCivilKey]) {
+          const val = String(row[estadoCivilKey]).trim();
+          const knownStates = ['Solteiro(a)', 'Casado(a)', 'Divorciado(a)', 'Viúvo(a)', 'Separado(a)', 'União Estável', 'Outro'];
+          const match = knownStates.find(ks => ks.toLowerCase() === val.toLowerCase());
+          if (match) estado_civil = match;
+          else estado_civil = 'Outro';
+        }
+
+        const escolaridadeKey = Object.keys(row).find(k => k.toLowerCase() === 'escolaridade');
+        let escolaridade = 'Ensino Médio Completo';
+        if (escolaridadeKey && row[escolaridadeKey]) {
+          const val = String(row[escolaridadeKey]).trim();
+          const knownLevels = [
+            'Analfabeto', 
+            'Ensino Fundamental Incompleto', 
+            'Ensino Fundamental Completo', 
+            'Ensino Médio Incompleto', 
+            'Ensino Médio Completo', 
+            'Ensino Superior Incompleto', 
+            'Ensino Superior Completo', 
+            'Pós-Graduação'
+          ];
+          const match = knownLevels.find(kl => kl.toLowerCase() === val.toLowerCase());
+          if (match) escolaridade = match;
+        }
+
+        const enderecoKey = Object.keys(row).find(k => k.toLowerCase() === 'endereço' || k.toLowerCase() === 'endereco');
+        const endereco = enderecoKey ? String(row[enderecoKey]).trim() : null;
+
+        const bairroKey = Object.keys(row).find(k => k.toLowerCase() === 'bairro');
+        const bairro = bairroKey ? String(row[bairroKey]).trim() : null;
+
+        const cidadeKey = Object.keys(row).find(k => k.toLowerCase() === 'cidade');
+        const cidade = cidadeKey ? String(row[cidadeKey]).trim() : null;
+
+        const estadoKey = Object.keys(row).find(k => k.toLowerCase() === 'estado' || k.toLowerCase() === 'estado (uf)' || k.toLowerCase() === 'uf');
+        let id_uf = null;
+        let estado = null;
+        if (estadoKey && row[estadoKey]) {
+          const stateStr = String(row[estadoKey]).trim().toUpperCase();
+          const foundUf = ufs.find(u => u.sigla.toUpperCase() === stateStr || u.nome.toUpperCase() === stateStr);
+          if (foundUf) {
+            id_uf = foundUf.id;
+            estado = foundUf.sigla;
+          } else {
+            estado = stateStr;
+          }
+        }
+
+        const cepKey = Object.keys(row).find(k => k.toLowerCase() === 'cep');
+        const cep = cepKey ? String(row[cepKey]).trim() : null;
+
+        const paisKey = Object.keys(row).find(k => k.toLowerCase() === 'país' || k.toLowerCase() === 'pais');
+        const pais = paisKey ? String(row[paisKey]).trim() : 'Brasil';
+
+        const recepcaoKey = Object.keys(row).find(k => k.toLowerCase().includes('recepção') || k.toLowerCase().includes('recepcao'));
+        let recepcao = 'Batismo';
+        if (recepcaoKey && row[recepcaoKey]) {
+          const val = String(row[recepcaoKey]).trim().toLowerCase();
+          if (val.includes('jurisdi')) recepcao = 'Jurisdição';
+          else if (val.includes('transfer')) recepcao = 'Transferência';
+        }
+
+        const categoriaKey = Object.keys(row).find(k => k.toLowerCase().includes('faixa') || k.toLowerCase().includes('categoria'));
+        let categoria = 'Adulto';
+        if (categoriaKey && row[categoriaKey]) {
+          const val = String(row[categoriaKey]).trim();
+          const knownCats = ['Adulto', 'Idoso', 'Jovens', 'Adolescentes', 'Crianças'];
+          const match = knownCats.find(kc => kc.toLowerCase() === val.toLowerCase());
+          if (match) categoria = match;
+        }
+
+        const batismoKey = Object.keys(row).find(k => k.toLowerCase() === 'data de batismo' || k.toLowerCase() === 'databatismo');
+        let data_batismo: string | null = null;
+        if (batismoKey && row[batismoKey]) {
+          data_batismo = parseDateToDBString(row[batismoKey]);
+        }
+
+        const conversaoKey = Object.keys(row).find(k => k.toLowerCase() === 'data de conversão' || k.toLowerCase() === 'dataconversao' || k.toLowerCase() === 'data de conversao');
+        let data_conversao: string | null = null;
+        if (conversaoKey && row[conversaoKey]) {
+          data_conversao = parseDateToDBString(row[conversaoKey]);
+        }
+
+        const grupoKey = Object.keys(row).find(k => k.toLowerCase() === 'grupo' || k.toLowerCase() === 'grupo / comunidade');
+        let id_grupo = null;
+        let id_comunidade = null;
+        if (grupoKey && row[grupoKey]) {
+          const groupName = String(row[grupoKey]).trim().toLowerCase();
+          const foundGroup = grupos.find(g => g.nome.toLowerCase() === groupName);
+          if (foundGroup) {
+            id_grupo = foundGroup.id;
+            id_comunidade = foundGroup.id;
+          }
+        }
+
+        membersToInsert.push({
+          id_igreja: selectedIgreja.id,
+          nome,
+          email,
+          telefone,
+          data_nascimento,
+          status,
+          batizado_aguas,
+          batizado_espirito,
+          cargo,
+          cpf,
+          sexo,
+          estado_civil,
+          escolaridade,
+          endereco,
+          bairro,
+          cidade,
+          id_uf,
+          estado,
+          cep,
+          pais,
+          recepcao,
+          categoria,
+          data_batismo,
+          data_conversao,
+          id_grupo,
+          id_comunidade,
+          criado_por_nome: user?.nome || 'Importador Excel',
+          criado_em: new Date().toISOString()
+        });
+      }
+
+      if (membersToInsert.length === 0) {
+        throw new Error('Nenhum membro válido pôde ser extraído das linhas da planilha.');
+      }
+
+      const { data: insertedData, error: insertErr } = await supabase
+        .from('membros')
+        .insert(membersToInsert)
+        .select('id, nome');
+
+      if (insertErr) {
+        throw insertErr;
+      }
+
+      const allCurrentMembersResponse = await supabase
+        .from('membros')
+        .select('id, nome')
+        .eq('id_igreja', selectedIgreja.id);
+
+      if (!allCurrentMembersResponse.error && allCurrentMembersResponse.data) {
+        const dbMembers = allCurrentMembersResponse.data;
+        const updatesToMake: Array<{ id: string, id_conjuge: string }> = [];
+
+        for (let i = 0; i < importPreview.length; i++) {
+          const row = importPreview[i];
+          const conjugeKey = Object.keys(row).find(k => k.toLowerCase() === 'cônjuge' || k.toLowerCase() === 'conjuge');
+          if (conjugeKey && row[conjugeKey]) {
+            const spouseName = String(row[conjugeKey]).trim().toLowerCase();
+            const targetMemberName = String(row[Object.keys(row).find(k => k.toLowerCase() === 'nome')!]).trim().toLowerCase();
+            
+            const targetMember = dbMembers.find(m => m.nome.toLowerCase() === targetMemberName);
+            const spouseMember = dbMembers.find(m => m.nome.toLowerCase() === spouseName);
+
+            if (targetMember && spouseMember) {
+              updatesToMake.push({ id: targetMember.id, id_conjuge: spouseMember.id });
+            }
+          }
+        }
+
+        if (updatesToMake.length > 0) {
+          await Promise.all(
+            updatesToMake.map(update => 
+              supabase.from('membros').update({ id_conjuge: update.id_conjuge }).eq('id', update.id)
+            )
+          );
+        }
+      }
+
+      setSuccess(`${membersToInsert.length} membros foram importados e salvos com sucesso!`);
+      setIsImportModalOpen(false);
+      setImportPreview([]);
+      fetchMembros();
+    } catch (err: any) {
+      console.error('Error importing Excel:', err);
+      setError('Erro ao importar membros: ' + (err.message || err));
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
   const filteredMembros = membros.filter(m => {
     // a) Descrição: Pesquisa em todos os campos
     const searchLower = search.toLowerCase();
@@ -811,6 +1292,35 @@ export default function MembrosPage() {
             >
               <FileText size={18} className="text-amber-600" />
               Relatórios
+            </button>
+            <button
+              onClick={exportToExcel}
+              disabled={!selectedIgreja || filteredMembros.length === 0}
+              className="flex items-center gap-2 bg-slate-150 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-755 text-slate-800 dark:text-slate-100 font-bold py-3 px-6 rounded-xl border border-slate-250 dark:border-slate-700 shadow-sm transition active:scale-95 text-sm uppercase tracking-wider cursor-pointer disabled:opacity-50"
+              title="Exportar para Excel"
+            >
+              <FileSpreadsheet size={18} className="text-green-600" />
+              Exportar
+            </button>
+            <label className="flex items-center gap-2 bg-slate-150 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-755 text-slate-800 dark:text-slate-100 font-bold py-3 px-6 rounded-xl border border-slate-250 dark:border-slate-700 shadow-sm transition active:scale-95 text-sm uppercase tracking-wider cursor-pointer disabled:opacity-50 select-none">
+              <Upload size={18} className="text-blue-600" />
+              Importar
+              <input
+                type="file"
+                accept=".xlsx,.xls"
+                onChange={handleExcelImport}
+                disabled={!selectedIgreja}
+                className="hidden"
+              />
+            </label>
+            <button
+              onClick={downloadTemplate}
+              disabled={!selectedIgreja}
+              className="flex items-center gap-2 bg-slate-150 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-755 text-slate-800 dark:text-slate-100 font-bold py-3 px-6 rounded-xl border border-slate-250 dark:border-slate-700 shadow-sm transition active:scale-95 text-sm uppercase tracking-wider cursor-pointer disabled:opacity-50"
+              title="Baixar Modelo de Planilha"
+            >
+              <Download size={18} className="text-teal-600" />
+              Modelo
             </button>
             {hasPermission('membros:novo') && (
               <button
@@ -1821,6 +2331,137 @@ export default function MembrosPage() {
                   <>
                     <Printer size={14} />
                     Gerar Relatório
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Excel Import Preview Modal */}
+      {isImportModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-xl border border-slate-100 dark:border-slate-700 max-w-4xl w-full overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="p-6 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
+                  <FileSpreadsheet size={20} className="text-blue-600" />
+                  Confirmar Importação de Membros
+                </h3>
+                <p className="text-xs text-slate-400 font-semibold mt-1">
+                  Revisamos as linhas da planilha. Verifique a prévia dos primeiros membros detectados.
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setIsImportModalOpen(false);
+                  setImportPreview([]);
+                }}
+                className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-white rounded-lg hover:bg-slate-50 dark:hover:bg-slate-900 transition-all cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto flex-1 space-y-4">
+              <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/30 p-4 rounded-2xl flex gap-3 text-amber-800 dark:text-amber-400 text-xs font-semibold leading-relaxed">
+                <AlertCircle size={18} className="flex-shrink-0 text-amber-600" />
+                <div>
+                  <p className="font-bold uppercase tracking-wider mb-1">Atenção ao Formato</p>
+                  <p>
+                    O sistema associará automaticamente os membros aos seus cônjuges se ambos estiverem listados na planilha com os nomes correspondentes. Se algum nome de Grupo / Comunidade coincidir com os grupos da igreja, a vinculação também será automática.
+                  </p>
+                </div>
+              </div>
+
+              <div className="border border-slate-100 dark:border-slate-700 rounded-2xl overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-700 text-slate-400 font-black uppercase tracking-widest">
+                        <th className="px-4 py-3">Nome</th>
+                        <th className="px-4 py-3">E-mail / Telefone</th>
+                        <th className="px-4 py-3">Nascimento</th>
+                        <th className="px-4 py-3">Status</th>
+                        <th className="px-4 py-3">Faixa Etária</th>
+                        <th className="px-4 py-3">Grupo / Comunidade</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-700 font-medium text-slate-700 dark:text-slate-300">
+                      {importPreview.slice(0, 10).map((row, index) => {
+                        const nomeKey = Object.keys(row).find(k => k.toLowerCase() === 'nome');
+                        const emailKey = Object.keys(row).find(k => k.toLowerCase() === 'e-mail' || k.toLowerCase() === 'email');
+                        const telKey = Object.keys(row).find(k => k.toLowerCase() === 'telefone');
+                        const nascKey = Object.keys(row).find(k => k.toLowerCase() === 'data de nascimento' || k.toLowerCase() === 'datanascimento');
+                        const statusKey = Object.keys(row).find(k => k.toLowerCase() === 'status');
+                        const catKey = Object.keys(row).find(k => k.toLowerCase().includes('faixa') || k.toLowerCase().includes('categoria'));
+                        const grupoKey = Object.keys(row).find(k => k.toLowerCase() === 'grupo' || k.toLowerCase() === 'grupo / comunidade');
+
+                        return (
+                          <tr key={index} className="hover:bg-slate-50/30 dark:hover:bg-slate-900/10 transition-all">
+                            <td className="px-4 py-3 font-bold text-slate-900 dark:text-white">
+                              {nomeKey ? row[nomeKey] : '-'}
+                            </td>
+                            <td className="px-4 py-3">
+                              <div>{emailKey ? row[emailKey] : '-'}</div>
+                              <div className="text-[10px] text-slate-400">{telKey ? row[telKey] : ''}</div>
+                            </td>
+                            <td className="px-4 py-3">
+                              {nascKey ? row[nascKey] : '-'}
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-slate-100 dark:bg-slate-900">
+                                {statusKey ? row[statusKey] : 'Ativo'}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              {catKey ? row[catKey] : 'Adulto'}
+                            </td>
+                            <td className="px-4 py-3 text-slate-500">
+                              {grupoKey ? row[grupoKey] : '-'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                {importPreview.length > 10 && (
+                  <div className="p-3 bg-slate-50 dark:bg-slate-900/20 text-center text-[11px] font-bold text-slate-400 border-t border-slate-100 dark:border-slate-700">
+                    E mais {importPreview.length - 10} membro(s) listados na planilha...
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-slate-100 dark:border-slate-700 flex justify-end gap-3 bg-slate-50 dark:bg-slate-900/10">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsImportModalOpen(false);
+                  setImportPreview([]);
+                }}
+                disabled={isImporting}
+                className="px-5 py-3 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-bold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-all uppercase text-xs tracking-wider cursor-pointer disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={processExcelImport}
+                disabled={isImporting}
+                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-bold transition-all shadow-md uppercase text-xs tracking-widest disabled:opacity-50 cursor-pointer"
+              >
+                {isImporting ? (
+                  <>
+                    <RefreshCw size={14} className="animate-spin" />
+                    Importando...
+                  </>
+                ) : (
+                  <>
+                    <Check size={14} />
+                    Confirmar e Salvar {importPreview.length} Membros
                   </>
                 )}
               </button>
