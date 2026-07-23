@@ -45,6 +45,8 @@ type Evento = {
   valor_inscricao: number;
   palestrante?: string | null;
   id_agenda?: string | null;
+  data_inicio?: string | null;
+  data_fim?: string | null;
   created_at?: string;
   _count_inscricoes?: number;
   agenda?: {
@@ -365,7 +367,9 @@ export default function EventosPage() {
       status: 'Confirmado',
       valor_inscricao: 0,
       palestrante: '',
-      id_agenda: null
+      id_agenda: null,
+      data_inicio: '',
+      data_fim: ''
     });
     setHasAgendaConfigured(false);
     setAgendaPrivado(false);
@@ -491,7 +495,24 @@ export default function EventosPage() {
   };
 
   const handleOpenEditEvent = (evt: Evento) => {
-    setCurrentEvent(evt);
+    const formatDatetimeLocal = (isoString: string | null | undefined) => {
+      if (!isoString) return '';
+      try {
+        const date = new Date(isoString);
+        if (isNaN(date.getTime())) return '';
+        const tzoffset = date.getTimezoneOffset() * 60000;
+        const localISOTime = (new Date(date.getTime() - tzoffset)).toISOString().slice(0, -1);
+        return localISOTime.substring(0, 16);
+      } catch (e) {
+        return '';
+      }
+    };
+
+    setCurrentEvent({
+      ...evt,
+      data_inicio: formatDatetimeLocal(evt.data_inicio),
+      data_fim: formatDatetimeLocal(evt.data_fim)
+    });
     if (evt.id_agenda && evt.agenda) {
       setHasAgendaConfigured(true);
       setAgendaTitulo(evt.agenda.titulo || '');
@@ -682,7 +703,9 @@ export default function EventosPage() {
         status: currentEvent.status || 'Confirmado',
         valor_inscricao: Number(currentEvent.valor_inscricao || 0),
         palestrante: currentEvent.palestrante || null,
-        id_agenda: agendaId
+        id_agenda: agendaId,
+        data_inicio: currentEvent.data_inicio ? new Date(currentEvent.data_inicio).toISOString() : null,
+        data_fim: currentEvent.data_fim ? new Date(currentEvent.data_fim).toISOString() : null
       };
 
       if (currentEvent.id) {
@@ -1369,6 +1392,17 @@ export default function EventosPage() {
                       </p>
                     )}
 
+                    {evt.data_inicio && (
+                      <div className="mt-2 text-[10px] text-slate-500 font-bold flex items-center gap-1 bg-slate-50 dark:bg-slate-950 p-1.5 rounded-lg border border-slate-150/40 dark:border-slate-800 w-fit">
+                        <span>📅 Início: {new Date(evt.data_inicio).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</span>
+                      </div>
+                    )}
+                    {evt.data_fim && (
+                      <div className="mt-1 text-[10px] text-slate-500 font-bold flex items-center gap-1 bg-slate-50 dark:bg-slate-950 p-1.5 rounded-lg border border-slate-150/40 dark:border-slate-800 w-fit">
+                        <span>🏁 Fim: {new Date(evt.data_fim).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</span>
+                      </div>
+                    )}
+
                     {/* Vagas indicators */}
                     <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
                       <div className="flex items-center gap-1.5 text-[10px] uppercase font-black tracking-wider text-slate-400">
@@ -1593,6 +1627,32 @@ export default function EventosPage() {
                         placeholder="Nome do Palestrante principal (campo livre)"
                         value={currentEvent.palestrante || ''}
                         onChange={(e) => setCurrentEvent({...currentEvent, palestrante: e.target.value})}
+                        className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-205 dark:border-slate-800 p-3.5 rounded-xl text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:border-amber-500 font-bold"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-450 dark:text-slate-400">
+                        Início do Evento *
+                      </label>
+                      <input
+                        type="datetime-local"
+                        required
+                        value={currentEvent?.data_inicio || ''}
+                        onChange={(e) => setCurrentEvent({...currentEvent, data_inicio: e.target.value})}
+                        className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-205 dark:border-slate-800 p-3.5 rounded-xl text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:border-amber-500 font-bold"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-450 dark:text-slate-400">
+                        Final do Evento *
+                      </label>
+                      <input
+                        type="datetime-local"
+                        required
+                        value={currentEvent?.data_fim || ''}
+                        onChange={(e) => setCurrentEvent({...currentEvent, data_fim: e.target.value})}
                         className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-205 dark:border-slate-800 p-3.5 rounded-xl text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:border-amber-500 font-bold"
                       />
                     </div>

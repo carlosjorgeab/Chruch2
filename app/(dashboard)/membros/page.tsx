@@ -1123,7 +1123,6 @@ export default function MembrosPage() {
           bairro,
           cidade,
           id_uf,
-          estado,
           cep,
           pais,
           recepcao,

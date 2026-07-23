@@ -315,6 +315,8 @@ CREATE TABLE IF NOT EXISTS eventos (
   valor_inscricao DECIMAL(10,2) DEFAULT 0.00,
   palestrante VARCHAR(255),
   id_agenda UUID REFERENCES agendas(id) ON DELETE SET NULL,
+  data_inicio TIMESTAMP WITH TIME ZONE,
+  data_fim TIMESTAMP WITH TIME ZONE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 

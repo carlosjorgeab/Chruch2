@@ -4,14 +4,8 @@ const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.
 
 async function run() {
   const sql = `
-    ALTER TABLE transacoes ADD COLUMN IF NOT EXISTS juros NUMERIC(15, 2) DEFAULT 0;
-    ALTER TABLE transacoes ADD COLUMN IF NOT EXISTS acrescimos NUMERIC(15, 2) DEFAULT 0;
-    ALTER TABLE transacoes ADD COLUMN IF NOT EXISTS valor_pago NUMERIC(15, 2) DEFAULT 0;
-    
-    -- Update existing rows if valor_pago is null/0 to default to valor
-    UPDATE transacoes SET juros = 0 WHERE juros IS NULL;
-    UPDATE transacoes SET acrescimos = 0 WHERE acrescimos IS NULL;
-    UPDATE transacoes SET valor_pago = valor WHERE valor_pago IS NULL OR valor_pago = 0;
+    ALTER TABLE public.eventos ADD COLUMN IF NOT EXISTS data_inicio TIMESTAMP WITH TIME ZONE;
+    ALTER TABLE public.eventos ADD COLUMN IF NOT EXISTS data_fim TIMESTAMP WITH TIME ZONE;
   `;
 
   console.log('Attempting to execute migration SQL...');

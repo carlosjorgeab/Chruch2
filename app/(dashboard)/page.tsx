@@ -98,6 +98,7 @@ export default function Home() {
   const [currentMuralIndex, setCurrentMuralIndex] = useState(0);
   const [eventos, setEventos] = useState<any[]>([]);
   const [currentEventoIndex, setCurrentEventoIndex] = useState(0);
+  const [savedLembreteId, setSavedLembreteId] = useState<string | null>(null);
   const [aniversariantes, setAniversariantes] = useState<any[]>([]);
   const [agendas, setAgendas] = useState<any[]>([]);
   const [eventosChartData, setEventosChartData] = useState<any[]>([]);
@@ -216,6 +217,32 @@ export default function Home() {
 
   // Tooltip custom styling
   const [hoveredBar, setHoveredBar] = useState<string | null>(null);
+
+  const handleUpdateTempoLembrete = async (agendaId: string, tempo: number) => {
+    try {
+      const { error } = await supabase
+        .from('agendas')
+        .update({ tempo_lembrete: tempo })
+        .eq('id', agendaId);
+
+      if (error) throw error;
+
+      setEventos(prev => prev.map(evt => {
+        if (evt.id_agenda === agendaId) {
+          return {
+            ...evt,
+            agenda: evt.agenda ? { ...evt.agenda, tempo_lembrete: tempo } : { tempo_lembrete: tempo }
+          };
+        }
+        return evt;
+      }));
+
+      setSavedLembreteId(agendaId);
+      setTimeout(() => setSavedLembreteId(null), 3000);
+    } catch (err) {
+      console.error('Erro ao atualizar tempo de lembrete:', err);
+    }
+  };
 
   // Time-frame selections
   const [cashFlowPeriod, setCashFlowPeriod] = useState<'diario' | 'mensal' | 'anual'>('mensal');
@@ -415,21 +442,16 @@ export default function Home() {
 
         if (!errEventos && eventosData) {
           const now = new Date();
-          const activeEventos = eventosData.filter((item: any) => {
-            // Se o evento estiver vinculado a uma agenda, obedece o vencimento da agenda vinculada
-            if (item.id_agenda && agendaData) {
-              const linkedAgenda = agendaData.find((a: any) => a.id === item.id_agenda);
-              if (linkedAgenda) {
-                const agendaDateStr = linkedAgenda.data_hora_fim || linkedAgenda.data_hora;
-                if (agendaDateStr) {
-                  const agendaDate = new Date(agendaDateStr);
-                  agendaDate.setHours(23, 59, 59, 999);
-                  return agendaDate >= now;
-                }
-              }
-            }
-
-            // Fallback para as datas próprias do evento caso não possua agenda vinculada
+          const activeEventos = eventosData.map((item: any) => {
+            const linkedAgenda = item.id_agenda && agendaData
+              ? agendaData.find((a: any) => a.id === item.id_agenda)
+              : null;
+            return {
+              ...item,
+              agenda: linkedAgenda || null
+            };
+          }).filter((item: any) => {
+            // Prioritize the event's own start and end dates
             const endStr = item.data_fim || item.data_inicio;
             if (endStr) {
               const end = new Date(endStr.includes('T') ? endStr : endStr + 'T00:00:00');
@@ -437,6 +459,17 @@ export default function Home() {
               compareDate.setHours(23, 59, 59, 999);
               return compareDate >= now;
             }
+
+            // Fallback to linked agenda if the event does not have its own dates
+            if (item.id_agenda && item.agenda) {
+              const agendaDateStr = item.agenda.data_hora_fim || item.agenda.data_hora;
+              if (agendaDateStr) {
+                const agendaDate = new Date(agendaDateStr);
+                agendaDate.setHours(23, 59, 59, 999);
+                return agendaDate >= now;
+              }
+            }
+
             return true;
           });
           setEventos(activeEventos);
@@ -1125,7 +1158,9 @@ export default function Home() {
                         const isCurrentMonth = day.getMonth() === currentEventosDate.getMonth();
                         const isToday = day.toDateString() === new Date().toDateString();
                         const dayEvents = eventos.filter((item) => {
-                          const eventDay = new Date(item.data_inicio);
+                          const startStr = item.data_inicio || item.agenda?.data_hora;
+                          if (!startStr) return false;
+                          const eventDay = new Date(startStr);
                           return eventDay.toDateString() === day.toDateString();
                         });
 
@@ -1173,17 +1208,25 @@ export default function Home() {
                     const item = eventos[currentEventoIndex] ?? eventos[0];
                     if (!item) return <div className="text-slate-400 text-xs py-10 text-center font-bold">Nenhum evento especial encontrado</div>;
 
-                    const startEventDate = new Date(item.data_inicio);
-                    const endEventDate = item.data_fim ? new Date(item.data_fim) : null;
+                    const startEventDate = item.data_inicio ? new Date(item.data_inicio) : (item.agenda?.data_hora ? new Date(item.agenda.data_hora) : null);
+                    const endEventDate = item.data_fim ? new Date(item.data_fim) : (item.agenda?.data_hora_fim ? new Date(item.agenda.data_hora_fim) : null);
                     
-                    let dateStr = startEventDate.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
-                    if (endEventDate && startEventDate.toDateString() !== endEventDate.toDateString()) {
-                      dateStr += ` até ${endEventDate.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}`;
-                    }
-                    
-                    let timeStr = startEventDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-                    if (endEventDate) {
-                      timeStr += ` às ${endEventDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}h`;
+                    let dateStr = '';
+                    let timeStr = '';
+
+                    if (startEventDate && !isNaN(startEventDate.getTime())) {
+                      dateStr = startEventDate.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+                      timeStr = startEventDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+                      if (endEventDate && !isNaN(endEventDate.getTime())) {
+                        if (startEventDate.toDateString() !== endEventDate.toDateString()) {
+                          dateStr += ` até ${endEventDate.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}`;
+                        }
+                        timeStr += ` às ${endEventDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}h`;
+                      }
+                    } else {
+                      dateStr = 'Sem data definida';
+                      timeStr = '--:--';
                     }
 
                     return (
@@ -1213,7 +1256,7 @@ export default function Home() {
 
                         <div className="space-y-1.5 pt-3 border-t border-slate-100 dark:border-slate-850">
                           <div className="text-[10px] text-slate-500 dark:text-slate-400 font-bold flex items-center gap-1.5">
-                            📅 {dateStr} às {timeStr}
+                            📅 {dateStr} {timeStr !== '--:--' ? `• ${timeStr}` : ''}
                           </div>
                           {item.local && (
                             <div className="text-[10px] text-slate-500 dark:text-slate-400 font-bold flex items-center gap-1.5">
@@ -1223,6 +1266,35 @@ export default function Home() {
                           <div className="text-[10px] text-slate-500 dark:text-slate-400 font-bold flex items-center gap-1.5">
                             🎟️ Valor: {Number(item.valor_inscricao) > 0 ? `R$ ${parseFloat(item.valor_inscricao).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'Gratuito'}
                           </div>
+
+                          {item.id_agenda && item.agenda && (
+                            <div className="pt-2 mt-2 border-t border-dashed border-slate-150 dark:border-slate-800 flex flex-col gap-1">
+                              <label className="text-[9px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1">
+                                🔔 Tempo de Lembrete
+                              </label>
+                              <div className="flex items-center gap-2">
+                                <select
+                                  value={item.agenda.tempo_lembrete !== undefined ? item.agenda.tempo_lembrete : 15}
+                                  onChange={(e) => handleUpdateTempoLembrete(item.id_agenda, parseInt(e.target.value))}
+                                  className="text-[10px] font-bold bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg p-1.5 focus:outline-none focus:border-amber-500 text-slate-700 dark:text-slate-300 w-full max-w-[200px]"
+                                >
+                                  <option value={5}>5 minutos antes</option>
+                                  <option value={10}>10 minutos antes</option>
+                                  <option value={15}>15 minutos antes (Padrão)</option>
+                                  <option value={30}>30 minutos antes</option>
+                                  <option value={60}>1 hora antes</option>
+                                  <option value={120}>2 horas antes</option>
+                                  <option value={1440}>1 dia antes</option>
+                                  <option value={0}>Não notificar</option>
+                                </select>
+                                {savedLembreteId === item.id_agenda && (
+                                  <span className="text-[9px] font-black text-emerald-500 transition-all duration-300 animate-pulse">
+                                    Salvo!
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          )}
                         </div>
 
                         {eventos.length > 1 && (
