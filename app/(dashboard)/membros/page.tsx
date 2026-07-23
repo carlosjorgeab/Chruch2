@@ -41,6 +41,8 @@ type Membro = {
   id_conjuge: string | null;
   id_grupo: string | null;
   id_comunidade: string | null;
+  pai?: string | null;
+  mae?: string | null;
   criado_por_nome: string | null;
   criado_em: string | null;
   atualizado_por_nome: string | null;
@@ -73,6 +75,45 @@ const calculateAge = (birthdate: string | null | undefined): string => {
   } catch (e) {
     return '-';
   }
+};
+
+const serializeEnderecoWithParents = (endereco: string | null, pai: string | null, mae: string | null): string | null => {
+  const cleanEndereco = (endereco || '').trim();
+  const cleanPai = (pai || '').trim();
+  const cleanMae = (mae || '').trim();
+  
+  if (!cleanPai && !cleanMae) {
+    return cleanEndereco || null;
+  }
+  
+  return `${cleanEndereco}\n---FILIACAO---\nPai: ${cleanPai}\nMãe: ${cleanMae}`;
+};
+
+const deserializeEnderecoAndParents = (enderecoWithParents: string | null): { endereco: string, pai: string, mae: string } => {
+  const defaultVal = { endereco: '', pai: '', mae: '' };
+  if (!enderecoWithParents) return defaultVal;
+  
+  const marker = '\n---FILIACAO---\n';
+  const parts = enderecoWithParents.split(marker);
+  
+  if (parts.length < 2) {
+    return { endereco: enderecoWithParents, pai: '', mae: '' };
+  }
+  
+  const endereco = parts[0].trim();
+  const parentLines = parts[1].split('\n');
+  let pai = '';
+  let mae = '';
+  
+  for (const line of parentLines) {
+    if (line.startsWith('Pai: ')) {
+      pai = line.substring(5).trim();
+    } else if (line.startsWith('Mãe: ')) {
+      mae = line.substring(5).trim();
+    }
+  }
+  
+  return { endereco, pai, mae };
 };
 
 export default function MembrosPage() {
@@ -112,6 +153,8 @@ export default function MembrosPage() {
     estado_civil: 'Solteiro(a)',
     escolaridade: 'Ensino Médio Completo',
     endereco: '',
+    pai: '',
+    mae: '',
     bairro: '',
     cidade: '',
     id_uf: '',
@@ -234,7 +277,16 @@ export default function MembrosPage() {
 
       if (err) throw err;
       if (data) {
-        setMembros(data);
+        const processedData = data.map((m: any) => {
+          const parsed = deserializeEnderecoAndParents(m.endereco);
+          return {
+            ...m,
+            endereco: parsed.endereco,
+            pai: parsed.pai,
+            mae: parsed.mae,
+          };
+        });
+        setMembros(processedData);
       }
     } catch (e: any) {
       setError('Erro ao buscar membros: ' + (e.message || e));
@@ -271,6 +323,8 @@ export default function MembrosPage() {
       estado_civil: 'Solteiro(a)',
       escolaridade: 'Ensino Médio Completo',
       endereco: '',
+      pai: '',
+      mae: '',
       bairro: '',
       cidade: '',
       id_uf: '',
@@ -342,7 +396,7 @@ export default function MembrosPage() {
       sexo: currentMembro.sexo || null,
       estado_civil: currentMembro.estado_civil || null,
       escolaridade: currentMembro.escolaridade || null,
-      endereco: currentMembro.endereco || null,
+      endereco: serializeEnderecoWithParents(currentMembro.endereco || null, currentMembro.pai || null, currentMembro.mae || null),
       bairro: currentMembro.bairro || null,
       cidade: currentMembro.cidade || null,
       id_uf: currentMembro.id_uf || null,
@@ -785,6 +839,8 @@ export default function MembrosPage() {
           'Sexo': m.sexo || '',
           'Estado Civil': m.estado_civil || '',
           'Escolaridade': m.escolaridade || '',
+          'Pai': m.pai || '',
+          'Mãe': m.mae || '',
           'Endereço': m.endereco || '',
           'Bairro': m.bairro || '',
           'Cidade': m.cidade || '',
@@ -1393,6 +1449,32 @@ export default function MembrosPage() {
 
             <div>
               <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
+                Pai
+              </label>
+              <input
+                type="text"
+                value={currentMembro.pai || ''}
+                onChange={(e) => setCurrentMembro({ ...currentMembro, pai: e.target.value })}
+                className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-semibold"
+                placeholder="Nome do Pai"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
+                Mãe
+              </label>
+              <input
+                type="text"
+                value={currentMembro.mae || ''}
+                onChange={(e) => setCurrentMembro({ ...currentMembro, mae: e.target.value })}
+                className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-semibold"
+                placeholder="Nome da Mãe"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
                 Sexo *
               </label>
               <select
@@ -1445,28 +1527,29 @@ export default function MembrosPage() {
               </select>
             </div>
 
-            <div>
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
-                Data de Nascimento
-              </label>
-              <input
-                type="date"
-                value={currentMembro.data_nascimento || ''}
-                onChange={(e) => setCurrentMembro({ ...currentMembro, data_nascimento: e.target.value })}
-                className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-semibold"
-              />
-            </div>
-
-            <div>
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
-                Idade (Cálculo Automático)
-              </label>
-              <input
-                type="text"
-                disabled
-                value={calculateAge(currentMembro.data_nascimento)}
-                className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 text-slate-500 dark:text-slate-400 font-bold outline-none cursor-not-allowed"
-              />
+            <div className="grid grid-cols-3 gap-4">
+              <div className="col-span-1">
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1 truncate">
+                  Idade
+                </label>
+                <input
+                  type="text"
+                  disabled
+                  value={calculateAge(currentMembro.data_nascimento)}
+                  className="w-full px-3 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 text-slate-500 dark:text-slate-400 font-bold outline-none cursor-not-allowed text-center"
+                />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1 truncate">
+                  Data de Nascimento
+                </label>
+                <input
+                  type="date"
+                  value={currentMembro.data_nascimento || ''}
+                  onChange={(e) => setCurrentMembro({ ...currentMembro, data_nascimento: e.target.value })}
+                  className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 transition-all outline-none font-semibold"
+                />
+              </div>
             </div>
 
             <div>
@@ -1814,7 +1897,7 @@ export default function MembrosPage() {
             </div>
 
             {/* Quadro Recepção com as 3 opções da igreja */}
-            <div className="p-4 border-2 border-slate-100 dark:border-slate-700 rounded-2xl bg-slate-50/50 dark:bg-slate-900/30 space-y-3">
+            <div className="md:col-span-2 p-4 border-2 border-slate-100 dark:border-slate-700 rounded-2xl bg-slate-50/50 dark:bg-slate-900/30 space-y-3">
               <label className="block text-[10px] font-black text-[#E4A232] uppercase tracking-widest ml-1 font-bold">
                 Quadro para Recepção
               </label>

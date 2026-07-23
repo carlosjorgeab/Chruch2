@@ -4,8 +4,8 @@ const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.
 
 async function run() {
   const sql = `
-    ALTER TABLE public.eventos ADD COLUMN IF NOT EXISTS data_inicio TIMESTAMP WITH TIME ZONE;
-    ALTER TABLE public.eventos ADD COLUMN IF NOT EXISTS data_fim TIMESTAMP WITH TIME ZONE;
+    ALTER TABLE public.membros ADD COLUMN IF NOT EXISTS pai VARCHAR(255);
+    ALTER TABLE public.membros ADD COLUMN IF NOT EXISTS mae VARCHAR(255);
   `;
 
   console.log('Attempting to execute migration SQL...');

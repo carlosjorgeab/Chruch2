@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Users, UsersRound, Wallet, BookOpen, RefreshCw, BarChart2, PieChart, TrendingUp, TrendingDown, DollarSign, Calendar, Megaphone, FileText, Video, ChevronLeft, ChevronRight, ExternalLink, Download, QrCode } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useIgreja } from '@/context/IgrejaContext';
+import { motion, AnimatePresence } from 'motion/react';
 
 // Import recharts dynamically to avoid any SSR issues, or guard with mounted state
 import {
@@ -108,6 +109,10 @@ export default function Home() {
   // Eventos View Mode and Date states
   const [eventosViewMode, setEventosViewMode] = useState<'cards' | 'calendario'>('cards');
   const [currentEventosDate, setCurrentEventosDate] = useState(() => new Date());
+  const [showDetailedMode, setShowDetailedMode] = useState<boolean>(false);
+  const [showMoreInfo, setShowMoreInfo] = useState<boolean>(false);
+  const [subscribers, setSubscribers] = useState<any[]>([]);
+  const [loadingSubscribers, setLoadingSubscribers] = useState<boolean>(false);
 
   // Agenda selectors and view preferences
   const [viewType, setViewType] = useState<'dia' | 'semana' | 'mes'>('dia');
@@ -243,6 +248,41 @@ export default function Home() {
       console.error('Erro ao atualizar tempo de lembrete:', err);
     }
   };
+
+  const fetchEventSubscribers = async (eventId: string) => {
+    setLoadingSubscribers(true);
+    try {
+      const { data, error } = await supabase
+        .from('eventos_inscricoes')
+        .select(`
+          id,
+          tipo_participante,
+          nome_visitante,
+          pago,
+          valor_pago,
+          created_at,
+          membro:membros (
+            nome
+          )
+        `)
+        .eq('id_evento', eventId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setSubscribers(data || []);
+    } catch (err) {
+      console.error('Erro ao buscar inscritos do evento:', err);
+    } finally {
+      setLoadingSubscribers(false);
+    }
+  };
+
+  useEffect(() => {
+    const item = eventos[currentEventoIndex] ?? eventos[0];
+    if (item && showDetailedMode) {
+      fetchEventSubscribers(item.id);
+    }
+  }, [currentEventoIndex, showDetailedMode, eventos]);
 
   // Time-frame selections
   const [cashFlowPeriod, setCashFlowPeriod] = useState<'diario' | 'mensal' | 'anual'>('mensal');
@@ -658,6 +698,9 @@ export default function Home() {
   if (showAniversariantes) visiblePanels.push('aniversariantes');
 
   const getPanelSpanClass = (panelId: string) => {
+    if (panelId === 'eventos' && showDetailedMode) {
+      return 'lg:col-span-2';
+    }
     const index = visiblePanels.indexOf(panelId);
     if (index === -1) return 'hidden';
     const total = visiblePanels.length;
@@ -1062,9 +1105,23 @@ export default function Home() {
           {/* PAINEL DE EVENTOS */}
           {showEventos && (
             <div 
-              className={`bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col ${getPanelSpanClass('eventos')}`} 
+              className={`relative bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col ${getPanelSpanClass('eventos')}`} 
               id="dashboard-eventos"
             >
+              {(() => {
+                const item = eventos[currentEventoIndex] ?? eventos[0];
+                if (item) {
+                  const status = (item.status || 'Confirmado').toLowerCase().trim();
+                  const dotColor = status === 'confirmado' ? 'bg-emerald-500' : (status === 'pendente' ? 'bg-amber-500' : 'bg-rose-500');
+                  return (
+                    <div 
+                      className={`absolute top-4 right-4 w-3.5 h-3.5 rounded-full border-2 border-white dark:border-slate-900 shadow-sm z-10 ${dotColor}`}
+                      title={`Status: ${item.status || 'Confirmado'}`}
+                    />
+                  );
+                }
+                return null;
+              })()}
               <div className="p-6 sm:p-8 space-y-6 flex-1 flex flex-col justify-between">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-100 dark:border-slate-800 pb-5 gap-4">
                   <div>
@@ -1101,11 +1158,11 @@ export default function Home() {
                 </div>
 
                 {eventosViewMode === 'calendario' && (
-                  <div className="flex items-center justify-between gap-2 mt-2 pb-2 border-b border-slate-50 dark:border-slate-850 animate-in fade-in duration-200">
-                    <span className="text-xs font-black uppercase tracking-widest text-slate-800 dark:text-slate-300">
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-2 pb-2 border-b border-slate-50 dark:border-slate-850 animate-in fade-in duration-200">
+                    <span className="text-xs font-black uppercase tracking-widest text-slate-800 dark:text-slate-300 text-center sm:text-left">
                       {currentEventosDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
                     </span>
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1 justify-center">
                       <button
                         type="button"
                         onClick={() => {
@@ -1139,199 +1196,412 @@ export default function Home() {
                   </div>
                 )}
 
-                {eventosViewMode === 'calendario' ? (
-                  <div className="space-y-3 flex-1 flex flex-col justify-between animate-in fade-in duration-300">
-                    {/* Calendar columns headers */}
-                    <div className="grid grid-cols-7 gap-1 text-center font-black text-[9px] uppercase tracking-wider text-slate-400 pb-1">
-                      <div>Dom</div>
-                      <div>Seg</div>
-                      <div>Ter</div>
-                      <div>Qua</div>
-                      <div>Qui</div>
-                      <div>Sex</div>
-                      <div>Sáb</div>
-                    </div>
+                <AnimatePresence mode="wait">
+                  {eventosViewMode === 'calendario' ? (
+                    <motion.div
+                      key="calendario"
+                      initial={{ opacity: 0, y: 15 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -15 }}
+                      transition={{ duration: 0.25 }}
+                      className="space-y-3 flex-1 flex flex-col justify-between"
+                    >
+                      {/* Calendar columns headers */}
+                      <div className="grid grid-cols-7 gap-1 text-center font-black text-[9px] uppercase tracking-wider text-slate-400 pb-1">
+                        <div>Dom</div>
+                        <div>Seg</div>
+                        <div>Ter</div>
+                        <div>Qua</div>
+                        <div>Qui</div>
+                        <div>Sex</div>
+                        <div>Sáb</div>
+                      </div>
 
-                    {/* Calendar Grid cells */}
-                    <div className="grid grid-cols-7 gap-1 bg-slate-100/50 dark:bg-slate-955 p-1 rounded-2xl border border-slate-200/50 dark:border-slate-850">
-                      {getMonthDaysGrid(currentEventosDate).map((day) => {
-                        const isCurrentMonth = day.getMonth() === currentEventosDate.getMonth();
-                        const isToday = day.toDateString() === new Date().toDateString();
-                        const dayEvents = eventos.filter((item) => {
-                          const startStr = item.data_inicio || item.agenda?.data_hora;
-                          if (!startStr) return false;
-                          const eventDay = new Date(startStr);
-                          return eventDay.toDateString() === day.toDateString();
-                        });
+                      {/* Calendar Grid cells */}
+                      <div className="grid grid-cols-7 gap-1 bg-slate-100/50 dark:bg-slate-955 p-1 rounded-2xl border border-slate-200/50 dark:border-slate-850">
+                        {getMonthDaysGrid(currentEventosDate).map((day) => {
+                          const isCurrentMonth = day.getMonth() === currentEventosDate.getMonth();
+                          const isToday = day.toDateString() === new Date().toDateString();
+                          const dayEvents = eventos.filter((item) => {
+                            const startStr = item.data_inicio || item.agenda?.data_hora;
+                            if (!startStr) return false;
+                            const eventDay = new Date(startStr);
+                            return eventDay.toDateString() === day.toDateString();
+                          });
 
-                        return (
-                          <div
-                            key={day.toISOString()}
-                            className={`min-h-[55px] md:min-h-[70px] p-1 rounded-xl flex flex-col justify-between transition ${
-                              isToday
-                                ? 'bg-amber-500/10 border border-amber-500/40'
-                                : isCurrentMonth 
-                                  ? 'bg-white dark:bg-slate-900 border border-slate-150/40 dark:border-slate-800/50' 
-                                  : 'bg-slate-50/50 dark:bg-slate-900/20 opacity-40'
-                            }`}
-                          >
-                            <div className="flex justify-between items-center mb-0.5">
-                              <span className={`text-[8px] font-black px-1 rounded ${
-                                isToday 
-                                  ? 'bg-[#E4A232] text-white' 
+                          return (
+                            <div
+                              key={day.toISOString()}
+                              className={`min-h-[55px] md:min-h-[70px] p-1 rounded-xl flex flex-col justify-between transition ${
+                                isToday
+                                  ? 'bg-amber-500/10 border border-amber-500/40'
                                   : isCurrentMonth 
-                                    ? 'text-slate-800 dark:text-white' 
-                                    : 'text-slate-400'
-                              }`}>
-                                {day.getDate()}
-                              </span>
+                                    ? 'bg-white dark:bg-slate-900 border border-slate-150/40 dark:border-slate-800/50' 
+                                    : 'bg-slate-50/50 dark:bg-slate-900/20 opacity-40'
+                              }`}
+                            >
+                              <div className="flex justify-between items-center mb-0.5">
+                                <span className={`text-[8px] font-black px-1 rounded ${
+                                  isToday 
+                                    ? 'bg-[#E4A232] text-white' 
+                                    : isCurrentMonth 
+                                      ? 'text-slate-800 dark:text-white' 
+                                      : 'text-slate-400'
+                                }`}>
+                                  {day.getDate()}
+                                </span>
+                              </div>
+
+                              <div className="space-y-0.5 overflow-y-auto max-h-[35px] scrollbar-none w-full flex flex-col items-center justify-center">
+                                {dayEvents.map((item) => (
+                                  <div
+                                    key={item.id}
+                                    className="p-0.5 px-1 bg-amber-500/10 border border-amber-500/20 text-[7px] md:text-[8px] font-black text-amber-700 dark:text-amber-400 rounded truncate uppercase select-none leading-none w-full text-center flex items-center justify-center min-h-[14px]"
+                                    title={`${item.titulo}${item.local ? ` em ${item.local}` : ''}`}
+                                  >
+                                    {item.titulo}
+                                  </div>
+                                ))}
+                              </div>
                             </div>
+                          );
+                        })}
+                      </div>
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key="cards"
+                      initial={{ opacity: 0, y: 15 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -15 }}
+                      transition={{ duration: 0.25 }}
+                      className="flex flex-col gap-4 flex-1 justify-between mt-4"
+                    >
+                      {(() => {
+                        const item = eventos[currentEventoIndex] ?? eventos[0];
+                        if (!item) return <div className="text-slate-400 text-xs py-10 text-center font-bold">Nenhum evento especial encontrado</div>;
 
-                            <div className="space-y-0.5 overflow-y-auto max-h-[35px] scrollbar-none w-full">
-                              {dayEvents.map((item) => (
-                                <div
-                                  key={item.id}
-                                  className="p-0.5 px-1 bg-amber-500/10 border border-amber-500/20 text-[7px] md:text-[8px] font-black text-amber-700 dark:text-amber-400 rounded truncate uppercase select-none leading-none w-full"
-                                  title={`${item.titulo}${item.local ? ` em ${item.local}` : ''}`}
-                                >
-                                  {item.titulo}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ) : (
-                  (() => {
-                    const item = eventos[currentEventoIndex] ?? eventos[0];
-                    if (!item) return <div className="text-slate-400 text-xs py-10 text-center font-bold">Nenhum evento especial encontrado</div>;
-
-                    const startEventDate = item.data_inicio ? new Date(item.data_inicio) : (item.agenda?.data_hora ? new Date(item.agenda.data_hora) : null);
-                    const endEventDate = item.data_fim ? new Date(item.data_fim) : (item.agenda?.data_hora_fim ? new Date(item.agenda.data_hora_fim) : null);
-                    
-                    let dateStr = '';
-                    let timeStr = '';
-
-                    if (startEventDate && !isNaN(startEventDate.getTime())) {
-                      dateStr = startEventDate.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
-                      timeStr = startEventDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-
-                      if (endEventDate && !isNaN(endEventDate.getTime())) {
-                        if (startEventDate.toDateString() !== endEventDate.toDateString()) {
-                          dateStr += ` até ${endEventDate.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}`;
-                        }
-                        timeStr += ` às ${endEventDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}h`;
-                      }
-                    } else {
-                      dateStr = 'Sem data definida';
-                      timeStr = '--:--';
-                    }
-
-                    return (
-                      <div className="flex flex-col gap-4 flex-1 justify-between mt-4 animate-in fade-in duration-300">
-                        {item.url_imagem && (
-                          <div className="w-full relative h-[180px] md:h-[220px] rounded-2xl overflow-hidden bg-slate-50 dark:bg-slate-955/50 border border-slate-150 dark:border-slate-850 shadow-inner flex flex-col justify-center items-center">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={item.url_imagem}
-                              alt={item.titulo}
-                              className="w-full h-full object-contain"
-                              referrerPolicy="no-referrer"
-                            />
-                          </div>
-                        )}
+                        const startEventDate = item.data_inicio ? new Date(item.data_inicio) : (item.agenda?.data_hora ? new Date(item.agenda.data_hora) : null);
+                        const endEventDate = item.data_fim ? new Date(item.data_fim) : (item.agenda?.data_hora_fim ? new Date(item.agenda.data_hora_fim) : null);
                         
-                        <div className="space-y-2">
-                          <h4 className="text-sm font-black font-headline text-slate-905 dark:text-white uppercase tracking-tight leading-normal line-clamp-2">
-                            {item.titulo}
-                          </h4>
-                          {item.descricao && (
-                            <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-3 leading-relaxed">
-                              {item.descricao}
-                            </p>
-                          )}
-                        </div>
+                        let dateStr = '';
+                        let timeStr = '';
 
-                        <div className="space-y-1.5 pt-3 border-t border-slate-100 dark:border-slate-850">
-                          <div className="text-[10px] text-slate-500 dark:text-slate-400 font-bold flex items-center gap-1.5">
-                            📅 {dateStr} {timeStr !== '--:--' ? `• ${timeStr}` : ''}
-                          </div>
-                          {item.local && (
-                            <div className="text-[10px] text-slate-500 dark:text-slate-400 font-bold flex items-center gap-1.5">
-                              📍 {item.local}
-                            </div>
-                          )}
-                          <div className="text-[10px] text-slate-500 dark:text-slate-400 font-bold flex items-center gap-1.5">
-                            🎟️ Valor: {Number(item.valor_inscricao) > 0 ? `R$ ${parseFloat(item.valor_inscricao).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'Gratuito'}
-                          </div>
+                        if (startEventDate && !isNaN(startEventDate.getTime())) {
+                          dateStr = startEventDate.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+                          timeStr = startEventDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
-                          {item.id_agenda && item.agenda && (
-                            <div className="pt-2 mt-2 border-t border-dashed border-slate-150 dark:border-slate-800 flex flex-col gap-1">
-                              <label className="text-[9px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1">
-                                🔔 Tempo de Lembrete
-                              </label>
-                              <div className="flex items-center gap-2">
-                                <select
-                                  value={item.agenda.tempo_lembrete !== undefined ? item.agenda.tempo_lembrete : 15}
-                                  onChange={(e) => handleUpdateTempoLembrete(item.id_agenda, parseInt(e.target.value))}
-                                  className="text-[10px] font-bold bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg p-1.5 focus:outline-none focus:border-amber-500 text-slate-700 dark:text-slate-300 w-full max-w-[200px]"
-                                >
-                                  <option value={5}>5 minutos antes</option>
-                                  <option value={10}>10 minutos antes</option>
-                                  <option value={15}>15 minutos antes (Padrão)</option>
-                                  <option value={30}>30 minutos antes</option>
-                                  <option value={60}>1 hora antes</option>
-                                  <option value={120}>2 horas antes</option>
-                                  <option value={1440}>1 dia antes</option>
-                                  <option value={0}>Não notificar</option>
-                                </select>
-                                {savedLembreteId === item.id_agenda && (
-                                  <span className="text-[9px] font-black text-emerald-500 transition-all duration-300 animate-pulse">
-                                    Salvo!
+                          if (endEventDate && !isNaN(endEventDate.getTime())) {
+                            if (startEventDate.toDateString() !== endEventDate.toDateString()) {
+                              dateStr += ` até ${endEventDate.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}`;
+                            }
+                            timeStr += ` às ${endEventDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}h`;
+                          }
+                        } else {
+                          dateStr = 'Sem data definida';
+                          timeStr = '--:--';
+                        }
+
+                        if (showDetailedMode) {
+                          return (
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start mt-1">
+                              {/* Left Column: Event details */}
+                              <div className="space-y-4">
+                                {item.url_imagem && (
+                                  <div className="w-full relative h-[150px] md:h-[180px] rounded-2xl overflow-hidden bg-slate-50 dark:bg-slate-955/50 border border-slate-150 dark:border-slate-850 shadow-inner flex flex-col justify-center items-center">
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img
+                                      src={item.url_imagem}
+                                      alt={item.titulo}
+                                      className="w-full h-full object-contain"
+                                      referrerPolicy="no-referrer"
+                                    />
+                                  </div>
+                                )}
+                                
+                                <div className="space-y-2">
+                                  <h4 className="text-sm font-black font-headline text-slate-905 dark:text-white uppercase tracking-tight leading-normal">
+                                    {item.titulo}
+                                  </h4>
+                                  {item.descricao && (
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                                      {item.descricao}
+                                    </p>
+                                  )}
+                                </div>
+
+                                <div className="space-y-1.5 pt-3 border-t border-slate-100 dark:border-slate-850">
+                                  <div className="text-[10px] text-slate-500 dark:text-slate-400 font-bold flex items-center gap-1.5">
+                                    📅 {dateStr} {timeStr !== '--:--' ? `• ${timeStr}` : ''}
+                                  </div>
+                                  {item.local && (
+                                    <div className="text-[10px] text-slate-500 dark:text-slate-400 font-bold flex items-center gap-1.5">
+                                      📍 {item.local}
+                                    </div>
+                                  )}
+                                  <div className="text-[10px] text-slate-500 dark:text-slate-400 font-bold flex items-center gap-1.5">
+                                    🎟️ Valor: {Number(item.valor_inscricao) > 0 ? `R$ ${parseFloat(item.valor_inscricao).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'Gratuito'}
+                                  </div>
+                                </div>
+
+                                <div className="flex flex-col gap-2 pt-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => setShowDetailedMode(false)}
+                                    className="w-full flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-black text-[10px] uppercase tracking-widest py-2.5 px-4 rounded-xl border border-slate-200 dark:border-slate-700 transition cursor-pointer"
+                                  >
+                                    🔒 Voltar ao Card Simples
+                                  </button>
+
+                                  {eventos.length > 1 && (
+                                    <div className="flex items-center justify-between gap-2 bg-slate-50 dark:bg-slate-955 border border-slate-150 dark:border-slate-850 p-1 rounded-lg">
+                                      <button 
+                                        type="button"
+                                        onClick={() => {
+                                          const nextIndex = currentEventoIndex === 0 ? eventos.length - 1 : currentEventoIndex - 1;
+                                          setCurrentEventoIndex(nextIndex);
+                                        }}
+                                        className="p-1 px-3 rounded-md hover:bg-slate-150 dark:hover:bg-slate-850 text-slate-650 dark:text-slate-400 transition cursor-pointer text-xs font-bold"
+                                        title="Evento Anterior"
+                                      >
+                                        ◀ Anterior
+                                      </button>
+                                      <span className="text-[10px] font-bold text-slate-400 select-none">
+                                        {currentEventoIndex + 1} / {eventos.length}
+                                      </span>
+                                      <button 
+                                        type="button"
+                                        onClick={() => {
+                                          const nextIndex = currentEventoIndex === eventos.length - 1 ? 0 : currentEventoIndex + 1;
+                                          setCurrentEventoIndex(nextIndex);
+                                        }}
+                                        className="p-1 px-3 rounded-md hover:bg-slate-150 dark:hover:bg-slate-850 text-slate-650 dark:text-slate-400 transition cursor-pointer text-xs font-bold"
+                                        title="Próximo Evento"
+                                      >
+                                        Próximo ▶
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Right Column: Subscribers List */}
+                              <div className="bg-slate-50/50 dark:bg-slate-955/20 border border-slate-150/50 dark:border-slate-850 rounded-2xl p-4 flex flex-col h-full min-h-[300px]">
+                                <div className="flex items-center justify-between border-b border-slate-150 dark:border-slate-800 pb-3 mb-3">
+                                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-800 dark:text-white flex items-center gap-1.5">
+                                    👥 Inscritos Confirmados ({subscribers.length})
                                   </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => fetchEventSubscribers(item.id)}
+                                    className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-lg transition text-slate-500 cursor-pointer"
+                                    title="Atualizar Lista"
+                                  >
+                                    <RefreshCw size={13} className={loadingSubscribers ? 'animate-spin' : ''} />
+                                  </button>
+                                </div>
+
+                                {loadingSubscribers ? (
+                                  <div className="flex-1 flex flex-col items-center justify-center py-10 space-y-2">
+                                    <RefreshCw size={20} className="animate-spin text-amber-500" />
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Carregando inscritos...</span>
+                                  </div>
+                                ) : subscribers.length === 0 ? (
+                                  <div className="flex-1 flex flex-col items-center justify-center py-10 text-center space-y-2">
+                                    <UsersRound size={24} className="text-slate-300 dark:text-slate-700" />
+                                    <p className="text-xs font-bold text-slate-400">Nenhum inscrito ainda</p>
+                                    <p className="text-[9px] text-slate-400 max-w-[200px] mx-auto">As inscrições para este evento ainda estão vazias.</p>
+                                  </div>
+                                ) : (
+                                  <div className="flex-1 overflow-y-auto max-h-[300px] space-y-2 pr-1 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-800">
+                                    {subscribers.map((sub) => {
+                                      const name = sub.tipo_participante === 'Membro' ? (sub.membro?.nome || 'Membro desconhecido') : (sub.nome_visitante || 'Visitante');
+                                      return (
+                                        <div 
+                                          key={sub.id} 
+                                          className="p-2.5 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-850 rounded-xl flex items-center justify-between gap-3 text-xs shadow-sm"
+                                        >
+                                          <div className="min-w-0">
+                                            <p className="font-bold text-slate-800 dark:text-slate-200 truncate leading-tight">
+                                              {name}
+                                            </p>
+                                            <p className="text-[9px] font-medium text-slate-400 mt-0.5">
+                                              {sub.created_at ? new Date(sub.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : ''}
+                                            </p>
+                                          </div>
+                                          
+                                          <div className="flex items-center gap-1.5 shrink-0">
+                                            <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider leading-none ${
+                                              sub.tipo_participante === 'Membro' 
+                                                ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20' 
+                                                : 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20'
+                                            }`}>
+                                              {sub.tipo_participante}
+                                            </span>
+
+                                            <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider leading-none ${
+                                              sub.pago 
+                                                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20' 
+                                                : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20'
+                                            }`}>
+                                              {sub.pago ? 'Pago' : 'Pendente'}
+                                            </span>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
                                 )}
                               </div>
                             </div>
-                          )}
-                        </div>
+                          );
+                        }
 
-                        {eventos.length > 1 && (
-                          <div className="flex items-center justify-end gap-2 mt-1">
-                            <div className="flex items-center gap-1 bg-slate-50 dark:bg-slate-955 border border-slate-150 dark:border-slate-850 p-1 rounded-lg">
-                              <button 
-                                type="button"
-                                onClick={() => {
-                                  const nextIndex = currentEventoIndex === 0 ? eventos.length - 1 : currentEventoIndex - 1;
-                                  setCurrentEventoIndex(nextIndex);
-                                }}
-                                className="p-1 px-2 rounded-md hover:bg-slate-150 dark:hover:bg-slate-850 text-slate-650 dark:text-slate-400 transition cursor-pointer"
-                                title="Evento Anterior"
-                              >
-                                <ChevronLeft size={14} />
-                              </button>
-                              <span className="text-[10px] font-bold text-slate-400 px-1 select-none">
-                                {currentEventoIndex + 1} / {eventos.length}
-                              </span>
-                              <button 
-                                type="button"
-                                onClick={() => {
-                                  const nextIndex = currentEventoIndex === eventos.length - 1 ? 0 : currentEventoIndex + 1;
-                                  setCurrentEventoIndex(nextIndex);
-                                }}
-                                className="p-1 px-2 rounded-md hover:bg-slate-150 dark:hover:bg-slate-850 text-slate-650 dark:text-slate-400 transition cursor-pointer"
-                                title="Próximo Evento"
-                              >
-                                <ChevronRight size={14} />
-                              </button>
+                        return (
+                          <>
+                            {item.url_imagem && (
+                              <div className="w-full relative h-[180px] md:h-[220px] rounded-2xl overflow-hidden bg-slate-50 dark:bg-slate-955/50 border border-slate-150 dark:border-slate-850 shadow-inner flex flex-col justify-center items-center">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                  src={item.url_imagem}
+                                  alt={item.titulo}
+                                  className="w-full h-full object-contain"
+                                  referrerPolicy="no-referrer"
+                                />
+                              </div>
+                            )}
+                            
+                            <div className="space-y-3">
+                              <h4 className="text-sm font-black font-headline text-slate-905 dark:text-white uppercase tracking-tight leading-normal line-clamp-2">
+                                {item.titulo}
+                              </h4>
+                              
+                              <div className="flex justify-start">
+                                <button
+                                  type="button"
+                                  onClick={() => setShowMoreInfo(!showMoreInfo)}
+                                  className="text-[10px] font-black uppercase tracking-wider text-amber-500 hover:text-amber-600 transition flex items-center gap-1 cursor-pointer"
+                                >
+                                  {showMoreInfo ? '▲ Menos detalhes' : '▼ Mais informações'}
+                                </button>
+                              </div>
+
+                              {showMoreInfo ? (
+                                <div className="p-3 bg-slate-50 dark:bg-slate-955 rounded-xl border border-slate-150 dark:border-slate-850 space-y-2 text-xs text-slate-650 dark:text-slate-350 animate-in fade-in slide-in-from-top-1 duration-200">
+                                  {item.palestrante && (
+                                    <p className="font-bold flex items-center gap-1.5 text-slate-800 dark:text-white">
+                                      <span>🎤</span> Palestrante: <span className="font-semibold text-slate-600 dark:text-slate-300">{item.palestrante}</span>
+                                    </p>
+                                  )}
+                                  {item.descricao ? (
+                                    <div className="space-y-1">
+                                      <p className="font-bold text-slate-800 dark:text-white">📝 Descrição completa:</p>
+                                      <p className="leading-relaxed whitespace-pre-wrap text-slate-600 dark:text-slate-350">{item.descricao}</p>
+                                    </div>
+                                  ) : (
+                                    <p className="italic text-slate-400">Sem descrição adicional.</p>
+                                  )}
+                                </div>
+                              ) : (
+                                item.descricao && (
+                                  <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-3 leading-relaxed">
+                                    {item.descricao}
+                                  </p>
+                                )
+                              )}
                             </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })()
-                )}
+
+                            <div className="space-y-1.5 pt-3 border-t border-slate-100 dark:border-slate-850">
+                              <div className="text-[10px] text-slate-500 dark:text-slate-400 font-bold flex items-center gap-1.5">
+                                📅 {dateStr} {timeStr !== '--:--' ? `• ${timeStr}` : ''}
+                              </div>
+                              {item.local && (
+                                <div className="text-[10px] text-slate-500 dark:text-slate-400 font-bold flex items-center gap-1.5">
+                                  📍 {item.local}
+                                </div>
+                              )}
+                              <div className="text-[10px] text-slate-500 dark:text-slate-400 font-bold flex items-center gap-1.5">
+                                🎟️ Valor: {Number(item.valor_inscricao) > 0 ? `R$ ${parseFloat(item.valor_inscricao).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'Gratuito'}
+                              </div>
+
+                              {item.id_agenda && item.agenda && (
+                                <div className="pt-2 mt-2 border-t border-dashed border-slate-150 dark:border-slate-800 flex flex-col gap-1">
+                                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1">
+                                    🔔 Tempo de Lembrete
+                                  </label>
+                                  <div className="flex items-center gap-2">
+                                    <select
+                                      value={item.agenda.tempo_lembrete !== undefined ? item.agenda.tempo_lembrete : 15}
+                                      onChange={(e) => handleUpdateTempoLembrete(item.id_agenda, parseInt(e.target.value))}
+                                      className="text-[10px] font-bold bg-slate-50 dark:bg-slate-955 border border-slate-200 dark:border-slate-800 rounded-lg p-1.5 focus:outline-none focus:border-amber-500 text-slate-700 dark:text-slate-300 w-full max-w-[200px]"
+                                    >
+                                      <option value={5}>5 minutos antes</option>
+                                      <option value={10}>10 minutos antes</option>
+                                      <option value={15}>15 minutos antes (Padrão)</option>
+                                      <option value={30}>30 minutos antes</option>
+                                      <option value={60}>1 hora antes</option>
+                                      <option value={120}>2 horas antes</option>
+                                      <option value={1440}>1 dia antes</option>
+                                      <option value={0}>Não notificar</option>
+                                    </select>
+                                    {savedLembreteId === item.id_agenda && (
+                                      <span className="text-[9px] font-black text-emerald-500 transition-all duration-300 animate-pulse">
+                                        Salvo!
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowDetailedMode(true);
+                                fetchEventSubscribers(item.id);
+                              }}
+                              className="w-full mt-2 flex items-center justify-center gap-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 font-black text-[10px] uppercase tracking-widest py-3 px-4 rounded-xl border border-amber-500/20 transition cursor-pointer"
+                            >
+                              🔍 Ver Modo Detalhado & Inscritos
+                            </button>
+
+                            {eventos.length > 1 && (
+                              <div className="flex items-center justify-end gap-2 mt-1">
+                                <div className="flex items-center gap-1 bg-slate-50 dark:bg-slate-955 border border-slate-150 dark:border-slate-850 p-1 rounded-lg">
+                                  <button 
+                                    type="button"
+                                    onClick={() => {
+                                      const nextIndex = currentEventoIndex === 0 ? eventos.length - 1 : currentEventoIndex - 1;
+                                      setCurrentEventoIndex(nextIndex);
+                                    }}
+                                    className="p-1 px-2 rounded-md hover:bg-slate-150 dark:hover:bg-slate-850 text-slate-650 dark:text-slate-400 transition cursor-pointer"
+                                    title="Evento Anterior"
+                                  >
+                                    <ChevronLeft size={14} />
+                                  </button>
+                                  <span className="text-[10px] font-bold text-slate-400 px-1 select-none">
+                                    {currentEventoIndex + 1} / {eventos.length}
+                                  </span>
+                                  <button 
+                                    type="button"
+                                    onClick={() => {
+                                      const nextIndex = currentEventoIndex === eventos.length - 1 ? 0 : currentEventoIndex + 1;
+                                      setCurrentEventoIndex(nextIndex);
+                                    }}
+                                    className="p-1 px-2 rounded-md hover:bg-slate-150 dark:hover:bg-slate-850 text-slate-650 dark:text-slate-400 transition cursor-pointer"
+                                    title="Próximo Evento"
+                                  >
+                                    <ChevronRight size={14} />
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             </div>
           )}
