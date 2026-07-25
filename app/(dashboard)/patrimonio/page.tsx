@@ -66,6 +66,7 @@ export default function PatrimonioPage() {
   const [locais, setLocais] = useState<any[]>([]);
   const [bens, setBens] = useState<any[]>([]);
   const [movimentacoes, setMovimentacoes] = useState<any[]>([]);
+  const [membros, setMembros] = useState<any[]>([]);
 
   // Current items
   const [currentCategoria, setCurrentCategoria] = useState<any>({ nome: '', descricao: '' });
@@ -104,9 +105,20 @@ export default function PatrimonioPage() {
       fetchCategorias(),
       fetchLocais(),
       fetchBens(),
-      fetchMovimentacoes()
+      fetchMovimentacoes(),
+      fetchMembros()
     ]);
     setLoading(false);
+  };
+
+  const fetchMembros = async () => {
+    if (!selectedIgreja?.id) return;
+    const { data } = await supabase
+      .from('membros')
+      .select('id, nome')
+      .eq('id_igreja', selectedIgreja.id)
+      .order('nome');
+    if (data) setMembros(data);
   };
 
   const fetchCategorias = async () => {
@@ -325,12 +337,17 @@ export default function PatrimonioPage() {
     if (!currentMovimentacao.patrimonio_id) return setError('Obrigatório selecionar o bem.');
     if (!currentMovimentacao.responsavel) return setError('Responsável é obrigatório.');
 
+    const bem = bens.find(b => b.id === currentMovimentacao.patrimonio_id);
+    const isLocationChange = ['MUDANCA_LOCAL', 'EMPRESTIMO', 'DEVOLUCAO'].includes(currentMovimentacao.tipo_movimentacao);
+
     const payload = {
       patrimonio_id: currentMovimentacao.patrimonio_id,
       tipo_movimentacao: currentMovimentacao.tipo_movimentacao,
       responsavel: currentMovimentacao.responsavel,
-      observacao: currentMovimentacao.observacao,
+      observacao: currentMovimentacao.observacao || '',
       data_movimentacao: currentMovimentacao.data_movimentacao,
+      localizacao_atual_id: isLocationChange ? bem?.localizacao_id || null : null,
+      nova_localizacao_id: isLocationChange ? currentMovimentacao.nova_localizacao_id || null : null,
     };
 
     if (currentMovimentacao.id) {
@@ -339,8 +356,21 @@ export default function PatrimonioPage() {
       await supabase.from('patrimonio_movimentacoes').insert([payload]);
     }
 
+    if (isLocationChange && currentMovimentacao.nova_localizacao_id) {
+       await supabase.from('patrimonios').update({
+           localizacao_id: currentMovimentacao.nova_localizacao_id
+       }).eq('id', currentMovimentacao.patrimonio_id);
+    }
+
+    if (currentMovimentacao.tipo_movimentacao === 'BAIXA') {
+       await supabase.from('patrimonios').update({
+           status: 'BAIXADO'
+       }).eq('id', currentMovimentacao.patrimonio_id);
+    }
+
     setIsEditingMovimentacao(false);
     fetchMovimentacoes();
+    fetchBens();
     setSuccess('Movimentação salva!');
     setTimeout(() => setSuccess(''), 3000);
   };
@@ -637,7 +667,7 @@ export default function PatrimonioPage() {
                 </h3>
               </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <fieldset disabled={currentBem.status === 'BAIXADO'} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 
                 {/* Imagem do Bem */}
                 <div className="lg:col-span-3 border-b border-slate-100 dark:border-slate-800 pb-2">
@@ -704,10 +734,13 @@ export default function PatrimonioPage() {
 
                 <div>
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Localização</label>
-                  <select value={currentBem.localizacao_id || ''} onChange={(e) => setCurrentBem({ ...currentBem, localizacao_id: e.target.value })} className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-medium">
+                  <select disabled={currentBem.id && movimentacoes.some(m => m.patrimonio_id === currentBem.id && ['MUDANCA_LOCAL', 'EMPRESTIMO', 'DEVOLUCAO'].includes(m.tipo_movimentacao))} value={currentBem.localizacao_id || ''} onChange={(e) => setCurrentBem({ ...currentBem, localizacao_id: e.target.value })} className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-medium disabled:opacity-50 disabled:cursor-not-allowed">
                     <option value="">Selecione...</option>
                     {locais.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
                   </select>
+                  {currentBem.id && movimentacoes.some(m => m.patrimonio_id === currentBem.id && ['MUDANCA_LOCAL', 'EMPRESTIMO', 'DEVOLUCAO'].includes(m.tipo_movimentacao)) && (
+                    <p className="text-[9px] text-amber-500 mt-1 font-bold ml-1">Bloqueado devido a movimentações de local registradas.</p>
+                  )}
                 </div>
 
                 <div>
@@ -771,10 +804,12 @@ export default function PatrimonioPage() {
                   </>
                 )}
 
-              </div>
+              </fieldset>
               <div className="mt-8 flex justify-end gap-4">
                 <button type="button" onClick={() => setIsEditingBem(false)} className="px-6 py-3 text-sm font-bold text-slate-500 hover:text-slate-700 transition-colors">Cancelar</button>
-                <button type="submit" className="px-8 py-3 bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold rounded-2xl shadow-sm flex items-center gap-2"><Save className="w-4 h-4" /> Salvar Cadastro</button>
+                {currentBem.status !== 'BAIXADO' && (
+                  <button type="submit" className="px-8 py-3 bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold rounded-2xl shadow-sm flex items-center gap-2"><Save className="w-4 h-4" /> Salvar Cadastro</button>
+                )}
               </div>
             </motion.form>
           )}
@@ -970,7 +1005,7 @@ export default function PatrimonioPage() {
                           </span>
                         </td>
                         <td className="p-4 text-sm text-slate-600 dark:text-slate-300">
-                          {mov.responsavel}
+                          {membros.find(m => m.id === mov.responsavel)?.nome || mov.responsavel}
                         </td>
                         <td className="p-4 text-right">
                           <div className="flex items-center justify-end gap-2">
@@ -1036,8 +1071,24 @@ export default function PatrimonioPage() {
                 </div>
                 <div className="md:col-span-2">
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Responsável *</label>
-                  <input required type="text" value={currentMovimentacao.responsavel} onChange={(e) => setCurrentMovimentacao({ ...currentMovimentacao, responsavel: e.target.value })} placeholder="Nome da pessoa responsável pela movimentação" className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-medium" />
+                  <select required value={currentMovimentacao.responsavel} onChange={(e) => setCurrentMovimentacao({ ...currentMovimentacao, responsavel: e.target.value })} className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-medium">
+                    <option value="">Selecione um Membro</option>
+                    {membros.map((m: any) => (
+                      <option key={m.id} value={m.id}>{m.nome}</option>
+                    ))}
+                  </select>
                 </div>
+                {['MUDANCA_LOCAL', 'EMPRESTIMO', 'DEVOLUCAO'].includes(currentMovimentacao.tipo_movimentacao) && (
+                  <div className="md:col-span-2">
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Nova Localização *</label>
+                    <select required value={currentMovimentacao.nova_localizacao_id || ''} onChange={(e) => setCurrentMovimentacao({ ...currentMovimentacao, nova_localizacao_id: e.target.value })} className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-medium">
+                      <option value="">Selecione a Localização</option>
+                      {locais.map((l: any) => (
+                        <option key={l.id} value={l.id}>{l.nome}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 <div className="md:col-span-2">
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Observações</label>
                   <textarea rows={3} value={currentMovimentacao.observacao || ''} onChange={(e) => setCurrentMovimentacao({ ...currentMovimentacao, observacao: e.target.value })} placeholder="Destino, motivo do empréstimo, detalhes do defeito, etc." className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-medium" />
