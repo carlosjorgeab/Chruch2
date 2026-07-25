@@ -31,6 +31,8 @@ const MODULES_LIST = [
   { id: 'financeiro_relatorios', label: 'Gestão Financeira: Relatórios' },
   { id: 'financeiro_estatisticas', label: 'Gestão Financeira: Estatísticas' },
   { id: 'fornecedores', label: 'Cadastro de Fornecedores' },
+  { id: 'patrimonio', label: 'Patrimônio: Visão Geral' },
+  { id: 'patrimonio_categorias', label: 'Patrimônio: Categorias e Localizações' },
   { id: 'kids', label: 'Módulo Kids: Painel / Dashboard' },
   { id: 'kids_turmas', label: 'Módulo Kids: Turmas' },
   { id: 'kids_salas', label: 'Módulo Kids: Salas' },

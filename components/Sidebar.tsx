@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Users, UsersRound, BookOpen, ClipboardCheck, Wallet, Settings, LogOut, Shield, Building, Briefcase, Megaphone, Calendar, Ticket, Baby, ChevronLeft } from 'lucide-react';
+import { LayoutDashboard, Users, UsersRound, BookOpen, ClipboardCheck, Wallet, Settings, LogOut, Shield, Building, Briefcase, Megaphone, Calendar, Ticket, Baby, ChevronLeft, Package } from 'lucide-react';
 import { useIgreja } from '@/context/IgrejaContext';
 import { useAuth } from '@/context/AuthContext';
 import { Logo } from '@/components/Logo';
@@ -35,6 +35,7 @@ export function Sidebar({
     { href: '/presencas', icon: ClipboardCheck, label: t('menu_presencas'), disabled: false, id: '/presencas' },
     { href: '/financeiro', icon: Wallet, label: t('menu_financeiro'), disabled: false, id: '/financeiro' },
     { href: '/fornecedores', icon: Briefcase, label: 'Fornecedores', disabled: false, id: '/fornecedores' },
+    { href: '/patrimonio', icon: Package, label: 'Patrimônio', disabled: false, id: '/patrimonio' },
     { href: '/igrejas', icon: Building, label: t('menu_igrejas'), disabled: false, id: '/igrejas' },
     { href: '/perfis', icon: Shield, label: t('menu_perfis'), disabled: false, id: '/perfis' },
     { href: '/usuarios', icon: Users, label: t('menu_usuarios'), disabled: false, id: '/usuarios' },
