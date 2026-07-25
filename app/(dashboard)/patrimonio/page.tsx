@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { useIgreja } from '@/context/IgrejaContext';
 import { useConfirm } from '@/context/ConfirmContext';
-import { Plus, Edit2, Trash2, Save, Search, Package, Layers, MapPin, BarChart3, AlertCircle, QrCode } from 'lucide-react';
+import { Plus, Edit2, Trash2, Save, Search, Package, Layers, MapPin, BarChart3, AlertCircle, QrCode, ArrowLeft, Image as ImageIcon, Camera, History, FileText, Download, Calendar, X, ArrowRightLeft } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -43,11 +43,17 @@ export default function PatrimonioPage() {
   const { selectedIgreja } = useIgreja();
   const { confirmDelete } = useConfirm();
 
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'bens' | 'categorias' | 'locais'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'bens' | 'categorias' | 'locais' | 'movimentacoes' | 'relatorios'>('dashboard');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Form states (replacing popups)
+  const [isEditingBem, setIsEditingBem] = useState(false);
+  const [isEditingCategoria, setIsEditingCategoria] = useState(false);
+  const [isEditingLocal, setIsEditingLocal] = useState(false);
+  const [isEditingMovimentacao, setIsEditingMovimentacao] = useState(false);
 
   // Permission Checks
   const canReadPatrimonio = user?.id_master || user?.is_admin || hasPermission('/patrimonio') || hasPermission('patrimonio');
@@ -55,26 +61,36 @@ export default function PatrimonioPage() {
   const canReadCategorias = user?.id_master || user?.is_admin || hasPermission('/patrimonio_categorias') || hasPermission('patrimonio_categorias') || hasPermission('patrimonio');
   const canEditCategorias = user?.id_master || user?.is_admin || hasPermission('patrimonio_categorias:editar') || hasPermission('patrimonio_categorias:novo') || hasPermission('patrimonio_categorias');
 
-  // State
+  // State arrays
   const [categorias, setCategorias] = useState<any[]>([]);
   const [locais, setLocais] = useState<any[]>([]);
   const [bens, setBens] = useState<any[]>([]);
+  const [movimentacoes, setMovimentacoes] = useState<any[]>([]);
 
-  // Modals
-  const [showCategoriaModal, setShowCategoriaModal] = useState(false);
+  // Current items
   const [currentCategoria, setCurrentCategoria] = useState<any>({ nome: '', descricao: '' });
-  
-  const [showLocalModal, setShowLocalModal] = useState(false);
   const [currentLocal, setCurrentLocal] = useState<any>({ nome: '', descricao: '' });
-
-  const [showBemModal, setShowBemModal] = useState(false);
   const [currentBem, setCurrentBem] = useState<any>({
     nome: '', descricao: '', numero_tombamento: '', valor_aquisicao: '', data_aquisicao: '', 
-    estado_conservacao: 'BOM', status: 'ATIVO', categoria_id: '', localizacao_id: ''
+    estado_conservacao: 'BOM', status: 'ATIVO', categoria_id: '', localizacao_id: '', foto_url: ''
+  });
+  const [currentMovimentacao, setCurrentMovimentacao] = useState<any>({
+    patrimonio_id: '', tipo_movimentacao: 'MUDANCA_LOCAL', responsavel: '', observacao: '', data_movimentacao: new Date().toISOString().split('T')[0]
   });
 
   const [showQRModal, setShowQRModal] = useState(false);
   const [qrBem, setQrBem] = useState<any>(null);
+
+  // Image Upload states
+  const [isDragging, setIsDragging] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  
+  // Reports State
+  const [relatorioTipo, setRelatorioTipo] = useState<'bens' | 'movimentacoes'>('bens');
+  const [relatorioLocalizacao, setRelatorioLocalizacao] = useState('');
+  const [relatorioDataInicial, setRelatorioDataInicial] = useState('');
+  const [relatorioDataFinal, setRelatorioDataFinal] = useState('');
+  const [relatorioResult, setRelatorioResult] = useState<any[] | null>(null);
 
   useEffect(() => {
     if (selectedIgreja?.id) {
@@ -87,7 +103,8 @@ export default function PatrimonioPage() {
     await Promise.all([
       fetchCategorias(),
       fetchLocais(),
-      fetchBens()
+      fetchBens(),
+      fetchMovimentacoes()
     ]);
     setLoading(false);
   };
@@ -122,8 +139,58 @@ export default function PatrimonioPage() {
     if (data) setBens(data);
   };
 
-  const handleSaveCategoria = async () => {
+  const fetchMovimentacoes = async () => {
+    if (!selectedIgreja?.id) return;
+    const { data } = await supabase
+      .from('patrimonio_movimentacoes')
+      .select('*, bem:patrimonios(nome, numero_tombamento)')
+      .order('data_movimentacao', { ascending: false });
+      
+    if (data) setMovimentacoes(data);
+  };
+
+  // Upload Logic
+  const handleFileSelection = async (selectedFiles: File[]) => {
+    if (selectedFiles.length === 0) return;
+    const file = selectedFiles[0];
+    
+    setIsUploading(true);
+    setError('');
+    
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const response = await fetch('/api/financeiro/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Erro no servidor de upload.');
+      }
+      
+      if (result.success && result.url) {
+        setCurrentBem((prev: any) => ({ ...prev, foto_url: result.url }));
+        setSuccess('Foto carregada com sucesso!');
+        setTimeout(() => setSuccess(''), 3000);
+      }
+    } catch (err: any) {
+      console.error(err);
+      setError('Erro ao enviar imagem.');
+    } finally {
+      setIsUploading(false);
+      setIsDragging(false);
+    }
+  };
+
+  // CRUD Categorias
+  const handleSaveCategoria = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!currentCategoria.nome) return setError('Nome da categoria é obrigatório.');
+    
     const payload = {
       nome: currentCategoria.nome,
       descricao: currentCategoria.descricao,
@@ -135,7 +202,8 @@ export default function PatrimonioPage() {
     } else {
       await supabase.from('patrimonio_categorias').insert([payload]);
     }
-    setShowCategoriaModal(false);
+    
+    setIsEditingCategoria(false);
     fetchCategorias();
     setSuccess('Categoria salva com sucesso!');
     setTimeout(() => setSuccess(''), 3000);
@@ -151,8 +219,11 @@ export default function PatrimonioPage() {
     });
   };
 
-  const handleSaveLocal = async () => {
+  // CRUD Locais
+  const handleSaveLocal = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!currentLocal.nome) return setError('Nome do local é obrigatório.');
+    
     const payload = {
       nome: currentLocal.nome,
       descricao: currentLocal.descricao,
@@ -164,7 +235,8 @@ export default function PatrimonioPage() {
     } else {
       await supabase.from('patrimonio_localizacoes').insert([payload]);
     }
-    setShowLocalModal(false);
+    
+    setIsEditingLocal(false);
     fetchLocais();
     setSuccess('Local salvo com sucesso!');
     setTimeout(() => setSuccess(''), 3000);
@@ -180,7 +252,9 @@ export default function PatrimonioPage() {
     });
   };
 
-  const handleSaveBem = async () => {
+  // CRUD Bens
+  const handleSaveBem = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!currentBem.nome) return setError('Nome do bem é obrigatório.');
     if (!currentBem.categoria_id) return setError('Categoria é obrigatória.');
     
@@ -194,6 +268,7 @@ export default function PatrimonioPage() {
       status: currentBem.status,
       categoria_id: currentBem.categoria_id,
       localizacao_id: currentBem.localizacao_id || null,
+      foto_url: currentBem.foto_url || null,
       id_igreja: selectedIgreja?.id,
       atualizado_por_nome: user?.nome,
       atualizado_em: new Date().toISOString()
@@ -202,9 +277,10 @@ export default function PatrimonioPage() {
     if (currentBem.id) {
       await supabase.from('patrimonios').update(payload).eq('id', currentBem.id);
     } else {
-      await supabase.from('patrimonios').insert([{ ...payload, criado_por_nome: user?.nome }]);
+      await supabase.from('patrimonios').insert([{ ...payload, criado_por_nome: user?.nome, criado_em: new Date().toISOString() }]);
     }
-    setShowBemModal(false);
+    
+    setIsEditingBem(false);
     fetchBens();
     setSuccess('Bem salvo com sucesso!');
     setTimeout(() => setSuccess(''), 3000);
@@ -225,7 +301,6 @@ export default function PatrimonioPage() {
     const currentIndex = statuses.indexOf(bem.status);
     const nextStatus = statuses[(currentIndex + 1) % statuses.length];
     
-    // Optimistic update
     setBens(prev => prev.map(b => b.id === bem.id ? { ...b, status: nextStatus } : b));
 
     const { error } = await supabase
@@ -238,10 +313,69 @@ export default function PatrimonioPage() {
       .eq('id', bem.id);
       
     if (error) {
-      // Revert on error
       fetchBens();
       setError('Erro ao atualizar status.');
       setTimeout(() => setError(''), 3000);
+    }
+  };
+
+  // CRUD Movimentações
+  const handleSaveMovimentacao = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentMovimentacao.patrimonio_id) return setError('Obrigatório selecionar o bem.');
+    if (!currentMovimentacao.responsavel) return setError('Responsável é obrigatório.');
+
+    const payload = {
+      patrimonio_id: currentMovimentacao.patrimonio_id,
+      tipo_movimentacao: currentMovimentacao.tipo_movimentacao,
+      responsavel: currentMovimentacao.responsavel,
+      observacao: currentMovimentacao.observacao,
+      data_movimentacao: currentMovimentacao.data_movimentacao,
+    };
+
+    if (currentMovimentacao.id) {
+      await supabase.from('patrimonio_movimentacoes').update(payload).eq('id', currentMovimentacao.id);
+    } else {
+      await supabase.from('patrimonio_movimentacoes').insert([payload]);
+    }
+
+    setIsEditingMovimentacao(false);
+    fetchMovimentacoes();
+    setSuccess('Movimentação salva!');
+    setTimeout(() => setSuccess(''), 3000);
+  };
+  
+  const handleDeleteMovimentacao = async (id: string) => {
+    confirmDelete({
+      message: 'Tem certeza que deseja excluir esta movimentação do histórico?',
+      onConfirm: async () => {
+        await supabase.from('patrimonio_movimentacoes').delete().eq('id', id);
+        fetchMovimentacoes();
+      }
+    });
+  };
+
+  // Reports
+  const generateReport = () => {
+    if (relatorioTipo === 'bens') {
+      let filtered = bens;
+      if (relatorioLocalizacao) {
+        filtered = filtered.filter(b => b.localizacao_id === relatorioLocalizacao);
+      }
+      setRelatorioResult(filtered);
+    } else {
+      let filtered = movimentacoes;
+      if (relatorioLocalizacao) {
+        const bensInLoc = bens.filter(b => b.localizacao_id === relatorioLocalizacao).map(b => b.id);
+        filtered = filtered.filter(m => bensInLoc.includes(m.patrimonio_id));
+      }
+      if (relatorioDataInicial) {
+        filtered = filtered.filter(m => new Date(m.data_movimentacao) >= new Date(relatorioDataInicial));
+      }
+      if (relatorioDataFinal) {
+        filtered = filtered.filter(m => new Date(m.data_movimentacao) <= new Date(relatorioDataFinal));
+      }
+      setRelatorioResult(filtered);
     }
   };
 
@@ -283,44 +417,32 @@ export default function PatrimonioPage() {
       )}
 
       {/* Tabs */}
-      <div className="flex overflow-x-auto hide-scrollbar gap-2 p-1 bg-slate-100 dark:bg-slate-800/50 rounded-2xl w-fit">
-        <button
-          onClick={() => setActiveTab('dashboard')}
-          className={`px-4 py-2 text-sm font-bold rounded-xl transition-all whitespace-nowrap ${
-            activeTab === 'dashboard' ? 'bg-white dark:bg-slate-700 text-amber-600 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
-          }`}
-        >
-          <div className="flex items-center gap-2"><BarChart3 className="w-4 h-4" /> Visão Geral</div>
-        </button>
-        <button
-          onClick={() => setActiveTab('bens')}
-          className={`px-4 py-2 text-sm font-bold rounded-xl transition-all whitespace-nowrap ${
-            activeTab === 'bens' ? 'bg-white dark:bg-slate-700 text-amber-600 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
-          }`}
-        >
-          <div className="flex items-center gap-2"><Package className="w-4 h-4" /> Bens e Ativos</div>
-        </button>
-        {canReadCategorias && (
-          <>
-            <button
-              onClick={() => setActiveTab('categorias')}
-              className={`px-4 py-2 text-sm font-bold rounded-xl transition-all whitespace-nowrap ${
-                activeTab === 'categorias' ? 'bg-white dark:bg-slate-700 text-amber-600 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
-              }`}
-            >
-              <div className="flex items-center gap-2"><Layers className="w-4 h-4" /> Categorias</div>
-            </button>
-            <button
-              onClick={() => setActiveTab('locais')}
-              className={`px-4 py-2 text-sm font-bold rounded-xl transition-all whitespace-nowrap ${
-                activeTab === 'locais' ? 'bg-white dark:bg-slate-700 text-amber-600 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
-              }`}
-            >
-              <div className="flex items-center gap-2"><MapPin className="w-4 h-4" /> Localizações</div>
-            </button>
-          </>
-        )}
-      </div>
+      {(!isEditingBem && !isEditingCategoria && !isEditingLocal && !isEditingMovimentacao) && (
+        <div className="flex overflow-x-auto hide-scrollbar gap-2 p-1 bg-slate-100 dark:bg-slate-800/50 rounded-2xl w-fit">
+          <button onClick={() => setActiveTab('dashboard')} className={`px-4 py-2 text-sm font-bold rounded-xl transition-all whitespace-nowrap ${activeTab === 'dashboard' ? 'bg-white dark:bg-slate-700 text-amber-600 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'}`}>
+            <div className="flex items-center gap-2"><BarChart3 className="w-4 h-4" /> Visão Geral</div>
+          </button>
+          <button onClick={() => setActiveTab('bens')} className={`px-4 py-2 text-sm font-bold rounded-xl transition-all whitespace-nowrap ${activeTab === 'bens' ? 'bg-white dark:bg-slate-700 text-amber-600 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'}`}>
+            <div className="flex items-center gap-2"><Package className="w-4 h-4" /> Bens e Ativos</div>
+          </button>
+          {canReadCategorias && (
+            <>
+              <button onClick={() => setActiveTab('categorias')} className={`px-4 py-2 text-sm font-bold rounded-xl transition-all whitespace-nowrap ${activeTab === 'categorias' ? 'bg-white dark:bg-slate-700 text-amber-600 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'}`}>
+                <div className="flex items-center gap-2"><Layers className="w-4 h-4" /> Categorias</div>
+              </button>
+              <button onClick={() => setActiveTab('locais')} className={`px-4 py-2 text-sm font-bold rounded-xl transition-all whitespace-nowrap ${activeTab === 'locais' ? 'bg-white dark:bg-slate-700 text-amber-600 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'}`}>
+                <div className="flex items-center gap-2"><MapPin className="w-4 h-4" /> Localizações</div>
+              </button>
+              <button onClick={() => setActiveTab('movimentacoes')} className={`px-4 py-2 text-sm font-bold rounded-xl transition-all whitespace-nowrap ${activeTab === 'movimentacoes' ? 'bg-white dark:bg-slate-700 text-amber-600 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'}`}>
+                <div className="flex items-center gap-2"><History className="w-4 h-4" /> Movimentações</div>
+              </button>
+              <button onClick={() => setActiveTab('relatorios')} className={`px-4 py-2 text-sm font-bold rounded-xl transition-all whitespace-nowrap ${activeTab === 'relatorios' ? 'bg-white dark:bg-slate-700 text-amber-600 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'}`}>
+                <div className="flex items-center gap-2"><FileText className="w-4 h-4" /> Relatórios</div>
+              </button>
+            </>
+          )}
+        </div>
+      )}
 
       {loading ? (
         <div className="h-64 flex items-center justify-center">
@@ -330,7 +452,7 @@ export default function PatrimonioPage() {
         <div className="space-y-6">
           
           {/* TAB: DASHBOARD */}
-          {activeTab === 'dashboard' && (
+          {activeTab === 'dashboard' && !isEditingBem && !isEditingCategoria && !isEditingLocal && !isEditingMovimentacao && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 flex flex-col gap-2">
                 <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total de Bens</span>
@@ -354,7 +476,7 @@ export default function PatrimonioPage() {
           )}
 
           {/* TAB: BENS */}
-          {activeTab === 'bens' && (
+          {activeTab === 'bens' && !isEditingBem && (
             <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 overflow-hidden shadow-sm">
               <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div className="relative flex-1 max-w-md">
@@ -372,9 +494,9 @@ export default function PatrimonioPage() {
                     onClick={() => {
                       setCurrentBem({
                         nome: '', descricao: '', numero_tombamento: '', valor_aquisicao: '', data_aquisicao: '', 
-                        estado_conservacao: 'BOM', status: 'ATIVO', categoria_id: '', localizacao_id: ''
+                        estado_conservacao: 'BOM', status: 'ATIVO', categoria_id: '', localizacao_id: '', foto_url: ''
                       });
-                      setShowBemModal(true);
+                      setIsEditingBem(true);
                     }}
                     className="px-6 py-3 bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold rounded-2xl transition-all shadow-sm flex items-center gap-2"
                   >
@@ -401,8 +523,12 @@ export default function PatrimonioPage() {
                       <tr key={bem.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
                         <td className="p-4">
                           <div className="flex items-start gap-3">
-                            <div className="bg-white p-1 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm shrink-0">
-                              <QRCodeSVG value={`patrimonio:${bem.id}`} size={32} />
+                            <div className="bg-white p-1 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm shrink-0 cursor-pointer hover:shadow-md transition-all" onClick={() => { setQrBem(bem); setShowQRModal(true); }}>
+                              {bem.foto_url ? (
+                                <img src={bem.foto_url} alt={bem.nome} className="w-8 h-8 object-cover rounded" />
+                              ) : (
+                                <QRCodeSVG value={`patrimonio:${bem.id}`} size={32} />
+                              )}
                             </div>
                             <div>
                               <p className="font-bold text-slate-900 dark:text-white text-sm">{bem.nome}</p>
@@ -464,7 +590,7 @@ export default function PatrimonioPage() {
                                 <button
                                   onClick={() => {
                                     setCurrentBem(bem);
-                                    setShowBemModal(true);
+                                    setIsEditingBem(true);
                                   }}
                                   className="p-2 text-slate-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-xl transition-all"
                                 >
@@ -495,16 +621,174 @@ export default function PatrimonioPage() {
             </div>
           )}
 
+          {/* FORM: BEM */}
+          {isEditingBem && (
+            <motion.form 
+              initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} 
+              onSubmit={handleSaveBem} 
+              className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm p-6 sm:p-8"
+            >
+              <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-4 mb-6">
+                <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight flex items-center gap-3">
+                  <button type="button" onClick={() => setIsEditingBem(false)} className="p-2 -ml-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800">
+                    <ArrowLeft className="w-5 h-5" />
+                  </button>
+                  {currentBem.id ? 'Editar Cadastro de Bem' : 'Novo Cadastro de Bem'}
+                </h3>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                
+                {/* Imagem do Bem */}
+                <div className="lg:col-span-3 border-b border-slate-100 dark:border-slate-800 pb-2">
+                  <h4 className="text-xs font-black uppercase tracking-widest text-[#E4A232]">Foto do Bem</h4>
+                </div>
+                <div className="lg:col-span-3 flex gap-6 items-start">
+                  <div className="w-32 h-32 shrink-0 bg-slate-100 dark:bg-slate-800 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-700 overflow-hidden relative group">
+                    {currentBem.foto_url ? (
+                      <img src={currentBem.foto_url} alt="Prévia" className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex flex-col items-center justify-center text-slate-400">
+                        <ImageIcon className="w-8 h-8 mb-2 opacity-50" />
+                        <span className="text-[10px] uppercase font-bold tracking-wider">Sem foto</span>
+                      </div>
+                    )}
+                    <button type="button" onClick={() => document.getElementById('bem-photo-upload')?.click()} className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                      <Camera className="w-6 h-6" />
+                    </button>
+                  </div>
+                  <div className="flex-1 space-y-4">
+                    <div
+                      onDragOver={(e) => { e.preventDefault(); if (!isUploading) setIsDragging(true); }}
+                      onDragLeave={() => setIsDragging(false)}
+                      onDrop={(e) => { e.preventDefault(); setIsDragging(false); if (!isUploading && e.dataTransfer.files.length) handleFileSelection(Array.from(e.dataTransfer.files)); }}
+                      onClick={() => !isUploading && document.getElementById('bem-photo-upload')?.click()}
+                      className={`p-4 rounded-xl border-2 border-dashed transition-all duration-200 text-center flex flex-col items-center justify-center gap-2 ${isDragging ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/20 cursor-pointer' : isUploading ? 'opacity-50 cursor-wait' : 'border-slate-200 dark:border-slate-700 hover:border-amber-500 cursor-pointer'}`}
+                    >
+                      <input id="bem-photo-upload" type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files && handleFileSelection(Array.from(e.target.files))} />
+                      <div className="w-10 h-10 bg-amber-100 dark:bg-amber-900/30 text-amber-600 rounded-full flex items-center justify-center mb-1">
+                        <Camera size={20} />
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-slate-700 dark:text-slate-300">Clique para buscar ou arraste uma foto</p>
+                        <p className="text-xs text-slate-500 mt-1">PNG, JPG até 5MB</p>
+                      </div>
+                    </div>
+                    {currentBem.foto_url && (
+                      <button type="button" onClick={() => setCurrentBem({ ...currentBem, foto_url: '' })} className="text-xs text-rose-500 font-bold hover:underline">Remover Imagem</button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="lg:col-span-3 border-b border-slate-100 dark:border-slate-800 pb-2 mt-2">
+                  <h4 className="text-xs font-black uppercase tracking-widest text-[#E4A232]">I. Identificação do Bem</h4>
+                </div>
+                
+                <div className="md:col-span-2">
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Nome do Bem *</label>
+                  <input type="text" required value={currentBem.nome} onChange={(e) => setCurrentBem({ ...currentBem, nome: e.target.value })} className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-medium" />
+                </div>
+                
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Nº Tombamento / Plaqueta</label>
+                  <input type="text" value={currentBem.numero_tombamento || ''} onChange={(e) => setCurrentBem({ ...currentBem, numero_tombamento: e.target.value })} className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-medium" />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Categoria *</label>
+                  <select required value={currentBem.categoria_id || ''} onChange={(e) => setCurrentBem({ ...currentBem, categoria_id: e.target.value })} className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-medium">
+                    <option value="">Selecione...</option>
+                    {categorias.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Localização</label>
+                  <select value={currentBem.localizacao_id || ''} onChange={(e) => setCurrentBem({ ...currentBem, localizacao_id: e.target.value })} className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-medium">
+                    <option value="">Selecione...</option>
+                    {locais.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Status Atual</label>
+                  <select value={currentBem.status} onChange={(e) => setCurrentBem({ ...currentBem, status: e.target.value })} className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-medium">
+                    <option value="ATIVO">Ativo</option>
+                    <option value="EM_MANUTENCAO">Em Manutenção</option>
+                    <option value="EMPRESTADO">Emprestado</option>
+                    <option value="BAIXADO">Baixado</option>
+                  </select>
+                </div>
+
+                <div className="lg:col-span-3 border-b border-slate-100 dark:border-slate-800 pb-2 mt-2">
+                  <h4 className="text-xs font-black uppercase tracking-widest text-[#E4A232]">II. Valores e Aquisição</h4>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Data da Aquisição</label>
+                  <input type="date" value={currentBem.data_aquisicao ? currentBem.data_aquisicao.split('T')[0] : ''} onChange={(e) => setCurrentBem({ ...currentBem, data_aquisicao: e.target.value })} className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-medium" />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Valor Aquisição (R$)</label>
+                  <input type="number" step="0.01" value={currentBem.valor_aquisicao || ''} onChange={(e) => setCurrentBem({ ...currentBem, valor_aquisicao: e.target.value })} className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-medium" />
+                </div>
+                
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Estado de Conservação</label>
+                  <select value={currentBem.estado_conservacao} onChange={(e) => setCurrentBem({ ...currentBem, estado_conservacao: e.target.value })} className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-medium">
+                    <option value="NOVO">Novo</option>
+                    <option value="BOM">Bom</option>
+                    <option value="REGULAR">Regular</option>
+                    <option value="RUIM">Ruim</option>
+                    <option value="SUCATA">Sucata</option>
+                  </select>
+                </div>
+
+                <div className="lg:col-span-3">
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Descrição / Observações</label>
+                  <textarea rows={3} value={currentBem.descricao || ''} onChange={(e) => setCurrentBem({ ...currentBem, descricao: e.target.value })} className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-medium" />
+                </div>
+                
+                {/* Auditoria / Log do Patrimônio */}
+                {currentBem.id && (
+                  <>
+                    <div className="lg:col-span-3 border-b border-slate-100 dark:border-slate-800 pb-2 mt-2">
+                      <h4 className="text-xs font-black uppercase tracking-widest text-[#E4A232]">III. Histórico de Cadastro</h4>
+                    </div>
+                    <div className="lg:col-span-3 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl grid grid-cols-1 md:grid-cols-2 gap-4 border border-slate-100 dark:border-slate-700">
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Criado por</p>
+                        <p className="text-sm font-medium text-slate-800 dark:text-slate-200">{currentBem.criado_por_nome || 'Sistema'} em {new Date(currentBem.criado_em || currentBem.created_at).toLocaleString('pt-BR')}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Última Atualização por</p>
+                        <p className="text-sm font-medium text-slate-800 dark:text-slate-200">
+                          {currentBem.atualizado_por_nome || 'N/A'} {currentBem.atualizado_em ? `em ${new Date(currentBem.atualizado_em).toLocaleString('pt-BR')}` : ''}
+                        </p>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+              </div>
+              <div className="mt-8 flex justify-end gap-4">
+                <button type="button" onClick={() => setIsEditingBem(false)} className="px-6 py-3 text-sm font-bold text-slate-500 hover:text-slate-700 transition-colors">Cancelar</button>
+                <button type="submit" className="px-8 py-3 bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold rounded-2xl shadow-sm flex items-center gap-2"><Save className="w-4 h-4" /> Salvar Cadastro</button>
+              </div>
+            </motion.form>
+          )}
+
           {/* TAB: CATEGORIAS */}
-          {activeTab === 'categorias' && (
+          {activeTab === 'categorias' && !isEditingCategoria && (
             <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 overflow-hidden shadow-sm">
               <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
-                <h3 className="font-bold text-slate-900 dark:text-white">Categorias de Patrimônio</h3>
+                <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2"><Layers className="w-5 h-5 text-amber-500"/> Categorias de Patrimônio</h3>
                 {canEditCategorias && (
                   <button
                     onClick={() => {
                       setCurrentCategoria({ nome: '', descricao: '' });
-                      setShowCategoriaModal(true);
+                      setIsEditingCategoria(true);
                     }}
                     className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-sm font-bold rounded-xl transition-all shadow-sm flex items-center gap-2"
                   >
@@ -515,35 +799,67 @@ export default function PatrimonioPage() {
               <div className="p-6">
                 <div className="grid gap-3">
                   {categorias.map(cat => (
-                    <div key={cat.id} className="p-4 border border-slate-100 dark:border-slate-800 rounded-2xl flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/30">
+                    <div key={cat.id} className="p-4 border border-slate-100 dark:border-slate-800 rounded-2xl flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/30 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
                       <div>
                         <p className="font-bold text-slate-900 dark:text-white">{cat.nome}</p>
                         {cat.descricao && <p className="text-xs text-slate-500">{cat.descricao}</p>}
                       </div>
                       {canEditCategorias && (
                         <div className="flex gap-2">
-                          <button onClick={() => { setCurrentCategoria(cat); setShowCategoriaModal(true); }} className="p-2 text-slate-400 hover:text-amber-500"><Edit2 className="w-4 h-4" /></button>
-                          <button onClick={() => handleDeleteCategoria(cat.id)} className="p-2 text-slate-400 hover:text-rose-500"><Trash2 className="w-4 h-4" /></button>
+                          <button onClick={() => { setCurrentCategoria(cat); setIsEditingCategoria(true); }} className="p-2 text-slate-400 hover:text-amber-500 hover:bg-amber-50 rounded-xl transition-all"><Edit2 className="w-4 h-4" /></button>
+                          <button onClick={() => handleDeleteCategoria(cat.id)} className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all"><Trash2 className="w-4 h-4" /></button>
                         </div>
                       )}
                     </div>
                   ))}
-                  {categorias.length === 0 && <p className="text-center text-slate-500 text-sm py-4">Nenhuma categoria cadastrada.</p>}
+                  {categorias.length === 0 && <p className="text-center text-slate-500 text-sm py-8">Nenhuma categoria cadastrada.</p>}
                 </div>
               </div>
             </div>
           )}
 
+          {/* FORM: CATEGORIA */}
+          {isEditingCategoria && (
+            <motion.form 
+              initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} 
+              onSubmit={handleSaveCategoria} 
+              className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm p-6 sm:p-8 max-w-2xl"
+            >
+              <div className="flex items-center gap-3 mb-6 border-b border-slate-100 dark:border-slate-800 pb-4">
+                <button type="button" onClick={() => setIsEditingCategoria(false)} className="p-2 -ml-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800">
+                  <ArrowLeft className="w-5 h-5" />
+                </button>
+                <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">
+                  {currentCategoria.id ? 'Editar Categoria' : 'Nova Categoria'}
+                </h3>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Nome da Categoria *</label>
+                  <input required type="text" value={currentCategoria.nome} onChange={(e) => setCurrentCategoria({ ...currentCategoria, nome: e.target.value })} className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-medium" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Descrição</label>
+                  <textarea rows={3} value={currentCategoria.descricao || ''} onChange={(e) => setCurrentCategoria({ ...currentCategoria, descricao: e.target.value })} className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-medium" />
+                </div>
+              </div>
+              <div className="mt-8 flex justify-end gap-4">
+                <button type="button" onClick={() => setIsEditingCategoria(false)} className="px-6 py-3 text-sm font-bold text-slate-500 hover:text-slate-700 transition-colors">Cancelar</button>
+                <button type="submit" className="px-8 py-3 bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold rounded-2xl shadow-sm flex items-center gap-2"><Save className="w-4 h-4" /> Salvar</button>
+              </div>
+            </motion.form>
+          )}
+
           {/* TAB: LOCAIS */}
-          {activeTab === 'locais' && (
+          {activeTab === 'locais' && !isEditingLocal && (
             <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 overflow-hidden shadow-sm">
               <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
-                <h3 className="font-bold text-slate-900 dark:text-white">Localizações Físicas</h3>
+                <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2"><MapPin className="w-5 h-5 text-amber-500"/> Localizações Físicas</h3>
                 {canEditCategorias && (
                   <button
                     onClick={() => {
                       setCurrentLocal({ nome: '', descricao: '' });
-                      setShowLocalModal(true);
+                      setIsEditingLocal(true);
                     }}
                     className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-sm font-bold rounded-xl transition-all shadow-sm flex items-center gap-2"
                   >
@@ -554,149 +870,293 @@ export default function PatrimonioPage() {
               <div className="p-6">
                 <div className="grid gap-3">
                   {locais.map(loc => (
-                    <div key={loc.id} className="p-4 border border-slate-100 dark:border-slate-800 rounded-2xl flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/30">
+                    <div key={loc.id} className="p-4 border border-slate-100 dark:border-slate-800 rounded-2xl flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/30 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
                       <div>
                         <p className="font-bold text-slate-900 dark:text-white">{loc.nome}</p>
                         {loc.descricao && <p className="text-xs text-slate-500">{loc.descricao}</p>}
                       </div>
                       {canEditCategorias && (
                         <div className="flex gap-2">
-                          <button onClick={() => { setCurrentLocal(loc); setShowLocalModal(true); }} className="p-2 text-slate-400 hover:text-amber-500"><Edit2 className="w-4 h-4" /></button>
-                          <button onClick={() => handleDeleteLocal(loc.id)} className="p-2 text-slate-400 hover:text-rose-500"><Trash2 className="w-4 h-4" /></button>
+                          <button onClick={() => { setCurrentLocal(loc); setIsEditingLocal(true); }} className="p-2 text-slate-400 hover:text-amber-500 hover:bg-amber-50 rounded-xl transition-all"><Edit2 className="w-4 h-4" /></button>
+                          <button onClick={() => handleDeleteLocal(loc.id)} className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all"><Trash2 className="w-4 h-4" /></button>
                         </div>
                       )}
                     </div>
                   ))}
-                  {locais.length === 0 && <p className="text-center text-slate-500 text-sm py-4">Nenhum local cadastrado.</p>}
+                  {locais.length === 0 && <p className="text-center text-slate-500 text-sm py-8">Nenhum local cadastrado.</p>}
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* FORM: LOCAL */}
+          {isEditingLocal && (
+            <motion.form 
+              initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} 
+              onSubmit={handleSaveLocal} 
+              className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm p-6 sm:p-8 max-w-2xl"
+            >
+              <div className="flex items-center gap-3 mb-6 border-b border-slate-100 dark:border-slate-800 pb-4">
+                <button type="button" onClick={() => setIsEditingLocal(false)} className="p-2 -ml-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800">
+                  <ArrowLeft className="w-5 h-5" />
+                </button>
+                <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">
+                  {currentLocal.id ? 'Editar Local' : 'Novo Local'}
+                </h3>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Nome do Local *</label>
+                  <input required type="text" value={currentLocal.nome} onChange={(e) => setCurrentLocal({ ...currentLocal, nome: e.target.value })} className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-medium" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Descrição</label>
+                  <textarea rows={3} value={currentLocal.descricao || ''} onChange={(e) => setCurrentLocal({ ...currentLocal, descricao: e.target.value })} className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-medium" />
+                </div>
+              </div>
+              <div className="mt-8 flex justify-end gap-4">
+                <button type="button" onClick={() => setIsEditingLocal(false)} className="px-6 py-3 text-sm font-bold text-slate-500 hover:text-slate-700 transition-colors">Cancelar</button>
+                <button type="submit" className="px-8 py-3 bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold rounded-2xl shadow-sm flex items-center gap-2"><Save className="w-4 h-4" /> Salvar</button>
+              </div>
+            </motion.form>
+          )}
+
+          {/* TAB: MOVIMENTAÇÕES */}
+          {activeTab === 'movimentacoes' && !isEditingMovimentacao && (
+            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 overflow-hidden shadow-sm">
+              <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
+                <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2"><ArrowRightLeft className="w-5 h-5 text-amber-500"/> Histórico de Movimentações</h3>
+                {canEditPatrimonio && (
+                  <button
+                    onClick={() => {
+                      setCurrentMovimentacao({ patrimonio_id: '', tipo_movimentacao: 'MUDANCA_LOCAL', responsavel: user?.nome || '', observacao: '', data_movimentacao: new Date().toISOString().split('T')[0] });
+                      setIsEditingMovimentacao(true);
+                    }}
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-sm font-bold rounded-xl transition-all shadow-sm flex items-center gap-2"
+                  >
+                    <Plus className="w-4 h-4" /> Registrar Movimentação
+                  </button>
+                )}
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50/50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
+                      <th className="p-4 text-xs font-black text-slate-500 uppercase tracking-wider">Data</th>
+                      <th className="p-4 text-xs font-black text-slate-500 uppercase tracking-wider">Bem</th>
+                      <th className="p-4 text-xs font-black text-slate-500 uppercase tracking-wider">Tipo</th>
+                      <th className="p-4 text-xs font-black text-slate-500 uppercase tracking-wider">Responsável</th>
+                      <th className="p-4 text-xs font-black text-slate-500 uppercase tracking-wider text-right">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {movimentacoes.map(mov => (
+                      <tr key={mov.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
+                        <td className="p-4 text-sm font-medium text-slate-900 dark:text-white">
+                          {new Date(mov.data_movimentacao).toLocaleDateString('pt-BR')}
+                        </td>
+                        <td className="p-4 font-bold text-slate-900 dark:text-white text-sm">
+                          {mov.bem?.nome || '-'}
+                        </td>
+                        <td className="p-4">
+                          <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                            mov.tipo_movimentacao === 'AQUISICAO' ? 'bg-emerald-100 text-emerald-700' :
+                            mov.tipo_movimentacao === 'MUDANCA_LOCAL' ? 'bg-blue-100 text-blue-700' :
+                            mov.tipo_movimentacao === 'MANUTENCAO' ? 'bg-amber-100 text-amber-700' :
+                            mov.tipo_movimentacao === 'EMPRESTIMO' ? 'bg-purple-100 text-purple-700' :
+                            'bg-slate-100 text-slate-700'
+                          }`}>
+                            {mov.tipo_movimentacao}
+                          </span>
+                        </td>
+                        <td className="p-4 text-sm text-slate-600 dark:text-slate-300">
+                          {mov.responsavel}
+                        </td>
+                        <td className="p-4 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            {canEditPatrimonio && (
+                              <button
+                                onClick={() => handleDeleteMovimentacao(mov.id)}
+                                className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-xl transition-all"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {movimentacoes.length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="p-8 text-center text-slate-500 text-sm">Nenhuma movimentação registrada.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* FORM: MOVIMENTAÇÃO */}
+          {isEditingMovimentacao && (
+            <motion.form 
+              initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} 
+              onSubmit={handleSaveMovimentacao} 
+              className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm p-6 sm:p-8 max-w-3xl"
+            >
+              <div className="flex items-center gap-3 mb-6 border-b border-slate-100 dark:border-slate-800 pb-4">
+                <button type="button" onClick={() => setIsEditingMovimentacao(false)} className="p-2 -ml-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800">
+                  <ArrowLeft className="w-5 h-5" />
+                </button>
+                <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">
+                  Registrar Movimentação
+                </h3>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="md:col-span-2">
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Bem Patrimonial *</label>
+                  <select required value={currentMovimentacao.patrimonio_id} onChange={(e) => setCurrentMovimentacao({ ...currentMovimentacao, patrimonio_id: e.target.value })} className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-medium">
+                    <option value="">Selecione um bem...</option>
+                    {bens.map(b => <option key={b.id} value={b.id}>{b.nome} {b.numero_tombamento ? `(${b.numero_tombamento})` : ''}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Tipo de Movimentação *</label>
+                  <select required value={currentMovimentacao.tipo_movimentacao} onChange={(e) => setCurrentMovimentacao({ ...currentMovimentacao, tipo_movimentacao: e.target.value })} className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-medium">
+                    <option value="MUDANCA_LOCAL">Mudança de Local</option>
+                    <option value="EMPRESTIMO">Empréstimo</option>
+                    <option value="DEVOLUCAO">Devolução</option>
+                    <option value="MANUTENCAO">Envio p/ Manutenção</option>
+                    <option value="BAIXA">Baixa</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Data *</label>
+                  <input required type="date" value={currentMovimentacao.data_movimentacao} onChange={(e) => setCurrentMovimentacao({ ...currentMovimentacao, data_movimentacao: e.target.value })} className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-medium" />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Responsável *</label>
+                  <input required type="text" value={currentMovimentacao.responsavel} onChange={(e) => setCurrentMovimentacao({ ...currentMovimentacao, responsavel: e.target.value })} placeholder="Nome da pessoa responsável pela movimentação" className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-medium" />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Observações</label>
+                  <textarea rows={3} value={currentMovimentacao.observacao || ''} onChange={(e) => setCurrentMovimentacao({ ...currentMovimentacao, observacao: e.target.value })} placeholder="Destino, motivo do empréstimo, detalhes do defeito, etc." className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-medium" />
+                </div>
+              </div>
+              <div className="mt-8 flex justify-end gap-4">
+                <button type="button" onClick={() => setIsEditingMovimentacao(false)} className="px-6 py-3 text-sm font-bold text-slate-500 hover:text-slate-700 transition-colors">Cancelar</button>
+                <button type="submit" className="px-8 py-3 bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold rounded-2xl shadow-sm flex items-center gap-2"><Save className="w-4 h-4" /> Registrar</button>
+              </div>
+            </motion.form>
+          )}
+
+          {/* TAB: RELATÓRIOS */}
+          {activeTab === 'relatorios' && (
+            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 overflow-hidden shadow-sm">
+              <div className="p-6 border-b border-slate-100 dark:border-slate-800">
+                <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2 mb-6"><FileText className="w-5 h-5 text-amber-500"/> Relatórios de Patrimônio</h3>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Tipo de Relatório</label>
+                    <select value={relatorioTipo} onChange={(e) => { setRelatorioTipo(e.target.value as any); setRelatorioResult(null); }} className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-medium">
+                      <option value="bens">Bens Patrimoniais</option>
+                      <option value="movimentacoes">Bens Movimentados</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Filtro: Localização</label>
+                    <select value={relatorioLocalizacao} onChange={(e) => setRelatorioLocalizacao(e.target.value)} className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-medium">
+                      <option value="">Todas</option>
+                      {locais.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                    </select>
+                  </div>
+                  
+                  {relatorioTipo === 'movimentacoes' && (
+                    <>
+                      <div>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Data Inicial</label>
+                        <input type="date" value={relatorioDataInicial} onChange={(e) => setRelatorioDataInicial(e.target.value)} className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-medium" />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Data Final</label>
+                        <input type="date" value={relatorioDataFinal} onChange={(e) => setRelatorioDataFinal(e.target.value)} className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-medium" />
+                      </div>
+                    </>
+                  )}
+                  
+                  <div className={relatorioTipo === 'bens' ? 'md:col-span-2' : ''}>
+                    <button onClick={generateReport} className="w-full px-6 py-3 bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold rounded-xl shadow-sm transition-all flex justify-center items-center gap-2">
+                      <Search className="w-4 h-4" /> Gerar Relatório
+                    </button>
+                  </div>
+                </div>
+              </div>
+              
+              {relatorioResult && (
+                <div className="p-6">
+                  <div className="flex justify-between items-center mb-4">
+                    <h4 className="font-bold text-slate-800 dark:text-slate-200">Resultado ({relatorioResult.length} registros)</h4>
+                    <button onClick={() => window.print()} className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold rounded-lg flex items-center gap-2 print:hidden"><Download className="w-3 h-3"/> Imprimir / PDF</button>
+                  </div>
+                  
+                  <div className="overflow-x-auto print:overflow-visible">
+                    <table className="w-full text-left border-collapse print:text-xs">
+                      <thead>
+                        <tr className="bg-slate-50 dark:bg-slate-800 border-b border-slate-100 dark:border-slate-700">
+                          {relatorioTipo === 'bens' ? (
+                            <>
+                              <th className="p-3 text-xs font-black text-slate-500 uppercase tracking-wider">Nome do Bem</th>
+                              <th className="p-3 text-xs font-black text-slate-500 uppercase tracking-wider">Tombamento</th>
+                              <th className="p-3 text-xs font-black text-slate-500 uppercase tracking-wider">Local / Categoria</th>
+                              <th className="p-3 text-xs font-black text-slate-500 uppercase tracking-wider">Status</th>
+                            </>
+                          ) : (
+                            <>
+                              <th className="p-3 text-xs font-black text-slate-500 uppercase tracking-wider">Data</th>
+                              <th className="p-3 text-xs font-black text-slate-500 uppercase tracking-wider">Bem</th>
+                              <th className="p-3 text-xs font-black text-slate-500 uppercase tracking-wider">Tipo</th>
+                              <th className="p-3 text-xs font-black text-slate-500 uppercase tracking-wider">Responsável</th>
+                            </>
+                          )}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                        {relatorioResult.map((item, idx) => (
+                          <tr key={item.id || idx}>
+                            {relatorioTipo === 'bens' ? (
+                              <>
+                                <td className="p-3 font-bold text-slate-900 dark:text-white text-sm">{item.nome}</td>
+                                <td className="p-3 text-sm text-slate-500 font-mono">{item.numero_tombamento || '-'}</td>
+                                <td className="p-3 text-sm text-slate-600 dark:text-slate-300">{item.local?.nome || '-'} / {item.categoria?.nome || '-'}</td>
+                                <td className="p-3 text-xs font-bold">{item.status}</td>
+                              </>
+                            ) : (
+                              <>
+                                <td className="p-3 text-sm">{new Date(item.data_movimentacao).toLocaleDateString('pt-BR')}</td>
+                                <td className="p-3 font-bold text-slate-900 dark:text-white text-sm">{item.bem?.nome || '-'}</td>
+                                <td className="p-3 text-sm">{item.tipo_movimentacao}</td>
+                                <td className="p-3 text-sm text-slate-600 dark:text-slate-300">{item.responsavel}</td>
+                              </>
+                            )}
+                          </tr>
+                        ))}
+                        {relatorioResult.length === 0 && (
+                          <tr><td colSpan={4} className="p-6 text-center text-slate-500">Nenhum resultado encontrado para os filtros.</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
         </div>
       )}
 
-      {/* MODAL: BEM */}
-      {showBemModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-200 dark:border-slate-800">
-            <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center sticky top-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md z-10">
-              <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">
-                {currentBem.id ? 'Editar Bem' : 'Novo Bem'}
-              </h3>
-              <button onClick={() => setShowBemModal(false)} className="text-slate-400 hover:text-slate-600">
-                ✕
-              </button>
-            </div>
-            <div className="p-6 space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="md:col-span-2">
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Nome do Bem *</label>
-                  <input type="text" value={currentBem.nome} onChange={(e) => setCurrentBem({ ...currentBem, nome: e.target.value })} className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none" />
-                </div>
-                
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Nº Tombamento / Plaqueta</label>
-                  <input type="text" value={currentBem.numero_tombamento || ''} onChange={(e) => setCurrentBem({ ...currentBem, numero_tombamento: e.target.value })} className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none" />
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Categoria *</label>
-                  <select value={currentBem.categoria_id || ''} onChange={(e) => setCurrentBem({ ...currentBem, categoria_id: e.target.value })} className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none">
-                    <option value="">Selecione...</option>
-                    {categorias.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Localização</label>
-                  <select value={currentBem.localizacao_id || ''} onChange={(e) => setCurrentBem({ ...currentBem, localizacao_id: e.target.value })} className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none">
-                    <option value="">Selecione...</option>
-                    {locais.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Status</label>
-                  <select value={currentBem.status} onChange={(e) => setCurrentBem({ ...currentBem, status: e.target.value })} className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none">
-                    <option value="ATIVO">Ativo</option>
-                    <option value="EM_MANUTENCAO">Em Manutenção</option>
-                    <option value="EMPRESTADO">Emprestado</option>
-                    <option value="BAIXADO">Baixado</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Valor Aquisição (R$)</label>
-                  <input type="number" step="0.01" value={currentBem.valor_aquisicao || ''} onChange={(e) => setCurrentBem({ ...currentBem, valor_aquisicao: e.target.value })} className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none" />
-                </div>
-                
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Estado de Conservação</label>
-                  <select value={currentBem.estado_conservacao} onChange={(e) => setCurrentBem({ ...currentBem, estado_conservacao: e.target.value })} className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none">
-                    <option value="NOVO">Novo</option>
-                    <option value="BOM">Bom</option>
-                    <option value="REGULAR">Regular</option>
-                    <option value="RUIM">Ruim</option>
-                    <option value="SUCATA">Sucata</option>
-                  </select>
-                </div>
-
-                <div className="md:col-span-2">
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Descrição</label>
-                  <textarea rows={3} value={currentBem.descricao || ''} onChange={(e) => setCurrentBem({ ...currentBem, descricao: e.target.value })} className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none" />
-                </div>
-              </div>
-            </div>
-            <div className="p-6 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-3 sticky bottom-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md">
-              <button onClick={() => setShowBemModal(false)} className="px-6 py-3 text-sm font-bold text-slate-500 hover:text-slate-700 transition-colors">Cancelar</button>
-              <button onClick={handleSaveBem} className="px-8 py-3 bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold rounded-2xl shadow-sm flex items-center gap-2"><Save className="w-4 h-4" /> Salvar Bem</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: CATEGORIA & LOCAL (Shared Layout) */}
-      {(showCategoriaModal || showLocalModal) && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-md shadow-2xl border border-slate-200 dark:border-slate-800">
-            <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
-              <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">
-                {showCategoriaModal ? (currentCategoria.id ? 'Editar Categoria' : 'Nova Categoria') : (currentLocal.id ? 'Editar Local' : 'Novo Local')}
-              </h3>
-              <button onClick={() => { setShowCategoriaModal(false); setShowLocalModal(false); }} className="text-slate-400 hover:text-slate-600">✕</button>
-            </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Nome *</label>
-                <input 
-                  type="text" 
-                  value={showCategoriaModal ? currentCategoria.nome : currentLocal.nome} 
-                  onChange={(e) => showCategoriaModal ? setCurrentCategoria({ ...currentCategoria, nome: e.target.value }) : setCurrentLocal({ ...currentLocal, nome: e.target.value })} 
-                  className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none" 
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Descrição</label>
-                <textarea 
-                  rows={2} 
-                  value={showCategoriaModal ? (currentCategoria.descricao || '') : (currentLocal.descricao || '')} 
-                  onChange={(e) => showCategoriaModal ? setCurrentCategoria({ ...currentCategoria, descricao: e.target.value }) : setCurrentLocal({ ...currentLocal, descricao: e.target.value })} 
-                  className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none" 
-                />
-              </div>
-            </div>
-            <div className="p-6 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-3">
-              <button onClick={() => { setShowCategoriaModal(false); setShowLocalModal(false); }} className="px-4 py-2 text-sm font-bold text-slate-500">Cancelar</button>
-              <button onClick={showCategoriaModal ? handleSaveCategoria : handleSaveLocal} className="px-6 py-2 bg-amber-500 text-white text-sm font-bold rounded-xl"><Save className="w-4 h-4 inline mr-2" /> Salvar</button>
-            </div>
-          </div>
-        </div>
-      )}
-      
       {/* MODAL: QR CODE */}
       {showQRModal && qrBem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm" onClick={() => setShowQRModal(false)}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm" onClick={() => setShowQRModal(false)}>
           <div className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-sm p-8 text-center space-y-6 shadow-2xl border border-slate-200 dark:border-slate-800" onClick={e => e.stopPropagation()}>
             <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">{qrBem.nome}</h3>
             <div className="bg-white p-4 rounded-2xl inline-block shadow-sm">
