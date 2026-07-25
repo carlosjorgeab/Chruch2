@@ -7,6 +7,36 @@ import { useIgreja } from '@/context/IgrejaContext';
 import { useConfirm } from '@/context/ConfirmContext';
 import { Plus, Edit2, Trash2, Save, Search, Package, Layers, MapPin, BarChart3, AlertCircle, QrCode } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
+import { motion, AnimatePresence } from 'motion/react';
+
+const calculateDepreciation = (valor: number | null | undefined, data_aquisicao: string | null | undefined, estado: string) => {
+  if (!valor) return 0;
+  
+  let currentValue = valor;
+  
+  if (data_aquisicao) {
+    const aquisicao = new Date(data_aquisicao);
+    const now = new Date();
+    const ageInYears = (now.getTime() - aquisicao.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+    if (ageInYears > 0) {
+      const depreciationRate = 0.10; // 10% per year
+      const factor = Math.max(0, 1 - (ageInYears * depreciationRate));
+      currentValue = currentValue * factor;
+    }
+  }
+  
+  const stateMultiplier: Record<string, number> = {
+    'NOVO': 1.0,
+    'BOM': 0.8,
+    'REGULAR': 0.5,
+    'RUIM': 0.2,
+    'SUCATA': 0.05
+  };
+  
+  currentValue = currentValue * (stateMultiplier[estado] || 1.0);
+  
+  return currentValue;
+};
 
 export default function PatrimonioPage() {
   const { user, hasPermission } = useAuth();
@@ -190,6 +220,31 @@ export default function PatrimonioPage() {
     });
   };
 
+  const handleQuickStatusChange = async (bem: any) => {
+    const statuses = ['ATIVO', 'EM_MANUTENCAO', 'BAIXADO'];
+    const currentIndex = statuses.indexOf(bem.status);
+    const nextStatus = statuses[(currentIndex + 1) % statuses.length];
+    
+    // Optimistic update
+    setBens(prev => prev.map(b => b.id === bem.id ? { ...b, status: nextStatus } : b));
+
+    const { error } = await supabase
+      .from('patrimonios')
+      .update({ 
+        status: nextStatus,
+        atualizado_por_nome: user?.nome,
+        atualizado_em: new Date().toISOString()
+      })
+      .eq('id', bem.id);
+      
+    if (error) {
+      // Revert on error
+      fetchBens();
+      setError('Erro ao atualizar status.');
+      setTimeout(() => setError(''), 3000);
+    }
+  };
+
   if (!canReadPatrimonio) {
     return <div className="p-8 text-center text-slate-500">Você não tem permissão para acessar este módulo.</div>;
   }
@@ -345,7 +400,22 @@ export default function PatrimonioPage() {
                       .map((bem) => (
                       <tr key={bem.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
                         <td className="p-4">
-                          <p className="font-bold text-slate-900 dark:text-white text-sm">{bem.nome}</p>
+                          <div className="flex items-start gap-3">
+                            <div className="bg-white p-1 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm shrink-0">
+                              <QRCodeSVG value={`patrimonio:${bem.id}`} size={32} />
+                            </div>
+                            <div>
+                              <p className="font-bold text-slate-900 dark:text-white text-sm">{bem.nome}</p>
+                              {bem.valor_aquisicao && (
+                                <div className="mt-1 flex flex-col gap-0.5">
+                                  <span className="text-xs text-slate-400 line-through">Aq: R$ {parseFloat(bem.valor_aquisicao).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                                  <span className="text-xs font-bold text-amber-600 dark:text-amber-500">
+                                    Atual: R$ {calculateDepreciation(parseFloat(bem.valor_aquisicao), bem.data_aquisicao, bem.estado_conservacao).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
                         </td>
                         <td className="p-4">
                           <p className="text-sm font-medium text-slate-600 dark:text-slate-300">{bem.local?.nome || '-'}</p>
@@ -355,14 +425,27 @@ export default function PatrimonioPage() {
                           {bem.numero_tombamento || '-'}
                         </td>
                         <td className="p-4">
-                          <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                            bem.status === 'ATIVO' ? 'bg-emerald-100 text-emerald-700' :
-                            bem.status === 'EM_MANUTENCAO' ? 'bg-amber-100 text-amber-700' :
-                            bem.status === 'BAIXADO' ? 'bg-rose-100 text-rose-700' :
-                            'bg-blue-100 text-blue-700'
-                          }`}>
-                            {bem.status}
-                          </span>
+                          <AnimatePresence mode="popLayout">
+                            <motion.button
+                              key={bem.status}
+                              initial={{ scale: 0.8, opacity: 0 }}
+                              animate={{ scale: 1, opacity: 1 }}
+                              exit={{ scale: 0.8, opacity: 0 }}
+                              transition={{ duration: 0.2 }}
+                              onClick={() => canEditPatrimonio && handleQuickStatusChange(bem)}
+                              disabled={!canEditPatrimonio}
+                              className={`inline-block focus:outline-none ${canEditPatrimonio ? 'cursor-pointer hover:opacity-80' : 'cursor-default'}`}
+                            >
+                              <span className={`px-3 py-1 rounded-full text-xs font-bold inline-block ${
+                                bem.status === 'ATIVO' ? 'bg-emerald-100 text-emerald-700' :
+                                bem.status === 'EM_MANUTENCAO' ? 'bg-amber-100 text-amber-700' :
+                                bem.status === 'BAIXADO' ? 'bg-rose-100 text-rose-700' :
+                                'bg-blue-100 text-blue-700'
+                              }`}>
+                                {bem.status}
+                              </span>
+                            </motion.button>
+                          </AnimatePresence>
                         </td>
                         <td className="p-4 text-right">
                           <div className="flex items-center justify-end gap-2">
