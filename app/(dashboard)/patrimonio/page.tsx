@@ -417,6 +417,119 @@ export default function PatrimonioPage() {
     });
   };
 
+  // Helper formatters for Patrimonio reports and tables
+  const formatMovimentacaoDate = (dt?: string | null) => {
+    if (!dt) return '-';
+    try {
+      if (dt.includes('T')) {
+        const d = new Date(dt);
+        if (!isNaN(d.getTime())) return d.toLocaleDateString('pt-BR');
+      } else {
+        const parts = dt.split('-');
+        if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+      }
+      const d = new Date(dt);
+      return isNaN(d.getTime()) ? dt : d.toLocaleDateString('pt-BR');
+    } catch (e) {
+      return dt;
+    }
+  };
+
+  const getTipoMovimentacaoLabel = (tipo?: string | null) => {
+    if (!tipo) return '-';
+    const clean = tipo.toUpperCase().trim();
+    switch (clean) {
+      case 'MUDANCA_LOCAL':
+      case 'MUDANÇA_LOCAL':
+      case 'TRANSFERENCIA':
+      case 'TRANSFERÊNCIA':
+        return 'Transferência de Local';
+      case 'TROCA_RESPONSAVEL':
+      case 'TROCA_RESPONSÁVEL':
+      case 'RESPONSAVEL':
+      case 'RESPONSÁVEL':
+        return 'Troca de Responsável';
+      case 'AQUISICAO':
+      case 'AQUISIÇÃO':
+        return 'Aquisição / Entrada';
+      case 'BAIXA':
+        return 'Baixa de Patrimônio';
+      case 'MANUTENCAO':
+      case 'MANUTENÇÃO':
+        return 'Manutenção';
+      case 'EMPRESTIMO':
+      case 'EMPRÉSTIMO':
+        return 'Empréstimo';
+      case 'MIGRACAO':
+      case 'MIGRAÇÃO':
+        return 'Migração / Ajuste';
+      default:
+        return tipo.replace(/_/g, ' ');
+    }
+  };
+
+  const getLocalNomeById = (id?: string | null) => {
+    if (!id) return null;
+    const found = locais.find(l => l.id === id);
+    return found ? found.nome : null;
+  };
+
+  const getBemNomeById = (id?: string | null) => {
+    if (!id) return null;
+    const found = bens.find(b => b.id === id);
+    return found ? found.nome : null;
+  };
+
+  const getMembroNomeById = (idOrVal?: string | null) => {
+    if (!idOrVal) return null;
+    const found = membros.find(m => m.id === idOrVal);
+    if (found) return found.nome;
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrVal);
+    if (!isUuid && idOrVal.trim().length > 0) return idOrVal;
+    return null;
+  };
+
+  const getMovimentacaoLocalText = (m: any) => {
+    const locAtual = m.localizacao_atual?.nome || getLocalNomeById(m.localizacao_atual_id);
+    const locNovo = m.nova_localizacao?.nome || getLocalNomeById(m.nova_localizacao_id);
+
+    if (locAtual && locNovo && locAtual !== locNovo) {
+      return `${locAtual} ➔ ${locNovo}`;
+    }
+    if (locNovo) return locNovo;
+    if (locAtual) return locAtual;
+    return '-';
+  };
+
+  const getMovimentacaoResponsaveisText = (m: any) => {
+    const respNovo = getMembroNomeById(m.responsavel_novo_id) || getMembroNomeById(m.responsavel) || m.responsavel;
+    const coRespNovo = getMembroNomeById(m.co_responsavel_novo_id);
+    const respAnt = getMembroNomeById(m.responsavel_anterior_id);
+    const coRespAnt = getMembroNomeById(m.co_responsavel_anterior_id);
+
+    let respLabel = respNovo || 'Não informado';
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(respLabel)) {
+      respLabel = 'Membro não identificado';
+    }
+
+    if (respAnt && respNovo && respAnt !== respNovo && !/^[0-9a-f]{8}-/i.test(respAnt)) {
+      respLabel = `${respAnt} ➔ ${respLabel}`;
+    }
+
+    let coRespLabel = coRespNovo || '';
+    if (coRespLabel && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(coRespLabel)) {
+      coRespLabel = 'Co-Resp. não identificado';
+    }
+    if (coRespAnt && coRespNovo && coRespAnt !== coRespNovo && !/^[0-9a-f]{8}-/i.test(coRespAnt)) {
+      coRespLabel = `${coRespAnt} ➔ ${coRespLabel}`;
+    }
+
+    if (coRespLabel) {
+      return `Resp: ${respLabel}\nCo-Resp: ${coRespLabel}`;
+    }
+    return respLabel;
+  };
+
   // Reports PDF Generation
   const generatePDFReport = (filteredList: any[], docTitle: string) => {
     try {
@@ -445,8 +558,8 @@ export default function PatrimonioPage() {
       
       let filterText = `Filtros: Localização: ${locName}`;
       if (relatorioTipo === 'movimentacoes') {
-        const iniStr = relatorioDataInicial ? new Date(relatorioDataInicial + 'T00:00:00').toLocaleDateString('pt-BR') : 'Início';
-        const fimStr = relatorioDataFinal ? new Date(relatorioDataFinal + 'T00:00:00').toLocaleDateString('pt-BR') : 'Atual';
+        const iniStr = relatorioDataInicial ? formatMovimentacaoDate(relatorioDataInicial) : 'Início';
+        const fimStr = relatorioDataFinal ? formatMovimentacaoDate(relatorioDataFinal) : 'Atual';
         filterText += ` | Período: ${iniStr} até ${fimStr}`;
       }
 
@@ -460,7 +573,11 @@ export default function PatrimonioPage() {
       let textStartX = 15;
       if (logoBase64) {
         try {
-          doc.addImage(logoBase64, 'PNG', 14, 15, logoSize, logoSize);
+          let imageType = 'PNG';
+          if (logoBase64.includes('data:image/jpeg') || logoBase64.includes('data:image/jpg') || logoBase64.includes('.jpg') || logoBase64.includes('.jpeg')) {
+            imageType = 'JPEG';
+          }
+          doc.addImage(logoBase64, imageType, 14, 15, logoSize, logoSize);
           textStartX = 14 + logoSize + 4;
         } catch (err) {
           console.error("Error drawing logo", err);
@@ -487,11 +604,11 @@ export default function PatrimonioPage() {
         const tableRows = filteredList.map(b => [
           b.nome || '-',
           b.numero_tombamento || '-',
-          b.local?.nome || '-',
+          b.local?.nome || getLocalNomeById(b.localizacao_id) || '-',
           b.categoria?.nome || '-',
           b.estado_conservacao || '-',
           b.status || '-',
-          b.valor_aquisicao ? parseFloat(b.valor_aquisicao).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '-'
+          b.valor_aquisicao ? parseFloat(b.valor_aquisicao).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'
         ]);
 
         autoTable(doc, {
@@ -530,18 +647,19 @@ export default function PatrimonioPage() {
           }
         });
       } else {
-        const tableHeaders = ['Data', 'Bem (Tombamento)', 'Tipo', 'Local Atual / Novo', 'Responsável', 'Observação'];
+        const tableHeaders = ['Data', 'Bem (Tombamento)', 'Tipo', 'Local Atual / Novo', 'Responsável e Co-Resp.', 'Observação'];
         const tableRows = filteredList.map(m => {
-          const dtStr = m.data_movimentacao ? new Date(m.data_movimentacao + 'T00:00:00').toLocaleDateString('pt-BR') : '-';
-          const bemName = m.bem?.nome ? `${m.bem.nome} (${m.bem.numero_tombamento || '-'})` : '-';
-          const locName = m.nova_localizacao?.nome ? `${m.localizacao_atual?.nome || '-'} ➔ ${m.nova_localizacao.nome}` : (m.localizacao_atual?.nome || '-');
-          const respName = m.responsavel || '-';
+          const dtStr = formatMovimentacaoDate(m.data_movimentacao);
+          const bemName = m.bem?.nome ? `${m.bem.nome}${m.bem.numero_tombamento ? ` (${m.bem.numero_tombamento})` : ''}` : (getBemNomeById(m.patrimonio_id) || '-');
+          const tipoStr = getTipoMovimentacaoLabel(m.tipo_movimentacao);
+          const locStr = getMovimentacaoLocalText(m);
+          const respStr = getMovimentacaoResponsaveisText(m);
           return [
             dtStr,
             bemName,
-            m.tipo_movimentacao || '-',
-            locName,
-            respName,
+            tipoStr,
+            locStr,
+            respStr,
             m.observacao || '-'
           ];
         });
@@ -573,10 +691,10 @@ export default function PatrimonioPage() {
           },
           columnStyles: {
             0: { cellWidth: 22 },
-            1: { cellWidth: 40, fontStyle: 'bold' },
+            1: { cellWidth: 38, fontStyle: 'bold' },
             2: { cellWidth: 28 },
             3: { cellWidth: 35 },
-            4: { cellWidth: 30 },
+            4: { cellWidth: 35 },
             5: { cellWidth: 'auto' },
           }
         });
@@ -1230,7 +1348,8 @@ export default function PatrimonioPage() {
                       <th className="p-4 text-xs font-black text-slate-500 uppercase tracking-wider">Data</th>
                       <th className="p-4 text-xs font-black text-slate-500 uppercase tracking-wider">Bem</th>
                       <th className="p-4 text-xs font-black text-slate-500 uppercase tracking-wider">Tipo</th>
-                      <th className="p-4 text-xs font-black text-slate-500 uppercase tracking-wider">Responsável</th>
+                      <th className="p-4 text-xs font-black text-slate-500 uppercase tracking-wider">Local Atual / Novo</th>
+                      <th className="p-4 text-xs font-black text-slate-500 uppercase tracking-wider">Responsável e Co-Resp.</th>
                       <th className="p-4 text-xs font-black text-slate-500 uppercase tracking-wider text-right">Ações</th>
                     </tr>
                   </thead>
@@ -1238,24 +1357,27 @@ export default function PatrimonioPage() {
                     {movimentacoes.map(mov => (
                       <tr key={mov.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
                         <td className="p-4 text-sm font-medium text-slate-900 dark:text-white">
-                          {new Date(mov.data_movimentacao).toLocaleDateString('pt-BR')}
+                          {formatMovimentacaoDate(mov.data_movimentacao)}
                         </td>
                         <td className="p-4 font-bold text-slate-900 dark:text-white text-sm">
-                          {mov.bem?.nome || '-'}
+                          {mov.bem?.nome ? `${mov.bem.nome}${mov.bem.numero_tombamento ? ` (${mov.bem.numero_tombamento})` : ''}` : (getBemNomeById(mov.patrimonio_id) || '-')}
                         </td>
                         <td className="p-4">
                           <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                            mov.tipo_movimentacao === 'AQUISICAO' ? 'bg-emerald-100 text-emerald-700' :
-                            mov.tipo_movimentacao === 'MUDANCA_LOCAL' ? 'bg-blue-100 text-blue-700' :
-                            mov.tipo_movimentacao === 'MANUTENCAO' ? 'bg-amber-100 text-amber-700' :
-                            mov.tipo_movimentacao === 'EMPRESTIMO' ? 'bg-purple-100 text-purple-700' :
-                            'bg-slate-100 text-slate-700'
+                            mov.tipo_movimentacao === 'AQUISICAO' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' :
+                            mov.tipo_movimentacao === 'MUDANCA_LOCAL' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' :
+                            mov.tipo_movimentacao === 'MANUTENCAO' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' :
+                            mov.tipo_movimentacao === 'EMPRESTIMO' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' :
+                            'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
                           }`}>
-                            {mov.tipo_movimentacao}
+                            {getTipoMovimentacaoLabel(mov.tipo_movimentacao)}
                           </span>
                         </td>
-                        <td className="p-4 text-sm text-slate-600 dark:text-slate-300">
-                          {membros.find(m => m.id === (mov.responsavel_novo_id || mov.responsavel))?.nome || mov.responsavel}
+                        <td className="p-4 text-sm text-slate-600 dark:text-slate-300 font-medium">
+                          {getMovimentacaoLocalText(mov)}
+                        </td>
+                        <td className="p-4 text-sm text-slate-600 dark:text-slate-300 font-medium whitespace-pre-line">
+                          {getMovimentacaoResponsaveisText(mov)}
                         </td>
                         <td className="p-4 text-right">
                           <div className="flex items-center justify-end gap-2">
@@ -1479,7 +1601,8 @@ export default function PatrimonioPage() {
                               <th className="p-3 text-xs font-black text-slate-500 uppercase tracking-wider">Data</th>
                               <th className="p-3 text-xs font-black text-slate-500 uppercase tracking-wider">Bem</th>
                               <th className="p-3 text-xs font-black text-slate-500 uppercase tracking-wider">Tipo</th>
-                              <th className="p-3 text-xs font-black text-slate-500 uppercase tracking-wider">Responsável</th>
+                              <th className="p-3 text-xs font-black text-slate-500 uppercase tracking-wider">Local Atual / Novo</th>
+                              <th className="p-3 text-xs font-black text-slate-500 uppercase tracking-wider">Responsável e Co-Resp.</th>
                             </>
                           )}
                         </tr>
@@ -1491,21 +1614,22 @@ export default function PatrimonioPage() {
                               <>
                                 <td className="p-3 font-bold text-slate-900 dark:text-white text-sm">{item.nome}</td>
                                 <td className="p-3 text-sm text-slate-500 font-mono">{item.numero_tombamento || '-'}</td>
-                                <td className="p-3 text-sm text-slate-600 dark:text-slate-300">{item.local?.nome || '-'} / {item.categoria?.nome || '-'}</td>
+                                <td className="p-3 text-sm text-slate-600 dark:text-slate-300">{item.local?.nome || getLocalNomeById(item.localizacao_id) || '-'} / {item.categoria?.nome || '-'}</td>
                                 <td className="p-3 text-xs font-bold">{item.status}</td>
                               </>
                             ) : (
                               <>
-                                <td className="p-3 text-sm">{new Date(item.data_movimentacao).toLocaleDateString('pt-BR')}</td>
-                                <td className="p-3 font-bold text-slate-900 dark:text-white text-sm">{item.bem?.nome || '-'}</td>
-                                <td className="p-3 text-sm">{item.tipo_movimentacao}</td>
-                                <td className="p-3 text-sm text-slate-600 dark:text-slate-300">{item.responsavel}</td>
+                                <td className="p-3 text-sm">{formatMovimentacaoDate(item.data_movimentacao)}</td>
+                                <td className="p-3 font-bold text-slate-900 dark:text-white text-sm">{item.bem?.nome ? `${item.bem.nome}${item.bem.numero_tombamento ? ` (${item.bem.numero_tombamento})` : ''}` : (getBemNomeById(item.patrimonio_id) || '-')}</td>
+                                <td className="p-3 text-sm font-medium">{getTipoMovimentacaoLabel(item.tipo_movimentacao)}</td>
+                                <td className="p-3 text-sm text-slate-600 dark:text-slate-300">{getMovimentacaoLocalText(item)}</td>
+                                <td className="p-3 text-sm text-slate-600 dark:text-slate-300 whitespace-pre-line">{getMovimentacaoResponsaveisText(item)}</td>
                               </>
                             )}
                           </tr>
                         ))}
                         {relatorioResult.length === 0 && (
-                          <tr><td colSpan={4} className="p-6 text-center text-slate-500">Nenhum resultado encontrado para os filtros.</td></tr>
+                          <tr><td colSpan={5} className="p-6 text-center text-slate-500">Nenhum resultado encontrado para os filtros.</td></tr>
                         )}
                       </tbody>
                     </table>

@@ -303,7 +303,9 @@ export async function GET(req: NextRequest) {
     VALUES 
       ('translation_overrides_pt', '{}', 'Ajustes de traducción en portugués'),
       ('translation_overrides_es', '{}', 'Ajustes de traducción en español'),
-      ('translation_overrides_en', '{}', 'Ajustes de traducción en inglés')
+      ('translation_overrides_en', '{}', 'Ajustes de traducción en inglés'),
+      ('email_alertas_financeiro', '', 'Email destinatário para receber alertas e notificações financeiras do sistema'),
+      ('notify_contas_vencimento', 'true', 'Ativar envio automático de emails com lembrete de contas próximas ao vencimento')
     ON CONFLICT (chave) DO NOTHING;
 
     -- Upgrades for Eventos module changes
