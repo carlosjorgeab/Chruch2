@@ -1889,26 +1889,27 @@ export default function KidsModule() {
       )}
 
       {/* Header and Brand */}
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-6">
-        <div className="flex items-center gap-4">
-          <div className="p-4 bg-amber-500/10 dark:bg-amber-500/5 rounded-3xl text-amber-500 shadow-inner">
-            <Baby size={36} />
-          </div>
-          <div>
-            <h1 className="text-3xl font-black uppercase tracking-tight text-slate-900 dark:text-white leading-tight">Kids</h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">Gestão de Turmas, Salas de Atendimento e Check-in Infantil</p>
-          </div>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
+        <div>
+          <h1 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight flex items-center gap-2">
+            <Baby className="w-6 h-6 text-amber-500" />
+            Módulo Kids
+          </h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 font-medium mt-1">
+            Gestão de Turmas, Salas de Atendimento e Check-in Infantil
+          </p>
         </div>
 
         {/* Tab Navigation buttons */}
-        <div className="flex items-center gap-2 p-1.5 bg-slate-100 dark:bg-slate-900/60 rounded-2xl border border-slate-200/50 dark:border-slate-800">
+        <div className="flex overflow-x-auto hide-scrollbar gap-2 p-1 bg-slate-100 dark:bg-slate-800/50 rounded-2xl w-fit">
           {canAccessPainel && (
             <button 
+              type="button"
               onClick={() => setActiveTab('painel')}
-              className={`px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider font-bold transition-all flex items-center gap-2 ${
+              className={`px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${
                 activeTab === 'painel' 
-                  ? 'bg-[#E4A232] text-white shadow-md' 
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                  ? 'bg-white dark:bg-slate-700 text-amber-600 shadow-sm' 
+                  : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
               }`}
             >
               <Smile size={16} />
@@ -1917,24 +1918,26 @@ export default function KidsModule() {
           )}
           {canAccessTurmas && (
             <button 
+              type="button"
               onClick={() => setActiveTab('turmas')}
-              className={`px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider font-bold transition-all flex items-center gap-2 ${
+              className={`px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${
                 activeTab === 'turmas' 
-                  ? 'bg-[#E4A232] text-white shadow-md' 
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                  ? 'bg-white dark:bg-slate-700 text-amber-600 shadow-sm' 
+                  : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
               }`}
             >
               <Users size={16} />
-              Turmas (Categorias)
+              Turmas
             </button>
           )}
           {canAccessSalas && (
             <button 
+              type="button"
               onClick={() => setActiveTab('salas')}
-              className={`px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider font-bold transition-all flex items-center gap-2 ${
+              className={`px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${
                 activeTab === 'salas' 
-                  ? 'bg-[#E4A232] text-white shadow-md' 
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                  ? 'bg-white dark:bg-slate-700 text-amber-600 shadow-sm' 
+                  : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
               }`}
             >
               <DoorOpen size={16} />

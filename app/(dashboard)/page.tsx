@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Users, UsersRound, Wallet, BookOpen, RefreshCw, BarChart2, PieChart, TrendingUp, TrendingDown, DollarSign, Calendar, Megaphone, FileText, Video, ChevronLeft, ChevronRight, ExternalLink, Download, QrCode } from 'lucide-react';
+import { Users, UsersRound, Wallet, BookOpen, RefreshCw, BarChart2, PieChart, TrendingUp, TrendingDown, DollarSign, Calendar, Megaphone, FileText, Video, ChevronLeft, ChevronRight, ExternalLink, Download, QrCode, AlertTriangle, ChevronDown, ChevronUp, ArrowUpRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useIgreja } from '@/context/IgrejaContext';
 import { motion, AnimatePresence } from 'motion/react';
@@ -284,6 +284,10 @@ export default function Home() {
     }
   }, [currentEventoIndex, showDetailedMode, eventos]);
 
+  // Contas a pagar alert states (5 dias)
+  const [contasPagar5Dias, setContasPagar5Dias] = useState<any[]>([]);
+  const [expandedContasPagar, setExpandedContasPagar] = useState(false);
+
   // Time-frame selections
   const [cashFlowPeriod, setCashFlowPeriod] = useState<'diario' | 'mensal' | 'anual'>('mensal');
   const [categoryPeriod, setCategoryPeriod] = useState<'diario' | 'mensal' | 'anual'>('mensal');
@@ -338,6 +342,7 @@ export default function Home() {
         if (err4) {
           setTransacoes([]);
           setEntradasMesVal(0);
+          setContasPagar5Dias([]);
         } else if (transData) {
           setTransacoes(transData);
           
@@ -356,6 +361,37 @@ export default function Home() {
             }
           });
           setEntradasMesVal(monthEntriesSum);
+
+          // Calculate accounts payable due in next 5 days
+          const todayZero = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          const limit5Days = new Date(todayZero);
+          limit5Days.setDate(limit5Days.getDate() + 5);
+          limit5Days.setHours(23, 59, 59, 999);
+
+          const pending5 = transData.filter((t: any) => {
+            const isSaida = t.tipo === 'Saída' || t.tipo === 'DESPESA' || t.tipo === 'Débito' || t.tipo === 'Despesa';
+            if (!isSaida) return false;
+
+            const isPaid = t.data_pagamento && String(t.data_pagamento).trim() !== '';
+            if (isPaid) return false;
+
+            const dueStr = t.data_vencimento || t.data;
+            if (!dueStr) return false;
+
+            const [y, m, d] = dueStr.split('-').map(Number);
+            if (!y || !m || !d) return false;
+            const dueDate = new Date(y, m - 1, d);
+
+            return dueDate <= limit5Days;
+          });
+
+          pending5.sort((a: any, b: any) => {
+            const dA = a.data_vencimento || a.data || '';
+            const dB = b.data_vencimento || b.data || '';
+            return dA.localeCompare(dB);
+          });
+
+          setContasPagar5Dias(pending5);
         }
 
         // Get mural de avisos
@@ -721,6 +757,142 @@ export default function Home() {
           <p className="text-slate-500 dark:text-slate-400 text-xs mt-1.5 font-medium">Resumo dinâmico e estatísticas atualizadas em tempo real</p>
         </div>
       </div>
+
+      {/* AVISO VISUAL DE CONTAS A PAGAR NOS PRÓXIMOS 5 DIAS */}
+      {contasPagar5Dias.length > 0 && (
+        <div className="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-orange-500/10 dark:from-amber-950/40 dark:via-slate-900 dark:to-orange-950/30 border-2 border-amber-500/40 dark:border-amber-500/30 rounded-3xl p-6 shadow-md transition-all duration-300" id="aviso-contas-pagar-5dias">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-amber-500 text-slate-955 font-black flex items-center justify-center shrink-0 shadow-lg shadow-amber-500/20">
+                <AlertTriangle size={24} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="bg-amber-500 text-slate-955 text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-md">
+                    Aviso Financeiro
+                  </span>
+                  {contasPagar5Dias.some(t => {
+                    const dueStr = t.data_vencimento || t.data;
+                    if (!dueStr) return false;
+                    const [y, m, d] = dueStr.split('-').map(Number);
+                    const due = new Date(y, m - 1, d);
+                    due.setHours(0, 0, 0, 0);
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const tomorrow = new Date(today);
+                    tomorrow.setDate(tomorrow.getDate() + 1);
+                    return due.getTime() === tomorrow.getTime() || due.getTime() <= today.getTime();
+                  }) && (
+                    <span className="bg-red-600 text-white text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-md animate-pulse">
+                      ⚡ Atenção Especial para o Próximo Dia
+                    </span>
+                  )}
+                </div>
+                <h3 className="text-lg font-black font-headline text-slate-900 dark:text-white uppercase tracking-tight mt-1">
+                  Contas a Pagar a Vencer nos Próximos 5 Dias ({contasPagar5Dias.length})
+                </h3>
+                <p className="text-xs text-slate-600 dark:text-slate-300 font-semibold mt-0.5">
+                  Valor Total Pendente: <strong className="text-amber-600 dark:text-amber-400 font-extrabold text-sm">R$ {contasPagar5Dias.reduce((s, t) => s + (Number(t.valor) || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 self-end md:self-auto shrink-0">
+              <button
+                type="button"
+                onClick={() => setExpandedContasPagar(!expandedContasPagar)}
+                className="flex items-center gap-1.5 px-4 py-2 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold transition shadow-sm cursor-pointer"
+              >
+                {expandedContasPagar ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                <span>{expandedContasPagar ? 'Ocultar Detalhes' : 'Ver Listagem'}</span>
+              </button>
+
+              <Link
+                href="/financeiro"
+                className="flex items-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-955 rounded-xl text-xs font-black transition shadow-md hover:scale-[1.02] active:scale-95 cursor-pointer"
+              >
+                <span>Módulo Financeiro</span>
+                <ArrowUpRight size={16} />
+              </Link>
+            </div>
+          </div>
+
+          {/* Expanded details table */}
+          {expandedContasPagar && (
+            <div className="mt-5 pt-4 border-t border-amber-500/20 dark:border-amber-500/10 animate-in fade-in duration-200">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500 border-b border-amber-500/20 pb-2">
+                      <th className="py-2 px-3">Status Vencimento</th>
+                      <th className="py-2 px-3">Descrição / Fornecedor</th>
+                      <th className="py-2 px-3">Categoria</th>
+                      <th className="py-2 px-3">Data Vencimento</th>
+                      <th className="py-2 px-3 text-right">Valor (R$)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-amber-500/10 text-xs">
+                    {contasPagar5Dias.map((t: any, idx: number) => {
+                      const dueStr = t.data_vencimento || t.data;
+                      const [y, m, d] = dueStr ? dueStr.split('-').map(Number) : [0,0,0];
+                      const dueDateFormatted = dueStr ? `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}/${y}` : '-';
+
+                      const due = new Date(y, m - 1, d);
+                      due.setHours(0, 0, 0, 0);
+
+                      const today = new Date();
+                      today.setHours(0, 0, 0, 0);
+
+                      const tomorrow = new Date(today);
+                      tomorrow.setDate(tomorrow.getDate() + 1);
+
+                      const diffTime = due.getTime() - today.getTime();
+                      const diffDays = Math.round(diffTime / (1000 * 3600 * 24));
+
+                      let badgeColor = "bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-500/30";
+                      let badgeText = `Vence em ${diffDays} dias`;
+
+                      if (diffDays < 0) {
+                        badgeColor = "bg-red-500 text-white font-black animate-pulse";
+                        badgeText = `VENCEU HÁ ${Math.abs(diffDays)} DIA(S)`;
+                      } else if (diffDays === 0) {
+                        badgeColor = "bg-red-600 text-white font-black shadow-sm animate-bounce";
+                        badgeText = "VENCE HOJE";
+                      } else if (diffDays === 1) {
+                        badgeColor = "bg-orange-500 text-white font-black shadow-md border border-orange-400";
+                        badgeText = "⚡ VENCE AMANHÃ (PRÓXIMO DIA)";
+                      }
+
+                      return (
+                        <tr key={t.id || idx} className="hover:bg-amber-500/5 transition-colors">
+                          <td className="py-3 px-3">
+                            <span className={`inline-block px-2.5 py-1 rounded-lg text-[10px] uppercase font-extrabold border ${badgeColor}`}>
+                              {badgeText}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 font-bold text-slate-900 dark:text-white">
+                            {t.descricao}
+                            {t.fornecedor && <span className="block text-[10px] text-slate-400 font-normal">{t.fornecedor}</span>}
+                          </td>
+                          <td className="py-3 px-3 text-slate-500 dark:text-slate-400 font-medium">
+                            {t.categoria || 'Despesa'}
+                          </td>
+                          <td className="py-3 px-3 font-bold text-slate-800 dark:text-slate-200">
+                            {dueDateFormatted}
+                          </td>
+                          <td className="py-3 px-3 font-black text-slate-900 dark:text-white text-right text-sm">
+                            R$ {Number(t.valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* STATS HIGHLIGHT GRID */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6" id="dashboard-stats-grid">

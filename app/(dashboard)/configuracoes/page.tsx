@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { Settings, Save, Bell, Shield, Globe, Moon, Clock, Lock, MonitorStop, RefreshCw, CheckCircle, AlertTriangle, Database, FileText, Copy, Check, UserPlus, Cake, BookOpen, Mail, Send, Activity } from 'lucide-react';
+import { Settings, Save, Bell, Shield, Globe, Moon, Clock, Lock, MonitorStop, RefreshCw, CheckCircle, AlertTriangle, Database, FileText, Copy, Check, UserPlus, Cake, BookOpen, Mail, Send, Activity, DollarSign } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useLanguage } from '@/context/LanguageContext';
 import { defaultTranslations } from '@/lib/translations';
@@ -42,6 +42,12 @@ export default function ConfiguracoesPage() {
   const [testEmailDest, setTestEmailDest] = useState('');
   const [testingSMTP, setTestingSMTP] = useState(false);
   const [testSmtpResult, setTestSmtpResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  // Financial alert states
+  const [emailAlertasFinanceiro, setEmailAlertasFinanceiro] = useState('');
+  const [notifyContasVencimento, setNotifyContasVencimento] = useState(true);
+  const [sendingFinanceAlert, setSendingFinanceAlert] = useState(false);
+  const [financeAlertResult, setFinanceAlertResult] = useState<{ success: boolean; message: string } | null>(null);
 
   const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -162,6 +168,8 @@ export default function ConfiguracoesPage() {
         let sFrom = '';
         let sSSL = 'true';
         let tLembrete = '15';
+        let eAlert = '';
+        let nContas = 'true';
         data.forEach((config: any) => {
           if (config.chave === 'session_timeout') setSessionTimeout(config.valor);
           if (config.chave === 'disable_multi_login') setDisableMultiLogin(config.valor === 'true');
@@ -170,6 +178,8 @@ export default function ConfiguracoesPage() {
           if (config.chave === 'notify_lessons') setNotifyLessons(config.valor === 'true');
           if (config.chave === 'notify_low_balance') setNotifyLowBalance(config.valor === 'true');
           if (config.chave === 'notify_birthdays') setNotifyBirthdays(config.valor === 'true');
+          if (config.chave === 'email_alertas_financeiro') eAlert = config.valor;
+          if (config.chave === 'notify_contas_vencimento') nContas = config.valor;
           if (config.chave === 'event_reminder_value') val = config.valor;
           if (config.chave === 'event_reminder_unit') unit = config.valor;
           if (config.chave === 'tempo_lembrete') tLembrete = config.valor;
@@ -184,6 +194,8 @@ export default function ConfiguracoesPage() {
         // Church specific overrides
         data.forEach((config: any) => {
           if (selectedIgreja?.id) {
+            if (config.chave === `email_alertas_financeiro_${selectedIgreja.id}`) eAlert = config.valor;
+            if (config.chave === `notify_contas_vencimento_${selectedIgreja.id}`) nContas = config.valor;
             if (config.chave === `event_reminder_value_${selectedIgreja.id}`) val = config.valor;
             if (config.chave === `event_reminder_unit_${selectedIgreja.id}`) unit = config.valor;
             if (config.chave === `tempo_lembrete_${selectedIgreja.id}`) tLembrete = config.valor;
@@ -196,6 +208,8 @@ export default function ConfiguracoesPage() {
           }
         });
 
+        setEmailAlertasFinanceiro(eAlert);
+        setNotifyContasVencimento(nContas === 'true');
         setReminderValue(val);
         setReminderUnit(unit);
         setTempoLembrete(tLembrete);
@@ -257,11 +271,15 @@ export default function ConfiguracoesPage() {
         { chave: 'notify_new_members', valor: String(notifyNewMembers) },
         { chave: 'notify_lessons', valor: String(notifyLessons) },
         { chave: 'notify_low_balance', valor: String(notifyLowBalance) },
-        { chave: 'notify_birthdays', valor: String(notifyBirthdays) }
+        { chave: 'notify_birthdays', valor: String(notifyBirthdays) },
+        { chave: 'email_alertas_financeiro', valor: emailAlertasFinanceiro },
+        { chave: 'notify_contas_vencimento', valor: String(notifyContasVencimento) }
       ];
 
       if (selectedIgreja?.id) {
         updates.push(
+          { chave: `email_alertas_financeiro_${selectedIgreja.id}`, valor: emailAlertasFinanceiro },
+          { chave: `notify_contas_vencimento_${selectedIgreja.id}`, valor: String(notifyContasVencimento) },
           { chave: `event_reminder_value_${selectedIgreja.id}`, valor: String(reminderValue) },
           { chave: `event_reminder_unit_${selectedIgreja.id}`, valor: reminderUnit },
           { chave: `tempo_lembrete_${selectedIgreja.id}`, valor: String(tempoLembrete) },
@@ -350,11 +368,50 @@ export default function ConfiguracoesPage() {
     }
   };
 
+  const handleSendFinanceAlertNow = async () => {
+    if (!emailAlertasFinanceiro || !emailAlertasFinanceiro.trim()) {
+      setFinanceAlertResult({ success: false, message: 'Informe um endereço de e-mail válido para o alerta financeiro.' });
+      return;
+    }
+    if (!selectedIgreja?.id) {
+      setFinanceAlertResult({ success: false, message: 'Selecione uma congregação para enviar o relatório de contas.' });
+      return;
+    }
+    setSendingFinanceAlert(true);
+    setFinanceAlertResult(null);
+    try {
+      const response = await fetch('/api/send-finance-alert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: emailAlertasFinanceiro,
+          igrejaId: selectedIgreja.id,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Falha ao enviar e-mail de alerta financeiro.');
+      }
+
+      setFinanceAlertResult({
+        success: true,
+        message: data.message || `E-mail de alerta enviado com sucesso! (${data.billsCount || 0} conta(s) encontrada(s), ${data.tomorrowCount || 0} com vencimento para o próximo dia/amanhã).`
+      });
+    } catch (error: any) {
+      console.error('Error sending finance alert:', error);
+      setFinanceAlertResult({ success: false, message: error.message || 'Erro ao enviar o e-mail de alerta financeiro.' });
+    } finally {
+      setSendingFinanceAlert(false);
+    }
+  };
+
   const tabs = [
     { id: 'geral', label: 'Geral', icon: Settings },
     { id: 'traducoes', label: 'Idiomas & Traduções', icon: Globe },
     { id: 'seguranca', label: 'Segurança', icon: Shield },
     { id: 'notificacoes', label: 'Notificações', icon: Bell },
+    { id: 'financeiro', label: 'Financeiro', icon: DollarSign },
     { id: 'servidores', label: 'Servidores', icon: Mail },
     { id: 'database', label: 'Banco de Dados', icon: Database },
   ];
@@ -362,7 +419,7 @@ export default function ConfiguracoesPage() {
   const allowedTabs = tabs.filter(tab => {
     if (user?.id_master) return true;
     if (user?.is_admin) {
-      return tab.id === 'geral' || tab.id === 'notificacoes';
+      return tab.id === 'geral' || tab.id === 'notificacoes' || tab.id === 'financeiro';
     }
     return false;
   });
@@ -860,6 +917,111 @@ export default function ConfiguracoesPage() {
                     </div>
                   </div>
 
+                </div>
+              )}
+
+              <div className="pt-8 flex justify-end">
+                <button 
+                  onClick={handleSave}
+                  disabled={saving || loading || !canEdit}
+                  className="flex items-center gap-2 bg-slate-900 dark:bg-white dark:text-slate-900 text-white px-8 py-3 rounded-xl font-bold transition-all shadow-lg hover:opacity-90 active:scale-95 disabled:opacity-50"
+                >
+                  {saving ? <RefreshCw size={18} className="animate-spin" /> : <Save size={18} />}
+                  {saving ? 'Salvando...' : 'Salvar Alterações'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'financeiro' && (
+            <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
+              <div className="border-b border-slate-100 dark:border-slate-700 pb-4">
+                <h3 className="text-xl font-black font-headline text-slate-900 dark:text-white uppercase">Configurações Financeiras</h3>
+                <p className="text-slate-500 dark:text-slate-400 text-sm">Gerencie os alertas de vencimento de contas a pagar e destinatários de e-mail</p>
+              </div>
+
+              {loading ? (
+                <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+                  <RefreshCw size={32} className="animate-spin mb-4" />
+                  <p className="font-bold uppercase tracking-widest text-xs">Carregando...</p>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 p-6 rounded-[2rem] shadow-sm space-y-6">
+                    <div className="flex items-center gap-4 pb-4 border-b border-slate-100 dark:border-slate-800">
+                      <div className="w-10 h-10 bg-amber-500/10 rounded-xl flex items-center justify-center text-amber-500">
+                        <DollarSign size={20} />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-black uppercase text-slate-900 dark:text-white tracking-widest">E-mail para Alertas de Contas a Pagar (5 Dias)</h4>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">Notificações e relatórios de contas a vencer nos próximos 5 dias buscando na tabela 'transacoes'</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-6">
+                      <div className="space-y-2">
+                        <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                          Informando o E-mail para Receber Contas a Pagar
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="email"
+                            value={emailAlertasFinanceiro}
+                            onChange={(e) => setEmailAlertasFinanceiro(e.target.value)}
+                            className="w-full px-4 py-3 pl-10 rounded-xl border border-slate-200 dark:border-slate-750 bg-slate-50 dark:bg-slate-955 text-slate-900 dark:text-white font-bold text-sm focus:border-amber-500 focus:bg-white dark:focus:bg-slate-900 transition outline-none"
+                            placeholder="exemplo@igreja.com.br"
+                            disabled={saving}
+                          />
+                          <Mail size={18} className="absolute left-3 top-3.5 text-slate-400" />
+                        </div>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                          📌 Este e-mail receberá os avisos com a listagem completa das contas a pagar que vencem nos próximos 5 dias, com <strong className="text-amber-600 dark:text-amber-400 font-black uppercase">ênfase especial e destaque reforçado nas contas a vencer no próximo dia (amanhã)</strong>.
+                        </p>
+                      </div>
+
+                      <div 
+                        onClick={() => setNotifyContasVencimento(!notifyContasVencimento)}
+                        className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-955/50 rounded-2xl border border-slate-100 dark:border-slate-800 cursor-pointer hover:border-amber-500 transition-all group"
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 bg-white dark:bg-slate-800 rounded-xl flex items-center justify-center text-amber-500 border border-slate-100 dark:border-slate-700">
+                            <Bell size={20} />
+                          </div>
+                          <div>
+                            <p className="font-bold text-slate-900 dark:text-white text-sm">Habilitar Alertas Financeiros de Vencimento</p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400">Ativar ou desativar o envio do relatório para o e-mail cadastrado</p>
+                          </div>
+                        </div>
+                        <div className={`relative inline-block w-12 h-6 transition-colors duration-200 ease-in-out ${notifyContasVencimento ? 'bg-amber-500' : 'bg-slate-200 dark:bg-slate-700'} rounded-full`}>
+                          <div className={`absolute top-1 w-4 h-4 transition-all duration-200 ease-in-out bg-white rounded-full ${notifyContasVencimento ? 'left-7' : 'left-1'}`}></div>
+                        </div>
+                      </div>
+
+                      {/* Test Finance Alert Button */}
+                      <div className="pt-4 border-t border-slate-100 dark:border-slate-800 space-y-4">
+                        <button
+                          type="button"
+                          onClick={handleSendFinanceAlertNow}
+                          disabled={sendingFinanceAlert || !emailAlertasFinanceiro}
+                          className="flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white px-6 py-3 rounded-xl font-bold text-sm transition shadow-md hover:scale-[1.01] active:scale-95 disabled:opacity-50 cursor-pointer"
+                        >
+                          {sendingFinanceAlert ? <RefreshCw size={18} className="animate-spin" /> : <Send size={18} />}
+                          {sendingFinanceAlert ? 'Processando e Enviando...' : 'Enviar Alerta por E-mail Agora (Teste)'}
+                        </button>
+
+                        {financeAlertResult && (
+                          <div className={`p-4 rounded-xl flex items-start gap-3 text-xs font-bold border ${
+                            financeAlertResult.success 
+                              ? 'bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800 text-green-700 dark:text-green-400'
+                              : 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800 text-red-700 dark:text-red-400'
+                          }`}>
+                            {financeAlertResult.success ? <CheckCircle size={18} className="shrink-0 mt-0.5" /> : <AlertTriangle size={18} className="shrink-0 mt-0.5" />}
+                            <span>{financeAlertResult.message}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
 

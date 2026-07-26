@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { useIgreja } from '@/context/IgrejaContext';
 import { useAuth } from '@/context/AuthContext';
 import { useConfirm } from '@/context/ConfirmContext';
-import { Plus, Edit2, Trash2, Save, X, Search, Check, RefreshCw, UserCheck, FileText, Calendar, Printer, Upload, AlertCircle, FileSpreadsheet, Download } from 'lucide-react';
+import { Plus, Edit2, Trash2, Save, X, Search, Check, RefreshCw, UserCheck, FileText, Calendar, Printer, Upload, AlertCircle, FileSpreadsheet, Download, Users, ArrowLeft } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { formatCPF, formatTelefone, formatCEP, validateCPF } from '@/lib/masks';
@@ -1326,11 +1326,13 @@ export default function MembrosPage() {
 
   return (
     <div className="p-8 space-y-8 max-w-6xl mx-auto">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <p className="text-sm font-bold text-amber-600 uppercase tracking-widest mb-1">Membros</p>
-          <h2 className="text-3xl font-black font-headline text-slate-900 dark:text-white uppercase tracking-tight">Membros</h2>
-          <p className="text-slate-500 text-sm">
+          <h1 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight flex items-center gap-2">
+            <Users className="w-6 h-6 text-amber-500" />
+            Gestão de Membros
+          </h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 font-medium mt-1">
             Gestão de membros para {selectedIgreja ? selectedIgreja.nome : 'esta igreja'}
           </p>
         </div>
@@ -1343,22 +1345,22 @@ export default function MembrosPage() {
                 setSuccess('');
               }}
               disabled={!selectedIgreja || membros.length === 0}
-              className="flex items-center gap-2 bg-slate-150 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-755 text-slate-800 dark:text-slate-100 font-bold py-3 px-6 rounded-xl border border-slate-250 dark:border-slate-700 shadow-sm transition active:scale-95 text-sm uppercase tracking-wider cursor-pointer disabled:opacity-50"
+              className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold py-2.5 px-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm transition-all text-xs uppercase tracking-wider cursor-pointer disabled:opacity-50"
             >
-              <FileText size={18} className="text-amber-600" />
+              <FileText size={16} className="text-amber-500" />
               Relatórios
             </button>
             <button
               onClick={exportToExcel}
               disabled={!selectedIgreja || filteredMembros.length === 0}
-              className="flex items-center gap-2 bg-slate-150 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-755 text-slate-800 dark:text-slate-100 font-bold py-3 px-6 rounded-xl border border-slate-250 dark:border-slate-700 shadow-sm transition active:scale-95 text-sm uppercase tracking-wider cursor-pointer disabled:opacity-50"
+              className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold py-2.5 px-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm transition-all text-xs uppercase tracking-wider cursor-pointer disabled:opacity-50"
               title="Exportar para Excel"
             >
-              <FileSpreadsheet size={18} className="text-green-600" />
+              <FileSpreadsheet size={16} className="text-emerald-500" />
               Exportar
             </button>
-            <label className="flex items-center gap-2 bg-slate-150 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-755 text-slate-800 dark:text-slate-100 font-bold py-3 px-6 rounded-xl border border-slate-250 dark:border-slate-700 shadow-sm transition active:scale-95 text-sm uppercase tracking-wider cursor-pointer disabled:opacity-50 select-none">
-              <Upload size={18} className="text-blue-600" />
+            <label className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold py-2.5 px-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm transition-all text-xs uppercase tracking-wider cursor-pointer disabled:opacity-50 select-none">
+              <Upload size={16} className="text-blue-500" />
               Importar
               <input
                 type="file"
@@ -1371,19 +1373,19 @@ export default function MembrosPage() {
             <button
               onClick={downloadTemplate}
               disabled={!selectedIgreja}
-              className="flex items-center gap-2 bg-slate-150 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-755 text-slate-800 dark:text-slate-100 font-bold py-3 px-6 rounded-xl border border-slate-250 dark:border-slate-700 shadow-sm transition active:scale-95 text-sm uppercase tracking-wider cursor-pointer disabled:opacity-50"
+              className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold py-2.5 px-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm transition-all text-xs uppercase tracking-wider cursor-pointer disabled:opacity-50"
               title="Baixar Modelo de Planilha"
             >
-              <Download size={18} className="text-teal-600" />
+              <Download size={16} className="text-teal-500" />
               Modelo
             </button>
             {hasPermission('membros:novo') && (
               <button
                 onClick={handleNew}
                 disabled={!selectedIgreja}
-                className="flex items-center gap-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white font-bold py-3 px-6 rounded-xl shadow-md transition active:scale-95 text-sm uppercase tracking-wider cursor-pointer"
+                className="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-bold py-2.5 px-5 rounded-2xl shadow-sm transition-all text-xs uppercase tracking-wider cursor-pointer"
               >
-                <Plus size={18} />
+                <Plus size={16} />
                 Novo Membro
               </button>
             )}
@@ -1392,26 +1394,28 @@ export default function MembrosPage() {
       </div>
 
       {error && (
-        <div className="p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl text-red-600 dark:text-red-400 font-bold text-sm">
-          {error}
+        <div className="p-4 bg-rose-50 text-rose-600 rounded-xl flex items-center gap-2 border border-rose-200">
+          <AlertCircle className="w-5 h-5 flex-shrink-0" />
+          <p className="text-sm font-medium">{error}</p>
         </div>
       )}
 
       {success && (
-        <div className="p-4 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-xl text-green-600 dark:text-green-400 font-bold text-sm">
-          {success}
+        <div className="p-4 bg-emerald-50 text-emerald-600 rounded-xl flex items-center gap-2 border border-emerald-200">
+          <AlertCircle className="w-5 h-5 flex-shrink-0" />
+          <p className="text-sm font-medium">{success}</p>
         </div>
       )}
 
       {isEditing ? (
-        <form onSubmit={handleSubmit} className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm p-8 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
-          <div className="flex justify-between items-center border-b border-slate-150 dark:border-slate-700 pb-4">
-            <h3 className="text-xl font-bold text-slate-900 dark:text-white">
+        <form onSubmit={handleSubmit} className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm p-6 sm:p-8 space-y-6">
+          <div className="flex items-center gap-3 border-b border-slate-100 dark:border-slate-800 pb-4">
+            <button type="button" onClick={() => setIsEditing(false)} className="p-2 -ml-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800">
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">
               {currentMembro.id ? 'Editar Cadastro de Membro' : 'Novo Membro'}
             </h3>
-            <button type="button" onClick={() => setIsEditing(false)} className="text-slate-400 hover:text-slate-600">
-              <X size={20} />
-            </button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -2065,19 +2069,22 @@ export default function MembrosPage() {
             {/* Status Tabs */}
             <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-2 ml-1">Status de Membro:</span>
-              {['todos', 'Ativo', 'Inativo', 'Visitante'].map((status) => (
-                <button
-                  key={status}
-                  onClick={() => setStatusFilter(status)}
-                  className={`px-4 py-1.5 rounded-xl font-bold text-xs uppercase tracking-wider transition cursor-pointer ${
-                    statusFilter === status
-                      ? 'bg-amber-150 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400 border border-amber-300'
-                      : 'bg-white dark:bg-slate-950 text-slate-500 dark:text-slate-450 border border-slate-200 dark:border-slate-850 hover:bg-slate-50'
-                  }`}
-                >
-                  {status === 'todos' ? 'Todos' : status}
-                </button>
-              ))}
+              <div className="flex overflow-x-auto hide-scrollbar gap-1 p-1 bg-slate-100 dark:bg-slate-800/50 rounded-2xl w-fit">
+                {['todos', 'Ativo', 'Inativo', 'Visitante'].map((status) => (
+                  <button
+                    key={status}
+                    type="button"
+                    onClick={() => setStatusFilter(status)}
+                    className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                      statusFilter === status
+                        ? 'bg-white dark:bg-slate-700 text-amber-600 shadow-sm'
+                        : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
+                    }`}
+                  >
+                    {status === 'todos' ? 'Todos' : status}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 

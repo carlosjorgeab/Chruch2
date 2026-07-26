@@ -1828,31 +1828,35 @@ export default function FinanceiroPage() {
   return (
     <div className="p-8 space-y-8 max-w-6xl mx-auto">
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
         <div>
-          <p className="text-sm font-bold text-amber-600 uppercase tracking-widest mb-1">Módulo Financeiro</p>
-          <h2 className="text-3xl font-black font-headline text-slate-900 dark:text-white uppercase tracking-tight">Finanças Integradas</h2>
-          <p className="text-slate-500 text-sm">
+          <h1 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight flex items-center gap-2">
+            <DollarSign className="w-6 h-6 text-amber-500" />
+            Finanças Integradas
+          </h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 font-medium mt-1">
             Caixa geral, contas bancárias, categorias e comprovantes anexos
           </p>
         </div>
 
         {/* Tab Selector */}
         {!isEditing && (
-          <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700 flex-wrap gap-1">
+          <div className="flex overflow-x-auto hide-scrollbar gap-1 p-1 bg-slate-100 dark:bg-slate-800/50 rounded-2xl w-fit">
             <button
+              type="button"
               onClick={() => setActiveTab('lancamentos')}
-              className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${
-                activeTab === 'lancamentos' ? 'bg-amber-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+              className={`px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap cursor-pointer ${
+                activeTab === 'lancamentos' ? 'bg-white dark:bg-slate-700 text-amber-600 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
               }`}
             >
               Lançamentos
             </button>
             {(user?.id_master || user?.is_admin || hasPermission('/financeiro') || hasPermission('/financeiro/fluxo_caixa')) && (
               <button
+                type="button"
                 onClick={() => setActiveTab('fluxo_caixa')}
-                className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${
-                  activeTab === 'fluxo_caixa' ? 'bg-amber-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                className={`px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap cursor-pointer ${
+                  activeTab === 'fluxo_caixa' ? 'bg-white dark:bg-slate-700 text-amber-600 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
                 }`}
               >
                 Fluxo de Caixa
@@ -1860,9 +1864,10 @@ export default function FinanceiroPage() {
             )}
             {(user?.id_master || user?.is_admin || hasPermission('/financeiro/contas')) && (
               <button
+                type="button"
                 onClick={() => setActiveTab('contas')}
-                className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${
-                  activeTab === 'contas' ? 'bg-amber-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                className={`px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap cursor-pointer ${
+                  activeTab === 'contas' ? 'bg-white dark:bg-slate-700 text-amber-600 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
                 }`}
               >
                 Contas
@@ -1870,9 +1875,10 @@ export default function FinanceiroPage() {
             )}
             {(user?.id_master || user?.is_admin || hasPermission('/financeiro/categorias')) && (
               <button
+                type="button"
                 onClick={() => setActiveTab('categorias')}
-                className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${
-                  activeTab === 'categorias' ? 'bg-amber-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                className={`px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap cursor-pointer ${
+                  activeTab === 'categorias' ? 'bg-white dark:bg-slate-700 text-amber-600 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
                 }`}
               >
                 Categorias
@@ -1880,9 +1886,10 @@ export default function FinanceiroPage() {
             )}
             {(user?.id_master || user?.is_admin || hasPermission('/financeiro/formas_pagamento')) && (
                <button
+                 type="button"
                  onClick={() => setActiveTab('formas_pagamento')}
-                 className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${
-                   activeTab === 'formas_pagamento' ? 'bg-amber-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                 className={`px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap cursor-pointer ${
+                   activeTab === 'formas_pagamento' ? 'bg-white dark:bg-slate-700 text-amber-600 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
                  }`}
                >
                  Formas de Pagamento
@@ -1890,9 +1897,10 @@ export default function FinanceiroPage() {
              )}
             {(user?.id_master || user?.is_admin || hasPermission('/financeiro/centro_custo')) && (
                <button
+                 type="button"
                  onClick={() => setActiveTab('centro_custo')}
-                 className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${
-                   activeTab === 'centro_custo' ? 'bg-amber-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                 className={`px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap cursor-pointer ${
+                   activeTab === 'centro_custo' ? 'bg-white dark:bg-slate-700 text-amber-600 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
                  }`}
                >
                  Centro de Custo

@@ -343,20 +343,23 @@ export default function PatrimonioPage() {
     const isLocationChange = ['MUDANCA_LOCAL', 'EMPRESTIMO', 'DEVOLUCAO'].includes(currentMovimentacao.tipo_movimentacao);
 
     const responsavel_novo_id = currentMovimentacao.responsavel_novo_id || currentMovimentacao.responsavel || null;
-    if (!responsavel_novo_id) return setError('Novo responsável é obrigatório.');
-
     const co_responsavel_novo_id = currentMovimentacao.co_responsavel_novo_id || null;
+    const nova_loc_id = isLocationChange ? (currentMovimentacao.nova_localizacao_id || null) : null;
+
+    if (!nova_loc_id && !responsavel_novo_id && !co_responsavel_novo_id) {
+      return setError('Selecione pelo menos um dos campos: Nova Localização, Novo Responsável ou Novo Co-Responsável.');
+    }
 
     const payload = {
       patrimonio_id: currentMovimentacao.patrimonio_id,
       tipo_movimentacao: currentMovimentacao.tipo_movimentacao,
-      responsavel: responsavel_novo_id,
+      responsavel: responsavel_novo_id || currentLocation?.responsavel_id || user?.nome || 'Não Informado',
       responsavel_anterior_id: currentLocation?.responsavel_id || null,
       responsavel_novo_id: responsavel_novo_id,
       co_responsavel_anterior_id: currentLocation?.co_responsavel_id || null,
       co_responsavel_novo_id: co_responsavel_novo_id,
       localizacao_atual_id: bem?.localizacao_id || null,
-      nova_localizacao_id: isLocationChange ? currentMovimentacao.nova_localizacao_id || null : null,
+      nova_localizacao_id: nova_loc_id,
       observacao: currentMovimentacao.observacao || '',
       data_movimentacao: currentMovimentacao.data_movimentacao,
     };
@@ -1163,9 +1166,9 @@ export default function PatrimonioPage() {
                       </div>
 
                       <div>
-                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Nova Localização *</label>
-                        <select required value={currentMovimentacao.nova_localizacao_id || ''} onChange={(e) => setCurrentMovimentacao({ ...currentMovimentacao, nova_localizacao_id: e.target.value })} className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-medium">
-                          <option value="">Selecione a Nova Localização</option>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Nova Localização (Opcional)</label>
+                        <select value={currentMovimentacao.nova_localizacao_id || ''} onChange={(e) => setCurrentMovimentacao({ ...currentMovimentacao, nova_localizacao_id: e.target.value })} className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-medium">
+                          <option value="">Selecione a Nova Localização (Opcional)</option>
                           {locais.map((l: any) => (
                             <option key={l.id} value={l.id}>{l.nome}</option>
                           ))}
@@ -1185,9 +1188,9 @@ export default function PatrimonioPage() {
                     </div>
 
                     <div>
-                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Novo Responsável (Membro) *</label>
-                      <select required value={currentMovimentacao.responsavel_novo_id || currentMovimentacao.responsavel || ''} onChange={(e) => setCurrentMovimentacao({ ...currentMovimentacao, responsavel_novo_id: e.target.value, responsavel: e.target.value })} className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-medium">
-                        <option value="">Selecione o Membro Responsável</option>
+                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Novo Responsável (Membro - Opcional)</label>
+                      <select value={currentMovimentacao.responsavel_novo_id || currentMovimentacao.responsavel || ''} onChange={(e) => setCurrentMovimentacao({ ...currentMovimentacao, responsavel_novo_id: e.target.value, responsavel: e.target.value })} className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-medium">
+                        <option value="">Selecione o Membro Responsável (Opcional)</option>
                         {membros.map((m: any) => (
                           <option key={m.id} value={m.id}>{m.nome}</option>
                         ))}
