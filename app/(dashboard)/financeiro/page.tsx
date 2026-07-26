@@ -1838,91 +1838,95 @@ export default function FinanceiroPage() {
             Caixa geral, contas bancárias, categorias e comprovantes anexos
           </p>
         </div>
+      </div>
 
-        {/* Tab Selector */}
-        {!isEditing && (
-          <div className="flex overflow-x-auto hide-scrollbar gap-1 p-1 bg-slate-100 dark:bg-slate-800/50 rounded-2xl w-fit">
+      {/* Sub-Módulos Menu (Linha de Baixo - Similar ao Patrimônio) */}
+      {!isEditing && (
+        <div className="flex overflow-x-auto hide-scrollbar gap-2 p-1 bg-slate-100 dark:bg-slate-800/50 rounded-2xl w-fit">
+          <button
+            type="button"
+            onClick={() => setActiveTab('lancamentos')}
+            className={`px-4 py-2 text-sm font-bold rounded-xl transition-all whitespace-nowrap cursor-pointer ${
+              activeTab === 'lancamentos' ? 'bg-white dark:bg-slate-700 text-amber-600 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
+            }`}
+          >
+            Lançamentos
+          </button>
+          {(user?.id_master || user?.is_admin || hasPermission('/financeiro') || hasPermission('/financeiro/fluxo_caixa')) && (
             <button
               type="button"
-              onClick={() => setActiveTab('lancamentos')}
-              className={`px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap cursor-pointer ${
-                activeTab === 'lancamentos' ? 'bg-white dark:bg-slate-700 text-amber-600 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
+              onClick={() => setActiveTab('fluxo_caixa')}
+              className={`px-4 py-2 text-sm font-bold rounded-xl transition-all whitespace-nowrap cursor-pointer ${
+                activeTab === 'fluxo_caixa' ? 'bg-white dark:bg-slate-700 text-amber-600 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
               }`}
             >
-              Lançamentos
+              Fluxo de Caixa
             </button>
-            {(user?.id_master || user?.is_admin || hasPermission('/financeiro') || hasPermission('/financeiro/fluxo_caixa')) && (
-              <button
-                type="button"
-                onClick={() => setActiveTab('fluxo_caixa')}
-                className={`px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap cursor-pointer ${
-                  activeTab === 'fluxo_caixa' ? 'bg-white dark:bg-slate-700 text-amber-600 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
-                }`}
-              >
-                Fluxo de Caixa
-              </button>
-            )}
-            {(user?.id_master || user?.is_admin || hasPermission('/financeiro/contas')) && (
-              <button
-                type="button"
-                onClick={() => setActiveTab('contas')}
-                className={`px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap cursor-pointer ${
-                  activeTab === 'contas' ? 'bg-white dark:bg-slate-700 text-amber-600 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
-                }`}
-              >
-                Contas
-              </button>
-            )}
-            {(user?.id_master || user?.is_admin || hasPermission('/financeiro/categorias')) && (
-              <button
-                type="button"
-                onClick={() => setActiveTab('categorias')}
-                className={`px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap cursor-pointer ${
-                  activeTab === 'categorias' ? 'bg-white dark:bg-slate-700 text-amber-600 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
-                }`}
-              >
-                Categorias
-              </button>
-            )}
-            {(user?.id_master || user?.is_admin || hasPermission('/financeiro/formas_pagamento')) && (
-               <button
-                 type="button"
-                 onClick={() => setActiveTab('formas_pagamento')}
-                 className={`px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap cursor-pointer ${
-                   activeTab === 'formas_pagamento' ? 'bg-white dark:bg-slate-700 text-amber-600 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
-                 }`}
-               >
-                 Formas de Pagamento
-               </button>
-             )}
-            {(user?.id_master || user?.is_admin || hasPermission('/financeiro/centro_custo')) && (
-               <button
-                 type="button"
-                 onClick={() => setActiveTab('centro_custo')}
-                 className={`px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap cursor-pointer ${
-                   activeTab === 'centro_custo' ? 'bg-white dark:bg-slate-700 text-amber-600 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
-                 }`}
-               >
-                 Centro de Custo
-               </button>
-             )}
+          )}
+          {(user?.id_master || user?.is_admin || hasPermission('/financeiro/contas')) && (
+            <button
+              type="button"
+              onClick={() => setActiveTab('contas')}
+              className={`px-4 py-2 text-sm font-bold rounded-xl transition-all whitespace-nowrap cursor-pointer ${
+                activeTab === 'contas' ? 'bg-white dark:bg-slate-700 text-amber-600 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
+              }`}
+            >
+              Contas
+            </button>
+          )}
+          {(user?.id_master || user?.is_admin || hasPermission('/financeiro/categorias')) && (
+            <button
+              type="button"
+              onClick={() => setActiveTab('categorias')}
+              className={`px-4 py-2 text-sm font-bold rounded-xl transition-all whitespace-nowrap cursor-pointer ${
+                activeTab === 'categorias' ? 'bg-white dark:bg-slate-700 text-amber-600 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
+              }`}
+            >
+              Categorias
+            </button>
+          )}
+          {(user?.id_master || user?.is_admin || hasPermission('/financeiro/formas_pagamento')) && (
              <button
-               onClick={() => setActiveTab('relatorios')}
-               className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${
-                 activeTab === 'relatorios' ? 'bg-amber-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+               type="button"
+               onClick={() => setActiveTab('formas_pagamento')}
+               className={`px-4 py-2 text-sm font-bold rounded-xl transition-all whitespace-nowrap cursor-pointer ${
+                 activeTab === 'formas_pagamento' ? 'bg-white dark:bg-slate-700 text-amber-600 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
                }`}
              >
-               Relatórios
+               Formas de Pagamento
              </button>
-              <button
-                onClick={() => setActiveTab('estatisticas_financeiras')}
-                className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${activeTab === 'estatisticas_financeiras' ? 'bg-amber-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'}`}
-              >
-                Estatísticas
-              </button>
-           </div>
-        )}
-      </div>
+           )}
+          {(user?.id_master || user?.is_admin || hasPermission('/financeiro/centro_custo')) && (
+             <button
+               type="button"
+               onClick={() => setActiveTab('centro_custo')}
+               className={`px-4 py-2 text-sm font-bold rounded-xl transition-all whitespace-nowrap cursor-pointer ${
+                 activeTab === 'centro_custo' ? 'bg-white dark:bg-slate-700 text-amber-600 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
+               }`}
+             >
+               Centro de Custo
+             </button>
+           )}
+           <button
+             type="button"
+             onClick={() => setActiveTab('relatorios')}
+             className={`px-4 py-2 text-sm font-bold rounded-xl transition-all whitespace-nowrap cursor-pointer ${
+               activeTab === 'relatorios' ? 'bg-white dark:bg-slate-700 text-amber-600 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
+             }`}
+           >
+             Relatórios
+           </button>
+           <button
+             type="button"
+             onClick={() => setActiveTab('estatisticas_financeiras')}
+             className={`px-4 py-2 text-sm font-bold rounded-xl transition-all whitespace-nowrap cursor-pointer ${
+               activeTab === 'estatisticas_financeiras' ? 'bg-white dark:bg-slate-700 text-amber-600 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
+             }`}
+           >
+             Estatísticas
+           </button>
+        </div>
+      )}
 
       {error && (
         <div className="p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl text-black dark:text-black font-bold text-sm flex items-center gap-2">

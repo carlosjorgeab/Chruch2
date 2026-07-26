@@ -1,11 +1,12 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { Settings, Save, Bell, Shield, Globe, Moon, Clock, Lock, MonitorStop, RefreshCw, CheckCircle, AlertTriangle, Database, FileText, Copy, Check, UserPlus, Cake, BookOpen, Mail, Send, Activity, DollarSign } from 'lucide-react';
+import { Settings, Save, Bell, Shield, Globe, Moon, Clock, Lock, MonitorStop, RefreshCw, CheckCircle, AlertTriangle, Database, FileText, Copy, Check, UserPlus, Cake, BookOpen, Mail, Send, Activity, DollarSign, ShieldCheck, Eye, Filter, Search, Download } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useLanguage } from '@/context/LanguageContext';
 import { defaultTranslations } from '@/lib/translations';
 import { useAuth } from '@/context/AuthContext';
 import { useIgreja } from '@/context/IgrejaContext';
+import { registrarAuditoria } from '@/lib/auditoria';
 
 export default function ConfiguracoesPage() {
   const { user, hasPermission } = useAuth();
@@ -20,6 +21,14 @@ export default function ConfiguracoesPage() {
   const { language: sysLanguage, setLanguage: setLanguageState, saveOverride, overrides } = useLanguage();
   const [editingTranslations, setEditingTranslations] = useState<Record<string, string>>({});
   const [language, setLanguage] = useState('pt');
+  
+  // Audit logs state
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [loadingAudit, setLoadingAudit] = useState(false);
+  const [auditSearchText, setAuditSearchText] = useState('');
+  const [auditFilterModulo, setAuditFilterModulo] = useState('Todos');
+  const [auditFilterAcao, setAuditFilterAcao] = useState('Todas');
+  const [selectedAuditLog, setSelectedAuditLog] = useState<any | null>(null);
   
   // Notification states
   const [notifyNewMembers, setNotifyNewMembers] = useState(true);
@@ -68,8 +77,41 @@ export default function ConfiguracoesPage() {
       checkDatabaseTables();
       fetchSchema();
       fetchMigrations();
+    } else if (activeTab === 'auditoria') {
+      fetchAuditLogs();
     }
-  }, [activeTab]);
+  }, [activeTab, selectedIgreja?.id]);
+
+  const fetchAuditLogs = async () => {
+    try {
+      setLoadingAudit(true);
+      let query = supabase
+        .from('auditoria')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(300);
+
+      if (selectedIgreja?.id) {
+        query = query.eq('id_igreja', selectedIgreja.id);
+      }
+
+      const { data, error: err } = await query;
+      if (err) {
+        if (err.code === 'PGRST205') {
+          console.warn('Tabela auditoria não encontrada.');
+          setAuditLogs([]);
+        } else {
+          console.error('Erro ao buscar logs de auditoria:', err);
+        }
+      } else if (data) {
+        setAuditLogs(data);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingAudit(false);
+    }
+  };
 
   const fetchMigrations = async () => {
     try {
@@ -321,6 +363,18 @@ export default function ConfiguracoesPage() {
       }
 
       setStatusMessage({ type: 'success', text: 'Configurações do sistema salvas com sucesso!' });
+      
+      registrarAuditoria({
+        id_igreja: selectedIgreja?.id || null,
+        usuario_id: user?.id || null,
+        usuario_nome: user?.nome || 'Administrador',
+        usuario_email: user?.email || null,
+        acao: 'CONFIGURACAO',
+        modulo: 'Configurações',
+        detalhes: 'Configurações do sistema salvas e atualizadas com sucesso.',
+        dados_novos: { sessionTimeout, disableMultiLogin, darkMode, emailAlertasFinanceiro, notifyContasVencimento, smtpHost, smtpPort }
+      });
+
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (error: any) {
       console.error('Error saving configs:', error);
@@ -412,6 +466,7 @@ export default function ConfiguracoesPage() {
     { id: 'seguranca', label: 'Segurança', icon: Shield },
     { id: 'notificacoes', label: 'Notificações', icon: Bell },
     { id: 'financeiro', label: 'Financeiro', icon: DollarSign },
+    { id: 'auditoria', label: 'Logs de Auditoria', icon: ShieldCheck },
     { id: 'servidores', label: 'Servidores', icon: Mail },
     { id: 'database', label: 'Banco de Dados', icon: Database },
   ];
@@ -419,7 +474,7 @@ export default function ConfiguracoesPage() {
   const allowedTabs = tabs.filter(tab => {
     if (user?.id_master) return true;
     if (user?.is_admin) {
-      return tab.id === 'geral' || tab.id === 'notificacoes' || tab.id === 'financeiro';
+      return tab.id === 'geral' || tab.id === 'notificacoes' || tab.id === 'financeiro' || tab.id === 'auditoria';
     }
     return false;
   });
@@ -1035,6 +1090,263 @@ export default function ConfiguracoesPage() {
                   {saving ? 'Salvando...' : 'Salvar Alterações'}
                 </button>
               </div>
+            </div>
+          )}
+
+          {activeTab === 'auditoria' && (
+            <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
+                <div>
+                  <h3 className="text-xl font-black font-headline text-slate-900 dark:text-white uppercase flex items-center gap-2">
+                    <ShieldCheck className="text-amber-500" size={22} />
+                    Logs de Auditoria do Sistema
+                  </h3>
+                  <p className="text-slate-500 dark:text-slate-400 text-sm">
+                    Histórico detalhado de alterações, cadastros, exclusões e acessos efetuados no sistema
+                  </p>
+                </div>
+                <button
+                  onClick={fetchAuditLogs}
+                  disabled={loadingAudit}
+                  className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition-all w-fit cursor-pointer"
+                >
+                  <RefreshCw size={14} className={loadingAudit ? 'animate-spin' : ''} />
+                  Atualizar Logs
+                </button>
+              </div>
+
+              {/* Filters */}
+              <div className="bg-slate-50 dark:bg-slate-900/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-800/80 flex flex-wrap items-center gap-3">
+                <div className="flex-1 min-w-[200px] relative">
+                  <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Buscar por usuário, detalhes..."
+                    value={auditSearchText}
+                    onChange={(e) => setAuditSearchText(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 rounded-xl border border-slate-200 dark:border-slate-750 bg-white dark:bg-slate-950/60 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Módulo:</span>
+                  <select
+                    value={auditFilterModulo}
+                    onChange={(e) => setAuditFilterModulo(e.target.value)}
+                    className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-750 bg-white dark:bg-slate-950/60 text-slate-900 dark:text-white text-xs font-semibold outline-none"
+                  >
+                    <option value="Todos">Todos os Módulos</option>
+                    <option value="Financeiro">Financeiro</option>
+                    <option value="Patrimônio">Patrimônio</option>
+                    <option value="Membros">Membros</option>
+                    <option value="Kids">Kids</option>
+                    <option value="Agenda">Agenda</option>
+                    <option value="Eventos">Eventos</option>
+                    <option value="Configurações">Configurações</option>
+                    <option value="Usuários">Usuários</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Ação:</span>
+                  <select
+                    value={auditFilterAcao}
+                    onChange={(e) => setAuditFilterAcao(e.target.value)}
+                    className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-750 bg-white dark:bg-slate-950/60 text-slate-900 dark:text-white text-xs font-semibold outline-none"
+                  >
+                    <option value="Todas">Todas as Ações</option>
+                    <option value="CRIAR">CRIAR / INSERIR</option>
+                    <option value="EDITAR">EDITAR / ATUALIZAR</option>
+                    <option value="EXCLUIR">EXCLUIR / REMOVER</option>
+                    <option value="CONFIGURACAO">CONFIGURAÇÃO</option>
+                    <option value="LOGIN">ACESSO / LOGIN</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Logs Table */}
+              {loadingAudit ? (
+                <div className="flex flex-col items-center justify-center py-16 text-slate-400 gap-2">
+                  <RefreshCw size={28} className="animate-spin text-amber-500" />
+                  <p className="text-xs font-bold uppercase tracking-wider">Carregando auditoria...</p>
+                </div>
+              ) : (
+                (() => {
+                  const filtered = auditLogs.filter((log) => {
+                    if (auditFilterModulo !== 'Todos' && log.modulo !== auditFilterModulo) return false;
+                    if (auditFilterAcao !== 'Todas' && log.acao !== auditFilterAcao) return false;
+                    if (auditSearchText) {
+                      const txt = auditSearchText.toLowerCase();
+                      const matchUser = (log.usuario_nome || '').toLowerCase().includes(txt) || (log.usuario_email || '').toLowerCase().includes(txt);
+                      const matchDetails = (log.detalhes || '').toLowerCase().includes(txt);
+                      const matchModule = (log.modulo || '').toLowerCase().includes(txt);
+                      if (!matchUser && !matchDetails && !matchModule) return false;
+                    }
+                    return true;
+                  });
+
+                  if (filtered.length === 0) {
+                    return (
+                      <div className="p-12 text-center bg-slate-50 dark:bg-slate-900/40 rounded-3xl border border-slate-200 dark:border-slate-800 space-y-2">
+                        <ShieldCheck className="mx-auto text-slate-400" size={36} />
+                        <p className="font-bold text-slate-700 dark:text-slate-300 text-sm">Nenhum registro de auditoria encontrado</p>
+                        <p className="text-xs text-slate-400">Tente redefinir os filtros ou realize operações no sistema para gerar novos logs.</p>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-xs">
+                          <thead className="bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 font-black uppercase tracking-wider border-b border-slate-200 dark:border-slate-700">
+                            <tr>
+                              <th className="p-3.5">Data / Hora</th>
+                              <th className="p-3.5">Usuário</th>
+                              <th className="p-3.5">Módulo</th>
+                              <th className="p-3.5">Ação</th>
+                              <th className="p-3.5">Detalhes</th>
+                              <th className="p-3.5 text-right">Dados</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                            {filtered.map((log) => {
+                              const dtStr = log.created_at ? new Date(log.created_at).toLocaleString('pt-BR') : '-';
+                              let acaoBadgeClass = 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
+                              if (log.acao?.includes('CRIAR') || log.acao?.includes('INSERIR')) {
+                                acaoBadgeClass = 'bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/50';
+                              } else if (log.acao?.includes('EDITAR') || log.acao?.includes('ATUALIZAR')) {
+                                acaoBadgeClass = 'bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800/50';
+                              } else if (log.acao?.includes('EXCLUIR') || log.acao?.includes('REMOVER')) {
+                                acaoBadgeClass = 'bg-rose-100 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-800/50';
+                              } else if (log.acao?.includes('CONFIG') || log.acao?.includes('LOGIN')) {
+                                acaoBadgeClass = 'bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800/50';
+                              }
+
+                              const hasExtraData = log.dados_anteriores || log.dados_novos;
+
+                              return (
+                                <tr key={log.id} className="hover:bg-slate-50 dark:hover:bg-slate-850/50 transition">
+                                  <td className="p-3.5 font-mono text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                                    {dtStr}
+                                  </td>
+                                  <td className="p-3.5 font-semibold text-slate-850 dark:text-slate-200 whitespace-nowrap">
+                                    <div>{log.usuario_nome || 'Sistema'}</div>
+                                    {log.usuario_email && (
+                                      <div className="text-[10px] text-slate-400 font-normal">{log.usuario_email}</div>
+                                    )}
+                                  </td>
+                                  <td className="p-3.5 whitespace-nowrap">
+                                    <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                                      {log.modulo}
+                                    </span>
+                                  </td>
+                                  <td className="p-3.5 whitespace-nowrap">
+                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black tracking-wider ${acaoBadgeClass}`}>
+                                      {log.acao}
+                                    </span>
+                                  </td>
+                                  <td className="p-3.5 text-slate-700 dark:text-slate-300 font-medium max-w-md">
+                                    {log.detalhes}
+                                  </td>
+                                  <td className="p-3.5 text-right whitespace-nowrap">
+                                    {hasExtraData ? (
+                                      <button
+                                        onClick={() => setSelectedAuditLog(log)}
+                                        className="p-1.5 rounded-lg bg-amber-50 dark:bg-amber-950/30 hover:bg-amber-100 dark:hover:bg-amber-900/50 text-amber-600 dark:text-amber-400 font-bold transition flex items-center gap-1 ml-auto cursor-pointer"
+                                        title="Ver Alterações Detalhadas"
+                                      >
+                                        <Eye size={14} />
+                                        <span>Detalhes</span>
+                                      </button>
+                                    ) : (
+                                      <span className="text-slate-400 text-[10px]">-</span>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  );
+                })()
+              )}
+
+              {/* Modal for viewing Audit log details */}
+              {selectedAuditLog && (
+                <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+                  <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-2xl w-full p-6 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200">
+                    <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-3">
+                      <div>
+                        <h4 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                          <ShieldCheck size={18} className="text-amber-500" />
+                          Detalhes do Log de Auditoria
+                        </h4>
+                        <p className="text-xs text-slate-500">{new Date(selectedAuditLog.created_at).toLocaleString('pt-BR')}</p>
+                      </div>
+                      <button
+                        onClick={() => setSelectedAuditLog(null)}
+                        className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    <div className="space-y-3 text-xs">
+                      <div className="grid grid-cols-2 gap-4 bg-slate-50 dark:bg-slate-950 p-3 rounded-2xl border border-slate-100 dark:border-slate-800">
+                        <div>
+                          <span className="text-slate-400 font-bold uppercase text-[10px] block">Usuário</span>
+                          <span className="font-bold text-slate-850 dark:text-slate-200">{selectedAuditLog.usuario_nome || 'Sistema'}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 font-bold uppercase text-[10px] block">Módulo / Ação</span>
+                          <span className="font-bold text-slate-850 dark:text-slate-200">{selectedAuditLog.modulo} - {selectedAuditLog.acao}</span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <span className="text-slate-400 font-bold uppercase text-[10px] block mb-1">Descrição do Evento</span>
+                        <div className="p-3 bg-slate-50 dark:bg-slate-950 rounded-2xl text-slate-800 dark:text-slate-200 font-medium">
+                          {selectedAuditLog.detalhes}
+                        </div>
+                      </div>
+
+                      {selectedAuditLog.dados_anteriores && (
+                        <div>
+                          <span className="text-slate-400 font-bold uppercase text-[10px] block mb-1">Dados Anteriores</span>
+                          <pre className="p-3 bg-slate-900 text-slate-300 rounded-2xl font-mono text-[11px] overflow-x-auto max-h-48 overflow-y-auto">
+                            {typeof selectedAuditLog.dados_anteriores === 'string'
+                              ? selectedAuditLog.dados_anteriores
+                              : JSON.stringify(selectedAuditLog.dados_anteriores, null, 2)}
+                          </pre>
+                        </div>
+                      )}
+
+                      {selectedAuditLog.dados_novos && (
+                        <div>
+                          <span className="text-slate-400 font-bold uppercase text-[10px] block mb-1">Dados Novos</span>
+                          <pre className="p-3 bg-slate-900 text-emerald-300 rounded-2xl font-mono text-[11px] overflow-x-auto max-h-48 overflow-y-auto">
+                            {typeof selectedAuditLog.dados_novos === 'string'
+                              ? selectedAuditLog.dados_novos
+                              : JSON.stringify(selectedAuditLog.dados_novos, null, 2)}
+                          </pre>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="pt-2 flex justify-end">
+                      <button
+                        onClick={() => setSelectedAuditLog(null)}
+                        className="px-5 py-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl font-bold text-xs hover:opacity-90 transition cursor-pointer"
+                      >
+                        Fechar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

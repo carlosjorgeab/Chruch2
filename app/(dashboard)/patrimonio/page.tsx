@@ -8,6 +8,8 @@ import { useConfirm } from '@/context/ConfirmContext';
 import { Plus, Edit2, Trash2, Save, Search, Package, Layers, MapPin, BarChart3, AlertCircle, QrCode, ArrowLeft, Image as ImageIcon, Camera, History, FileText, Download, Calendar, X, ArrowRightLeft, UserCheck, Users, User } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { motion, AnimatePresence } from 'motion/react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 const calculateDepreciation = (valor: number | null | undefined, data_aquisicao: string | null | undefined, estado: string) => {
   if (!valor) return 0;
@@ -415,15 +417,191 @@ export default function PatrimonioPage() {
     });
   };
 
-  // Reports
+  // Reports PDF Generation
+  const generatePDFReport = (filteredList: any[], docTitle: string) => {
+    try {
+      const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
+
+      const churchName = selectedIgreja?.nome || 'IGREJA';
+      const logoBase64 = selectedIgreja?.logo_url;
+      const generationDate = new Date().toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+
+      // Filter description line
+      let locName = 'Todas';
+      if (relatorioLocalizacao) {
+        const found = locais.find(l => l.id === relatorioLocalizacao);
+        if (found) locName = found.nome;
+      }
+      
+      let filterText = `Filtros: Localização: ${locName}`;
+      if (relatorioTipo === 'movimentacoes') {
+        const iniStr = relatorioDataInicial ? new Date(relatorioDataInicial + 'T00:00:00').toLocaleDateString('pt-BR') : 'Início';
+        const fimStr = relatorioDataFinal ? new Date(relatorioDataFinal + 'T00:00:00').toLocaleDateString('pt-BR') : 'Atual';
+        filterText += ` | Período: ${iniStr} até ${fimStr}`;
+      }
+
+      // Header block card (white fill, black stroke)
+      doc.setFillColor(255, 255, 255);
+      doc.setDrawColor(0, 0, 0); // Black border
+      doc.setLineWidth(0.4);
+      doc.rect(10, 10, 190, 26, 'FD');
+
+      const logoSize = 12;
+      let textStartX = 15;
+      if (logoBase64) {
+        try {
+          doc.addImage(logoBase64, 'PNG', 14, 15, logoSize, logoSize);
+          textStartX = 14 + logoSize + 4;
+        } catch (err) {
+          console.error("Error drawing logo", err);
+        }
+      }
+
+      // Header Titles & Info
+      doc.setTextColor(0, 0, 0);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.text(churchName.toUpperCase(), textStartX, 16);
+
+      doc.setFontSize(9);
+      doc.text(docTitle, textStartX, 22);
+
+      doc.setTextColor(80, 80, 80);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.text(`Gerado em: ${generationDate}  |  Total: ${filteredList.length} registro(s)`, textStartX, 27);
+      doc.text(filterText, textStartX, 32);
+
+      if (relatorioTipo === 'bens') {
+        const tableHeaders = ['Nome do Bem', 'Tombamento', 'Localização', 'Categoria', 'Estado', 'Status', 'Valor (R$)'];
+        const tableRows = filteredList.map(b => [
+          b.nome || '-',
+          b.numero_tombamento || '-',
+          b.local?.nome || '-',
+          b.categoria?.nome || '-',
+          b.estado_conservacao || '-',
+          b.status || '-',
+          b.valor_aquisicao ? parseFloat(b.valor_aquisicao).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '-'
+        ]);
+
+        autoTable(doc, {
+          startY: 40,
+          head: [tableHeaders],
+          body: tableRows,
+          theme: 'striped',
+          headStyles: {
+            fillColor: [0, 0, 0], // Pure Black background for header
+            textColor: [255, 255, 255],
+            fontStyle: 'bold',
+            fontSize: 8.5,
+            valign: 'middle',
+            lineColor: [0, 0, 0],
+            lineWidth: 0.1,
+          },
+          bodyStyles: {
+            fontSize: 8,
+            valign: 'middle',
+            textColor: [0, 0, 0],
+            lineColor: [180, 180, 180],
+            lineWidth: 0.1,
+          },
+          styles: {
+            font: 'helvetica',
+            cellPadding: 3,
+          },
+          columnStyles: {
+            0: { cellWidth: 40, fontStyle: 'bold' },
+            1: { cellWidth: 25 },
+            2: { cellWidth: 30 },
+            3: { cellWidth: 25 },
+            4: { cellWidth: 22 },
+            5: { cellWidth: 20 },
+            6: { cellWidth: 28, halign: 'right' },
+          }
+        });
+      } else {
+        const tableHeaders = ['Data', 'Bem (Tombamento)', 'Tipo', 'Local Atual / Novo', 'Responsável', 'Observação'];
+        const tableRows = filteredList.map(m => {
+          const dtStr = m.data_movimentacao ? new Date(m.data_movimentacao + 'T00:00:00').toLocaleDateString('pt-BR') : '-';
+          const bemName = m.bem?.nome ? `${m.bem.nome} (${m.bem.numero_tombamento || '-'})` : '-';
+          const locName = m.nova_localizacao?.nome ? `${m.localizacao_atual?.nome || '-'} ➔ ${m.nova_localizacao.nome}` : (m.localizacao_atual?.nome || '-');
+          const respName = m.responsavel || '-';
+          return [
+            dtStr,
+            bemName,
+            m.tipo_movimentacao || '-',
+            locName,
+            respName,
+            m.observacao || '-'
+          ];
+        });
+
+        autoTable(doc, {
+          startY: 40,
+          head: [tableHeaders],
+          body: tableRows,
+          theme: 'striped',
+          headStyles: {
+            fillColor: [0, 0, 0],
+            textColor: [255, 255, 255],
+            fontStyle: 'bold',
+            fontSize: 8.5,
+            valign: 'middle',
+            lineColor: [0, 0, 0],
+            lineWidth: 0.1,
+          },
+          bodyStyles: {
+            fontSize: 8,
+            valign: 'middle',
+            textColor: [0, 0, 0],
+            lineColor: [180, 180, 180],
+            lineWidth: 0.1,
+          },
+          styles: {
+            font: 'helvetica',
+            cellPadding: 3,
+          },
+          columnStyles: {
+            0: { cellWidth: 22 },
+            1: { cellWidth: 40, fontStyle: 'bold' },
+            2: { cellWidth: 28 },
+            3: { cellWidth: 35 },
+            4: { cellWidth: 30 },
+            5: { cellWidth: 'auto' },
+          }
+        });
+      }
+
+      doc.save(`relatorio_patrimonio_${new Date().toISOString().split('T')[0]}.pdf`);
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao gerar relatório PDF.');
+    }
+  };
+
   const generateReport = () => {
+    let filteredList: any[] = [];
+    let docTitle = 'RELATÓRIO DE BENS PATRIMONIAIS';
+
     if (relatorioTipo === 'bens') {
       let filtered = bens;
       if (relatorioLocalizacao) {
         filtered = filtered.filter(b => b.localizacao_id === relatorioLocalizacao);
       }
+      filteredList = filtered;
       setRelatorioResult(filtered);
     } else {
+      docTitle = 'RELATÓRIO DE MOVIMENTAÇÕES DE PATRIMÔNIO';
       let filtered = movimentacoes;
       if (relatorioLocalizacao) {
         const bensInLoc = bens.filter(b => b.localizacao_id === relatorioLocalizacao).map(b => b.id);
@@ -435,8 +613,12 @@ export default function PatrimonioPage() {
       if (relatorioDataFinal) {
         filtered = filtered.filter(m => new Date(m.data_movimentacao) <= new Date(relatorioDataFinal));
       }
+      filteredList = filtered;
       setRelatorioResult(filtered);
     }
+
+    // Immediately trigger PDF generation with church header
+    generatePDFReport(filteredList, docTitle);
   };
 
   if (!canReadPatrimonio) {
@@ -1278,7 +1460,7 @@ export default function PatrimonioPage() {
                 <div className="p-6">
                   <div className="flex justify-between items-center mb-4">
                     <h4 className="font-bold text-slate-800 dark:text-slate-200">Resultado ({relatorioResult.length} registros)</h4>
-                    <button onClick={() => window.print()} className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold rounded-lg flex items-center gap-2 print:hidden"><Download className="w-3 h-3"/> Imprimir / PDF</button>
+                    <button onClick={() => generatePDFReport(relatorioResult, relatorioTipo === 'bens' ? 'RELATÓRIO DE BENS PATRIMONIAIS' : 'RELATÓRIO DE MOVIMENTAÇÕES DE PATRIMÔNIO')} className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold rounded-lg flex items-center gap-2 cursor-pointer"><Download className="w-3 h-3"/> Baixar PDF</button>
                   </div>
                   
                   <div className="overflow-x-auto print:overflow-visible">
