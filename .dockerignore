@@ -1,9 +1,0 @@
-node_modules
-npm-debug.log
-.git
-.gitignore
-.dockerignore
-.env
-Dockerfile
-README.md
-tsconfig.tsbuildinfo
