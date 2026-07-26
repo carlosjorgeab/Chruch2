@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { useIgreja } from '@/context/IgrejaContext';
 import { useConfirm } from '@/context/ConfirmContext';
-import { Plus, Edit2, Trash2, Save, Search, Package, Layers, MapPin, BarChart3, AlertCircle, QrCode, ArrowLeft, Image as ImageIcon, Camera, History, FileText, Download, Calendar, X, ArrowRightLeft } from 'lucide-react';
+import { Plus, Edit2, Trash2, Save, Search, Package, Layers, MapPin, BarChart3, AlertCircle, QrCode, ArrowLeft, Image as ImageIcon, Camera, History, FileText, Download, Calendar, X, ArrowRightLeft, UserCheck, Users, User } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -70,13 +70,13 @@ export default function PatrimonioPage() {
 
   // Current items
   const [currentCategoria, setCurrentCategoria] = useState<any>({ nome: '', descricao: '' });
-  const [currentLocal, setCurrentLocal] = useState<any>({ nome: '', descricao: '' });
+  const [currentLocal, setCurrentLocal] = useState<any>({ nome: '', descricao: '', responsavel_id: '', co_responsavel_id: '' });
   const [currentBem, setCurrentBem] = useState<any>({
     nome: '', descricao: '', numero_tombamento: '', valor_aquisicao: '', data_aquisicao: '', 
     estado_conservacao: 'BOM', status: 'ATIVO', categoria_id: '', localizacao_id: '', foto_url: ''
   });
   const [currentMovimentacao, setCurrentMovimentacao] = useState<any>({
-    patrimonio_id: '', tipo_movimentacao: 'MUDANCA_LOCAL', responsavel: '', observacao: '', data_movimentacao: new Date().toISOString().split('T')[0]
+    patrimonio_id: '', tipo_movimentacao: 'MUDANCA_LOCAL', responsavel: '', responsavel_novo_id: '', co_responsavel_novo_id: '', nova_localizacao_id: '', observacao: '', data_movimentacao: new Date().toISOString().split('T')[0]
   });
 
   const [showQRModal, setShowQRModal] = useState(false);
@@ -239,6 +239,8 @@ export default function PatrimonioPage() {
     const payload = {
       nome: currentLocal.nome,
       descricao: currentLocal.descricao,
+      responsavel_id: currentLocal.responsavel_id || null,
+      co_responsavel_id: currentLocal.co_responsavel_id || null,
       id_igreja: selectedIgreja?.id
     };
 
@@ -335,25 +337,49 @@ export default function PatrimonioPage() {
   const handleSaveMovimentacao = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentMovimentacao.patrimonio_id) return setError('Obrigatório selecionar o bem.');
-    if (!currentMovimentacao.responsavel) return setError('Responsável é obrigatório.');
 
     const bem = bens.find(b => b.id === currentMovimentacao.patrimonio_id);
+    const currentLocation = locais.find(l => l.id === bem?.localizacao_id);
     const isLocationChange = ['MUDANCA_LOCAL', 'EMPRESTIMO', 'DEVOLUCAO'].includes(currentMovimentacao.tipo_movimentacao);
+
+    const responsavel_novo_id = currentMovimentacao.responsavel_novo_id || currentMovimentacao.responsavel || null;
+    if (!responsavel_novo_id) return setError('Novo responsável é obrigatório.');
+
+    const co_responsavel_novo_id = currentMovimentacao.co_responsavel_novo_id || null;
 
     const payload = {
       patrimonio_id: currentMovimentacao.patrimonio_id,
       tipo_movimentacao: currentMovimentacao.tipo_movimentacao,
-      responsavel: currentMovimentacao.responsavel,
+      responsavel: responsavel_novo_id,
+      responsavel_anterior_id: currentLocation?.responsavel_id || null,
+      responsavel_novo_id: responsavel_novo_id,
+      co_responsavel_anterior_id: currentLocation?.co_responsavel_id || null,
+      co_responsavel_novo_id: co_responsavel_novo_id,
+      localizacao_atual_id: bem?.localizacao_id || null,
+      nova_localizacao_id: isLocationChange ? currentMovimentacao.nova_localizacao_id || null : null,
       observacao: currentMovimentacao.observacao || '',
       data_movimentacao: currentMovimentacao.data_movimentacao,
-      localizacao_atual_id: isLocationChange ? bem?.localizacao_id || null : null,
-      nova_localizacao_id: isLocationChange ? currentMovimentacao.nova_localizacao_id || null : null,
     };
 
     if (currentMovimentacao.id) {
       await supabase.from('patrimonio_movimentacoes').update(payload).eq('id', currentMovimentacao.id);
     } else {
       await supabase.from('patrimonio_movimentacoes').insert([payload]);
+    }
+
+    // Update target location's responsable and co-responsable
+    const targetLocationId = isLocationChange && currentMovimentacao.nova_localizacao_id 
+      ? currentMovimentacao.nova_localizacao_id 
+      : bem?.localizacao_id;
+
+    if (targetLocationId) {
+      const locUpdates: any = {};
+      if (responsavel_novo_id) locUpdates.responsavel_id = responsavel_novo_id;
+      if (co_responsavel_novo_id) locUpdates.co_responsavel_id = co_responsavel_novo_id;
+      
+      if (Object.keys(locUpdates).length > 0) {
+        await supabase.from('patrimonio_localizacoes').update(locUpdates).eq('id', targetLocationId);
+      }
     }
 
     if (isLocationChange && currentMovimentacao.nova_localizacao_id) {
@@ -371,7 +397,8 @@ export default function PatrimonioPage() {
     setIsEditingMovimentacao(false);
     fetchMovimentacoes();
     fetchBens();
-    setSuccess('Movimentação salva!');
+    fetchLocais();
+    setSuccess('Movimentação registrada com sucesso!');
     setTimeout(() => setSuccess(''), 3000);
   };
   
@@ -893,7 +920,7 @@ export default function PatrimonioPage() {
                 {canEditCategorias && (
                   <button
                     onClick={() => {
-                      setCurrentLocal({ nome: '', descricao: '' });
+                      setCurrentLocal({ nome: '', descricao: '', responsavel_id: '', co_responsavel_id: '' });
                       setIsEditingLocal(true);
                     }}
                     className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-sm font-bold rounded-xl transition-all shadow-sm flex items-center gap-2"
@@ -904,20 +931,32 @@ export default function PatrimonioPage() {
               </div>
               <div className="p-6">
                 <div className="grid gap-3">
-                  {locais.map(loc => (
-                    <div key={loc.id} className="p-4 border border-slate-100 dark:border-slate-800 rounded-2xl flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/30 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
-                      <div>
-                        <p className="font-bold text-slate-900 dark:text-white">{loc.nome}</p>
-                        {loc.descricao && <p className="text-xs text-slate-500">{loc.descricao}</p>}
-                      </div>
-                      {canEditCategorias && (
-                        <div className="flex gap-2">
-                          <button onClick={() => { setCurrentLocal(loc); setIsEditingLocal(true); }} className="p-2 text-slate-400 hover:text-amber-500 hover:bg-amber-50 rounded-xl transition-all"><Edit2 className="w-4 h-4" /></button>
-                          <button onClick={() => handleDeleteLocal(loc.id)} className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all"><Trash2 className="w-4 h-4" /></button>
+                  {locais.map(loc => {
+                    const resp = membros.find(m => m.id === loc.responsavel_id);
+                    const coResp = membros.find(m => m.id === loc.co_responsavel_id);
+                    return (
+                      <div key={loc.id} className="p-4 border border-slate-100 dark:border-slate-800 rounded-2xl flex flex-col sm:flex-row justify-between sm:items-center gap-4 bg-slate-50/50 dark:bg-slate-800/30 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                        <div>
+                          <p className="font-bold text-slate-900 dark:text-white">{loc.nome}</p>
+                          {loc.descricao && <p className="text-xs text-slate-500 mb-1">{loc.descricao}</p>}
+                          <div className="flex flex-wrap gap-2 mt-2 text-xs">
+                            <span className="px-2.5 py-1 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 rounded-lg font-medium flex items-center gap-1">
+                              <UserCheck className="w-3.5 h-3.5" /> Responsável: {resp?.nome || 'Não definido'}
+                            </span>
+                            <span className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-lg font-medium flex items-center gap-1">
+                              <Users className="w-3.5 h-3.5" /> Co-Responsável: {coResp?.nome || 'Não definido'}
+                            </span>
+                          </div>
                         </div>
-                      )}
-                    </div>
-                  ))}
+                        {canEditCategorias && (
+                          <div className="flex gap-2 shrink-0">
+                            <button onClick={() => { setCurrentLocal(loc); setIsEditingLocal(true); }} className="p-2 text-slate-400 hover:text-amber-500 hover:bg-amber-50 rounded-xl transition-all"><Edit2 className="w-4 h-4" /></button>
+                            <button onClick={() => handleDeleteLocal(loc.id)} className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all"><Trash2 className="w-4 h-4" /></button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                   {locais.length === 0 && <p className="text-center text-slate-500 text-sm py-8">Nenhum local cadastrado.</p>}
                 </div>
               </div>
@@ -942,11 +981,37 @@ export default function PatrimonioPage() {
               <div className="space-y-4">
                 <div>
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Nome do Local *</label>
-                  <input required type="text" value={currentLocal.nome} onChange={(e) => setCurrentLocal({ ...currentLocal, nome: e.target.value })} className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-medium" />
+                  <input required type="text" value={currentLocal.nome || ''} onChange={(e) => setCurrentLocal({ ...currentLocal, nome: e.target.value })} className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-medium" />
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Descrição</label>
                   <textarea rows={3} value={currentLocal.descricao || ''} onChange={(e) => setCurrentLocal({ ...currentLocal, descricao: e.target.value })} className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-medium" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Responsável (Membro)</label>
+                  <select
+                    value={currentLocal.responsavel_id || ''}
+                    onChange={(e) => setCurrentLocal({ ...currentLocal, responsavel_id: e.target.value })}
+                    className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-medium"
+                  >
+                    <option value="">Selecione um Membro...</option>
+                    {membros.map((m: any) => (
+                      <option key={m.id} value={m.id}>{m.nome}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Co-Responsável (Membro)</label>
+                  <select
+                    value={currentLocal.co_responsavel_id || ''}
+                    onChange={(e) => setCurrentLocal({ ...currentLocal, co_responsavel_id: e.target.value })}
+                    className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-medium"
+                  >
+                    <option value="">Selecione um Membro...</option>
+                    {membros.map((m: any) => (
+                      <option key={m.id} value={m.id}>{m.nome}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
               <div className="mt-8 flex justify-end gap-4">
@@ -964,7 +1029,7 @@ export default function PatrimonioPage() {
                 {canEditPatrimonio && (
                   <button
                     onClick={() => {
-                      setCurrentMovimentacao({ patrimonio_id: '', tipo_movimentacao: 'MUDANCA_LOCAL', responsavel: user?.nome || '', observacao: '', data_movimentacao: new Date().toISOString().split('T')[0] });
+                      setCurrentMovimentacao({ patrimonio_id: '', tipo_movimentacao: 'MUDANCA_LOCAL', responsavel: user?.nome || '', responsavel_novo_id: '', co_responsavel_novo_id: '', observacao: '', data_movimentacao: new Date().toISOString().split('T')[0] });
                       setIsEditingMovimentacao(true);
                     }}
                     className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-sm font-bold rounded-xl transition-all shadow-sm flex items-center gap-2"
@@ -1005,7 +1070,7 @@ export default function PatrimonioPage() {
                           </span>
                         </td>
                         <td className="p-4 text-sm text-slate-600 dark:text-slate-300">
-                          {membros.find(m => m.id === mov.responsavel)?.nome || mov.responsavel}
+                          {membros.find(m => m.id === (mov.responsavel_novo_id || mov.responsavel))?.nome || mov.responsavel}
                         </td>
                         <td className="p-4 text-right">
                           <div className="flex items-center justify-end gap-2">
@@ -1033,73 +1098,136 @@ export default function PatrimonioPage() {
           )}
 
           {/* FORM: MOVIMENTAÇÃO */}
-          {isEditingMovimentacao && (
-            <motion.form 
-              initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} 
-              onSubmit={handleSaveMovimentacao} 
-              className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm p-6 sm:p-8 max-w-3xl"
-            >
-              <div className="flex items-center gap-3 mb-6 border-b border-slate-100 dark:border-slate-800 pb-4">
-                <button type="button" onClick={() => setIsEditingMovimentacao(false)} className="p-2 -ml-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800">
-                  <ArrowLeft className="w-5 h-5" />
-                </button>
-                <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">
-                  Registrar Movimentação
-                </h3>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="md:col-span-2">
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Bem Patrimonial *</label>
-                  <select required value={currentMovimentacao.patrimonio_id} onChange={(e) => setCurrentMovimentacao({ ...currentMovimentacao, patrimonio_id: e.target.value })} className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-medium">
-                    <option value="">Selecione um bem...</option>
-                    {bens.map(b => <option key={b.id} value={b.id}>{b.nome} {b.numero_tombamento ? `(${b.numero_tombamento})` : ''}</option>)}
-                  </select>
+          {isEditingMovimentacao && (() => {
+            const selectedBem = bens.find(b => b.id === currentMovimentacao.patrimonio_id);
+            const selectedLocation = locais.find(l => l.id === selectedBem?.localizacao_id);
+
+            const locationAtualText = selectedLocation 
+              ? selectedLocation.nome 
+              : (selectedBem?.localizacao_id ? 'Localização cadastrada no bem' : 'Sem localização definida');
+
+            const respAtualText = selectedLocation?.responsavel_id 
+              ? (membros.find(m => m.id === selectedLocation.responsavel_id)?.nome || 'Membro não encontrado')
+              : 'Nenhum responsável definido na localização';
+
+            const coRespAtualText = selectedLocation?.co_responsavel_id 
+              ? (membros.find(m => m.id === selectedLocation.co_responsavel_id)?.nome || 'Membro não encontrado')
+              : 'Nenhum co-responsável definido na localização';
+
+            return (
+              <motion.form 
+                initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} 
+                onSubmit={handleSaveMovimentacao} 
+                className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm p-6 sm:p-8 max-w-3xl"
+              >
+                <div className="flex items-center gap-3 mb-6 border-b border-slate-100 dark:border-slate-800 pb-4">
+                  <button type="button" onClick={() => setIsEditingMovimentacao(false)} className="p-2 -ml-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800">
+                    <ArrowLeft className="w-5 h-5" />
+                  </button>
+                  <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">
+                    Registrar Movimentação
+                  </h3>
                 </div>
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Tipo de Movimentação *</label>
-                  <select required value={currentMovimentacao.tipo_movimentacao} onChange={(e) => setCurrentMovimentacao({ ...currentMovimentacao, tipo_movimentacao: e.target.value })} className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-medium">
-                    <option value="MUDANCA_LOCAL">Mudança de Local</option>
-                    <option value="EMPRESTIMO">Empréstimo</option>
-                    <option value="DEVOLUCAO">Devolução</option>
-                    <option value="MANUTENCAO">Envio p/ Manutenção</option>
-                    <option value="BAIXA">Baixa</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Data *</label>
-                  <input required type="date" value={currentMovimentacao.data_movimentacao} onChange={(e) => setCurrentMovimentacao({ ...currentMovimentacao, data_movimentacao: e.target.value })} className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-medium" />
-                </div>
-                <div className="md:col-span-2">
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Responsável *</label>
-                  <select required value={currentMovimentacao.responsavel} onChange={(e) => setCurrentMovimentacao({ ...currentMovimentacao, responsavel: e.target.value })} className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-medium">
-                    <option value="">Selecione um Membro</option>
-                    {membros.map((m: any) => (
-                      <option key={m.id} value={m.id}>{m.nome}</option>
-                    ))}
-                  </select>
-                </div>
-                {['MUDANCA_LOCAL', 'EMPRESTIMO', 'DEVOLUCAO'].includes(currentMovimentacao.tipo_movimentacao) && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="md:col-span-2">
-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Nova Localização *</label>
-                    <select required value={currentMovimentacao.nova_localizacao_id || ''} onChange={(e) => setCurrentMovimentacao({ ...currentMovimentacao, nova_localizacao_id: e.target.value })} className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-medium">
-                      <option value="">Selecione a Localização</option>
-                      {locais.map((l: any) => (
-                        <option key={l.id} value={l.id}>{l.nome}</option>
-                      ))}
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Bem Patrimonial *</label>
+                    <select required value={currentMovimentacao.patrimonio_id} onChange={(e) => setCurrentMovimentacao({ ...currentMovimentacao, patrimonio_id: e.target.value })} className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-medium">
+                      <option value="">Selecione um bem...</option>
+                      {bens.map(b => <option key={b.id} value={b.id}>{b.nome} {b.numero_tombamento ? `(${b.numero_tombamento})` : ''}</option>)}
                     </select>
                   </div>
-                )}
-                <div className="md:col-span-2">
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Observações</label>
-                  <textarea rows={3} value={currentMovimentacao.observacao || ''} onChange={(e) => setCurrentMovimentacao({ ...currentMovimentacao, observacao: e.target.value })} placeholder="Destino, motivo do empréstimo, detalhes do defeito, etc." className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-medium" />
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Tipo de Movimentação *</label>
+                    <select required value={currentMovimentacao.tipo_movimentacao} onChange={(e) => setCurrentMovimentacao({ ...currentMovimentacao, tipo_movimentacao: e.target.value })} className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-medium">
+                      <option value="MUDANCA_LOCAL">Mudança de Local</option>
+                      <option value="EMPRESTIMO">Empréstimo</option>
+                      <option value="DEVOLUCAO">Devolução</option>
+                      <option value="MANUTENCAO">Envio p/ Manutenção</option>
+                      <option value="BAIXA">Baixa</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Data *</label>
+                    <input required type="date" value={currentMovimentacao.data_movimentacao} onChange={(e) => setCurrentMovimentacao({ ...currentMovimentacao, data_movimentacao: e.target.value })} className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-medium" />
+                  </div>
+
+                  {/* Localização Section */}
+                  {['MUDANCA_LOCAL', 'EMPRESTIMO', 'DEVOLUCAO'].includes(currentMovimentacao.tipo_movimentacao) && (
+                    <div className="md:col-span-2 space-y-3 p-4 rounded-2xl bg-slate-50/50 dark:bg-slate-800/30 border border-slate-100 dark:border-slate-800">
+                      <div>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Localização Atual (Não editável)</label>
+                        <div className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100/80 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 font-bold text-sm select-none cursor-not-allowed flex items-center gap-2">
+                          <MapPin className="w-4 h-4 text-amber-500 shrink-0" />
+                          <span>{locationAtualText}</span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Nova Localização *</label>
+                        <select required value={currentMovimentacao.nova_localizacao_id || ''} onChange={(e) => setCurrentMovimentacao({ ...currentMovimentacao, nova_localizacao_id: e.target.value })} className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-medium">
+                          <option value="">Selecione a Nova Localização</option>
+                          {locais.map((l: any) => (
+                            <option key={l.id} value={l.id}>{l.nome}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Responsável Section */}
+                  <div className="md:col-span-2 space-y-3 p-4 rounded-2xl bg-slate-50/50 dark:bg-slate-800/30 border border-slate-100 dark:border-slate-800">
+                    <div>
+                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Responsável Atual (Recuperado da Localização - Não editável)</label>
+                      <div className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100/80 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 font-bold text-sm select-none cursor-not-allowed flex items-center gap-2">
+                        <UserCheck className="w-4 h-4 text-amber-500 shrink-0" />
+                        <span>{respAtualText}</span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Novo Responsável (Membro) *</label>
+                      <select required value={currentMovimentacao.responsavel_novo_id || currentMovimentacao.responsavel || ''} onChange={(e) => setCurrentMovimentacao({ ...currentMovimentacao, responsavel_novo_id: e.target.value, responsavel: e.target.value })} className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-medium">
+                        <option value="">Selecione o Membro Responsável</option>
+                        {membros.map((m: any) => (
+                          <option key={m.id} value={m.id}>{m.nome}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Co-Responsável Section */}
+                  <div className="md:col-span-2 space-y-3 p-4 rounded-2xl bg-slate-50/50 dark:bg-slate-800/30 border border-slate-100 dark:border-slate-800">
+                    <div>
+                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Co-Responsável Atual (Recuperado da Localização - Não editável)</label>
+                      <div className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100/80 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 font-bold text-sm select-none cursor-not-allowed flex items-center gap-2">
+                        <Users className="w-4 h-4 text-amber-500 shrink-0" />
+                        <span>{coRespAtualText}</span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Novo Co-Responsável (Membro)</label>
+                      <select value={currentMovimentacao.co_responsavel_novo_id || ''} onChange={(e) => setCurrentMovimentacao({ ...currentMovimentacao, co_responsavel_novo_id: e.target.value })} className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-medium">
+                        <option value="">Selecione o Membro Co-Responsável (Opcional)</option>
+                        {membros.map((m: any) => (
+                          <option key={m.id} value={m.id}>{m.nome}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Observações</label>
+                    <textarea rows={3} value={currentMovimentacao.observacao || ''} onChange={(e) => setCurrentMovimentacao({ ...currentMovimentacao, observacao: e.target.value })} placeholder="Destino, motivo do empréstimo, detalhes do defeito, etc." className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-amber-500 outline-none font-medium" />
+                  </div>
                 </div>
-              </div>
-              <div className="mt-8 flex justify-end gap-4">
-                <button type="button" onClick={() => setIsEditingMovimentacao(false)} className="px-6 py-3 text-sm font-bold text-slate-500 hover:text-slate-700 transition-colors">Cancelar</button>
-                <button type="submit" className="px-8 py-3 bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold rounded-2xl shadow-sm flex items-center gap-2"><Save className="w-4 h-4" /> Registrar</button>
-              </div>
-            </motion.form>
-          )}
+                <div className="mt-8 flex justify-end gap-4">
+                  <button type="button" onClick={() => setIsEditingMovimentacao(false)} className="px-6 py-3 text-sm font-bold text-slate-500 hover:text-slate-700 transition-colors">Cancelar</button>
+                  <button type="submit" className="px-8 py-3 bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold rounded-2xl shadow-sm flex items-center gap-2"><Save className="w-4 h-4" /> Registrar Movimentação</button>
+                </div>
+              </motion.form>
+            );
+          })()}
 
           {/* TAB: RELATÓRIOS */}
           {activeTab === 'relatorios' && (
