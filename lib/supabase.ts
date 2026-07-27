@@ -1,7 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 
 let supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+//const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabaseServiceKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImppaW5uZ214aGV6ZHdreHl4a3lkIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MDIyMTM2NCwiZXhwIjoyMDk1Nzk3MzY0fQ.DXXxtlTy9FGFClcsd9I27EdFzBr8YhTRPXgwn2KZTq8';
 console.log(supabaseServiceKey);
 try {
   const url = new URL(supabaseUrl);
