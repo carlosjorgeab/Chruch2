@@ -274,10 +274,49 @@ export default function PatrimonioPage() {
     if (!currentBem.nome) return setError('Nome do bem é obrigatório.');
     if (!currentBem.categoria_id) return setError('Categoria é obrigatória.');
     
+    // Validação de número de tombamento único dentro da mesma igreja
+    if (currentBem.numero_tombamento && currentBem.numero_tombamento.trim()) {
+      const tombamentoTrimmed = currentBem.numero_tombamento.trim();
+      
+      // 1. Verificação no estado local (feedback instantâneo)
+      const duplicateInState = bens.find(b => 
+        b.numero_tombamento && 
+        b.numero_tombamento.trim().toLowerCase() === tombamentoTrimmed.toLowerCase() &&
+        b.id !== currentBem.id &&
+        (!selectedIgreja?.id || b.id_igreja === selectedIgreja.id)
+      );
+
+      if (duplicateInState) {
+        setError(`O número de tombamento "${tombamentoTrimmed}" já está cadastrado nesta igreja.`);
+        return;
+      }
+
+      // 2. Verificação direta no Supabase
+      let query = supabase
+        .from('patrimonios')
+        .select('id, nome, numero_tombamento')
+        .ilike('numero_tombamento', tombamentoTrimmed);
+
+      if (selectedIgreja?.id) {
+        query = query.eq('id_igreja', selectedIgreja.id);
+      }
+
+      if (currentBem.id) {
+        query = query.neq('id', currentBem.id);
+      }
+
+      const { data: existingBens, error: checkErr } = await query;
+
+      if (!checkErr && existingBens && existingBens.length > 0) {
+        setError(`O número de tombamento "${tombamentoTrimmed}" já está cadastrado nesta igreja (Bem: ${existingBens[0].nome}).`);
+        return;
+      }
+    }
+
     const payload = {
       nome: currentBem.nome,
       descricao: currentBem.descricao,
-      numero_tombamento: currentBem.numero_tombamento,
+      numero_tombamento: currentBem.numero_tombamento ? currentBem.numero_tombamento.trim() : null,
       valor_aquisicao: currentBem.valor_aquisicao ? parseFloat(currentBem.valor_aquisicao) : null,
       data_aquisicao: currentBem.data_aquisicao || null,
       estado_conservacao: currentBem.estado_conservacao,
