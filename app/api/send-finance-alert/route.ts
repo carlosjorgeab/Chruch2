@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+import { supabase } from '@/lib/supabase';
 
 export async function POST(req: NextRequest) {
   try {
@@ -22,8 +19,6 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-
-    const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
     // 1. Fetch transactions for the church from table 'transacoes'
     const { data: transacoes, error: errTrans } = await supabase
