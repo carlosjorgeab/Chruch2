@@ -1,6 +1,6 @@
 const urlEventos = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/eventos?limit=1`;
 const urlAgendas = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/agendas?limit=1`;
-const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 async function run() {
   try {
