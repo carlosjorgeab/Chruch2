@@ -1,17 +1,26 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase/client'; // Ajuste para o caminho do seu cliente Supabase
+import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
-  // 1. AbortController para interromper a requisição se demorar mais de 2 segundos
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseKey) {
+    return NextResponse.json(
+      { status: 'error', details: 'Configuração do Supabase ausente' },
+      { status: 500 }
+    );
+  }
+
+  const supabase = createClient(supabaseUrl, supabaseKey);
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 2000);
 
   try {
-    // 2. Requisição ultra leve: 'head: true' não baixa linhas do banco
     const { error } = await supabase
-      .from('perfis') // Substitua por qualquer tabela leve existente no seu banco
+      .from('perfis') // Tabela existente no seu banco
       .select('id', { head: true })
       .limit(1)
       .abortSignal(controller.signal);
