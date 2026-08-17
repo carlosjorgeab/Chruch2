@@ -1,23 +1,24 @@
 import { createClient } from '@supabase/supabase-js';
+export const dynamic = 'force-dynamic';
 
-const defaultUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const defaultKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const fallbackUrl = 'https://jiinngmxhezdwkxyxkyd.supabase.co';
+const fallbackKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImppaW5uZ214aGV6ZHdreHl4a3lkIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MDIyMTM2NCwiZXhwIjoyMDk1Nzk3MzY0fQ.DXXxtlTy9FGFClcsd9I27EdFzBr8YhTRPXgwn2KZTq8';
 
-let supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-let supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const envUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const envKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 function getValidUrl(url: string | undefined): string {
-  if (!url) return defaultUrl;
+  if (!url) return fallbackUrl;
   try {
     const parsed = new URL(url);
     if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
       return url;
     }
   } catch {}
-  return defaultUrl;
+  return fallbackUrl;
 }
 
-const validUrl = getValidUrl(supabaseUrl);
-const validKey = supabaseKey || defaultKey;
+const validUrl = getValidUrl(envUrl);
+const validKey = envKey || fallbackKey;
 
 export const supabase = createClient(validUrl, validKey);
